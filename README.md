@@ -25,6 +25,10 @@ StockRush는 한정 판매 상황을 다루는 커머스/플랫폼 백엔드 포
 - [ADR 0003: 서비스별 독립 프로젝트 구조 선택](docs/adr/0003-independent-services.md)
 - [Development Operations Architecture](docs/architecture/development-operations.md)
 - [Architecture Guard Rules](docs/architecture/architecture-guard-rules.md)
+- [Phase 1 Commerce Foundation](docs/architecture/phase-1-commerce-foundation.md)
+- [Common API Response](docs/api/common.md)
+- [Event Envelope](docs/architecture/events.md)
+- [Outbox and Consumer Idempotency](docs/architecture/outbox.md)
 - [AI Development Process](docs/ai-development-process.md)
 
 ### 내부 실행 기록
@@ -67,6 +71,8 @@ StockRush는 기능 구현과 별개로 AI 기반 개발 운영 체계를 프로
 
 ## 현재 상태
 
-현재는 Phase 0 개발 운영 도구 구현을 마치고 브랜치 정리/반영을 앞둔 상태입니다.
+현재는 Phase 1에서 로컬 인프라와 핵심 서비스 뼈대를 만드는 중입니다.
 
-첫 구현 목표는 서비스 코드가 아니라, 이후 구현을 안정적으로 진행하기 위한 문서, 의사결정 기록, Dev RAG 최소 설계, AI Run Ledger, Architecture Guard 기준을 고정하는 것입니다.
+Phase 0에서 Dev RAG, Project MCP, AI Run Ledger, Architecture Guard 기반을 만들었고, Phase 1에서는 PostgreSQL, Redis, Apache Kafka, Kafka UI, gateway, catalog, inventory, order, payment 서비스 구조를 고정합니다.
+
+로컬 인프라 기준은 [infra/local](infra/local/README.md)에 정리되어 있습니다.

@@ -15,7 +15,7 @@ SERVICE_SCHEMAS = {
     "auth-service": "auth",
     "catalog-service": "catalog",
     "inventory-service": "inventory",
-    "order-service": "order",
+    "order-service": "orders",
     "payment-service": "payment",
     "promotion-service": "promotion",
     "fulfillment-service": "fulfillment",
@@ -266,4 +266,3 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

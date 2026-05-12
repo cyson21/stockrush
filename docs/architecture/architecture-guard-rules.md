@@ -48,7 +48,7 @@ Services must not access another service schema directly.
 Allowed:
 
 ```text
-order-service -> order schema
+order-service -> orders schema
 inventory-service -> inventory schema
 payment-service -> payment schema
 catalog-service -> catalog schema
@@ -58,7 +58,7 @@ Disallowed:
 
 ```text
 order-service -> inventory schema table query
-payment-service -> order schema table update
+payment-service -> orders schema table update
 ```
 
 Suggested fix:

@@ -58,7 +58,7 @@ class ArchitectureGuardTest(unittest.TestCase):
             migration_root = root / "services" / "order-service" / "src" / "main" / "resources" / "db"
             migration_root.mkdir(parents=True)
             (migration_root / "V1__outbox.sql").write_text(
-                "CREATE TABLE order.outbox_events (event_id uuid primary key, payload jsonb);\n",
+                "CREATE TABLE orders.outbox_events (event_id uuid primary key, payload jsonb);\n",
                 encoding="utf-8",
             )
 
