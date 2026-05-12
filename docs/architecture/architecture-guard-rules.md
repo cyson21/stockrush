@@ -6,6 +6,27 @@ Architecture Guard prevents AI-assisted implementation from drifting away from t
 
 The first version is documentation-backed. Later versions can become CLI checks under `tools/architecture-guard`.
 
+## Current Implementation
+
+The first CLI implementation exists under:
+
+```text
+tools/architecture-guard/
+```
+
+Implemented commands:
+
+```bash
+./tools/architecture-guard/architecture-guard check
+./tools/architecture-guard/architecture-guard check --format json
+```
+
+Verification command:
+
+```bash
+python -m unittest discover tools/architecture-guard/tests
+```
+
 ## Rule Report Format
 
 Each violation should be reported with:
@@ -190,4 +211,3 @@ Suggested fix:
 ```text
 Store failed event metadata and expose it through an admin endpoint or read model.
 ```
-

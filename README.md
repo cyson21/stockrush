@@ -66,6 +66,13 @@ Dev RAG 최소 CLI:
 ./tools/dev-rag/dev-rag context "Inventory reservation 동시성 구현"
 ```
 
+Architecture Guard 최소 CLI:
+
+```bash
+./tools/architecture-guard/architecture-guard check
+./tools/architecture-guard/architecture-guard check --format json
+```
+
 ## 현재 상태
 
 현재는 설계 및 개발 운영 기반을 구축하는 Phase 0 단계입니다.
