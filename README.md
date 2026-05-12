@@ -27,6 +27,7 @@ StockRush는 한정 판매 상황을 다루는 커머스/플랫폼 백엔드 포
 - [Architecture Guard Rules](docs/architecture/architecture-guard-rules.md)
 - [Phase 1 Commerce Foundation](docs/architecture/phase-1-commerce-foundation.md)
 - [Customer App Flow](docs/architecture/customer-app-flow.md)
+- [Admin App Flow](docs/architecture/admin-app-flow.md)
 - [Common API Response](docs/api/common.md)
 - [Admin Order API](docs/api/admin-orders.md)
 - [Outbox Admin API](docs/api/outbox-admin.md)
@@ -74,7 +75,7 @@ StockRush는 기능 구현과 별개로 AI 기반 개발 운영 체계를 프로
 
 ## 현재 상태
 
-현재는 Phase 1 커머스 핵심 흐름 위에 고객 주문 앱을 연결하는 중입니다.
+현재는 Phase 1 커머스 핵심 흐름 위에 고객 주문 앱과 관리자 운영 앱을 연결하는 중입니다.
 
 Phase 0에서 Dev RAG, Project MCP, AI Run Ledger, Architecture Guard 기반을 만들었고, Phase 1에서는 PostgreSQL, Redis, Apache Kafka, Kafka UI, gateway, catalog, inventory, order, payment 서비스 구조를 고정합니다.
 
