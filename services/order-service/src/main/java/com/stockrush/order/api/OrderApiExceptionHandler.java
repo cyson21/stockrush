@@ -1,6 +1,9 @@
 package com.stockrush.order.api;
 
+import com.stockrush.order.application.OrderDataIntegrityException;
+import com.stockrush.order.application.OrderNotFoundException;
 import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingRequestHeaderException;
@@ -36,6 +39,28 @@ class OrderApiExceptionHandler {
         HttpServletRequest request
     ) {
         return badRequest("ORDER_INVALID_REQUEST", exception.getMessage(), request);
+    }
+
+    @ExceptionHandler(OrderNotFoundException.class)
+    ResponseEntity<ApiResponse<Void>> handleOrderNotFound(
+        OrderNotFoundException exception,
+        HttpServletRequest request
+    ) {
+        String correlationId = CorrelationIds.resolve(request.getHeader(CorrelationIds.HEADER_NAME));
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+            .header(CorrelationIds.HEADER_NAME, correlationId)
+            .body(ApiResponse.failure("ORDER_NOT_FOUND", exception.getMessage(), correlationId));
+    }
+
+    @ExceptionHandler(OrderDataIntegrityException.class)
+    ResponseEntity<ApiResponse<Void>> handleOrderDataIntegrity(
+        OrderDataIntegrityException exception,
+        HttpServletRequest request
+    ) {
+        String correlationId = CorrelationIds.resolve(request.getHeader(CorrelationIds.HEADER_NAME));
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+            .header(CorrelationIds.HEADER_NAME, correlationId)
+            .body(ApiResponse.failure("ORDER_DATA_INTEGRITY_ERROR", exception.getMessage(), correlationId));
     }
 
     private ResponseEntity<ApiResponse<Void>> badRequest(String code, String message, HttpServletRequest request) {

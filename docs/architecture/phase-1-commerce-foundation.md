@@ -30,8 +30,9 @@ flowchart LR
 3. Inventory reservation succeeds or fails.
 4. Payment authorization succeeds or fails.
 5. Order state ends as `CONFIRMED` or `CANCELLED`.
-6. Kafka UI shows the events.
-7. Database tables show outbox and processed event records.
+6. Customer checks the order detail API for the final order and Saga status.
+7. Kafka UI shows the events.
+8. Database tables show outbox and processed event records.
 
 ## Order Saga State Transitions
 
@@ -44,6 +45,14 @@ flowchart LR
 | `PaymentAuthorizationFailed` | `CANCELLED` | `FAILED` | `OrderCancelled` on `stockrush.order.events.v1` |
 
 `causationId` is preserved in outbox headers and copied into the Kafka envelope by the relay publisher.
+
+## Query API Surface
+
+| Service | API | Purpose |
+|---|---|---|
+| catalog-service | `GET /api/products`, `GET /api/products/{productCode}` | customer product discovery |
+| inventory-service | `GET /api/stocks`, `GET /api/stocks/{skuId}` | customer stock visibility and admin stock check |
+| order-service | `GET /api/orders/{orderId}` | customer order status and Saga progress tracking |
 
 ## Service Relay Coverage
 
