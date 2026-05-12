@@ -53,6 +53,7 @@ flowchart LR
 | catalog-service | `GET /api/products`, `GET /api/products/{productCode}` | customer product discovery |
 | inventory-service | `GET /api/stocks`, `GET /api/stocks/{skuId}` | customer stock visibility and admin stock check |
 | order-service | `GET /api/orders/{orderId}` | customer order status and Saga progress tracking |
+| order-service | `GET /api/admin/orders`, `GET /api/admin/orders/{orderId}/saga` | admin order monitoring and Saga failure inspection |
 
 ## Service Relay Coverage
 

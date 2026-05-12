@@ -28,6 +28,7 @@ StockRush는 한정 판매 상황을 다루는 커머스/플랫폼 백엔드 포
 - [Phase 1 Commerce Foundation](docs/architecture/phase-1-commerce-foundation.md)
 - [Customer App Flow](docs/architecture/customer-app-flow.md)
 - [Common API Response](docs/api/common.md)
+- [Admin Order API](docs/api/admin-orders.md)
 - [Event Envelope](docs/architecture/events.md)
 - [Outbox and Consumer Idempotency](docs/architecture/outbox.md)
 - [AI Development Process](docs/ai-development-process.md)
