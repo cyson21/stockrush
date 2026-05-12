@@ -149,3 +149,24 @@ The first usable version is complete when:
 - generated Context Packs include source paths
 - excluded paths are skipped
 
+## Current Implementation
+
+The first CLI implementation exists under:
+
+```text
+tools/dev-rag/
+```
+
+Implemented commands:
+
+```bash
+./tools/dev-rag/dev-rag ingest
+./tools/dev-rag/dev-rag search "Kafka Saga"
+./tools/dev-rag/dev-rag context "Inventory reservation 동시성 구현"
+```
+
+Verification command:
+
+```bash
+python -m unittest discover tools/dev-rag/tests
+```

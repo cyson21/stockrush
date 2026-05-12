@@ -58,6 +58,14 @@ StockRush는 기능 구현과 별개로 AI 기반 개발 운영 체계를 프로
 - `tools/project-mcp`: AI Agent가 프로젝트 상태와 문서를 표준 도구로 조회하는 MCP 서버
 - `tools/architecture-guard`: 서비스 경계와 Kafka 이벤트 규칙을 자동 점검하는 guard
 
+Dev RAG 최소 CLI:
+
+```bash
+./tools/dev-rag/dev-rag ingest
+./tools/dev-rag/dev-rag search "Kafka Saga"
+./tools/dev-rag/dev-rag context "Inventory reservation 동시성 구현"
+```
+
 ## 현재 상태
 
 현재는 설계 및 개발 운영 기반을 구축하는 Phase 0 단계입니다.

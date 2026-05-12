@@ -13,6 +13,10 @@ build/
 out/
 *.class
 
+# Python
+__pycache__/
+*.pyc
+
 # Node
 node_modules/
 dist/
@@ -33,6 +37,7 @@ logs/
 tmp/
 data/
 .worktrees/
+.dev-rag/
 
 # AI run generated scratch files
 .ai-runs/**/scratch/
