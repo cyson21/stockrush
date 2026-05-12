@@ -49,6 +49,28 @@ Expected tool categories:
 
 The MCP server does not hide destructive actions behind generic commands. Any operation that changes remote state, deletes data, or publishes externally remains an explicit approval point.
 
+Current server path:
+
+```text
+tools/project-mcp/project_mcp_server.py
+```
+
+Current resources:
+
+- `stockrush://readme`
+- `stockrush://todo`
+- `stockrush://tracking`
+- `stockrush://adr-index`
+
+Current tools:
+
+- `list_project_docs`
+- `read_project_doc`
+- `dev_rag_ingest`
+- `dev_rag_search`
+- `dev_rag_context`
+- `architecture_guard_check`
+
 ### Agentic Workflow Runner
 
 Agentic Workflow Runner coordinates role-based work.
@@ -118,4 +140,3 @@ Define work goal
 This architecture supports the following portfolio claim:
 
 > I built the project with a traceable agentic development workflow: RAG-based context retrieval, project-specific MCP tools, run ledgers, and architecture guards were used to keep AI-generated work aligned with system design and verification criteria.
-

@@ -73,6 +73,12 @@ Architecture Guard 최소 CLI:
 ./tools/architecture-guard/architecture-guard check --format json
 ```
 
+Project MCP Server:
+
+```bash
+python tools/project-mcp/project_mcp_server.py --root .
+```
+
 ## 현재 상태
 
 현재는 설계 및 개발 운영 기반을 구축하는 Phase 0 단계입니다.
