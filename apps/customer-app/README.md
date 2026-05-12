@@ -1,0 +1,47 @@
+# StockRush Customer App
+
+Customer App은 한정 상품 조회, SKU 선택, 주문 생성, Saga 상태 추적을 하나의 흐름으로 보여주는 React 앱입니다.
+
+## 실행
+
+```bash
+npm install
+npm run dev
+```
+
+기본 주소는 `http://localhost:5173`입니다.
+
+## 환경 변수
+
+기본 개발 모드는 Vite proxy prefix를 사용합니다. 정적 배포 또는 gateway 분리 환경에서는 아래 값을 지정합니다.
+
+| Variable | Default |
+|---|---|
+| `VITE_API_BASE_URL` | same origin |
+| `VITE_CATALOG_API_BASE_URL` | `{VITE_API_BASE_URL}/catalog` |
+| `VITE_INVENTORY_API_BASE_URL` | `{VITE_API_BASE_URL}/inventory` |
+| `VITE_ORDER_API_BASE_URL` | `{VITE_API_BASE_URL}/orders` |
+
+## 연동 서비스
+
+Vite 개발 서버는 아래 프록시를 사용합니다.
+
+| Prefix | Target |
+|---|---|
+| `/catalog` | `http://localhost:18081` |
+| `/inventory` | `http://localhost:18082` |
+| `/orders` | `http://localhost:18083` |
+
+## 화면 흐름
+
+1. `GET /api/products?status=ON_SALE`로 판매 중 상품을 조회한다.
+2. 상품 선택 시 `GET /api/stocks?productCode={productCode}`로 SKU별 재고를 조회한다.
+3. 회원 ID, 수량, 결제수단을 입력해 `POST /api/orders`를 호출한다.
+4. 생성된 주문 ID로 `GET /api/orders/{orderId}`를 polling해 주문 상태와 Saga 상태를 갱신한다.
+
+## 검증
+
+```bash
+npm test
+npm run build
+```

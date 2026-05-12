@@ -1,9 +1,11 @@
 # Apps
 
-Frontend apps are intentionally empty in Phase 1.
+Frontend apps connect the commerce services to portfolio demo flows.
 
-Planned apps:
+## Current Apps
 
-- `customer-app`: product list, order creation, order status tracking
+- [customer-app](customer-app/README.md): product list, stock selection, order creation, Saga status tracking
+
+## Planned Apps
+
 - `admin-app`: product, stock, order, event failure operation
-

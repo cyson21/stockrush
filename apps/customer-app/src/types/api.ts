@@ -1,0 +1,64 @@
+export type ApiError = {
+  code: string;
+  message: string;
+  details: Record<string, unknown>;
+};
+
+export type ApiResponse<T> = {
+  success: boolean;
+  data: T | null;
+  error: ApiError | null;
+  trace: {
+    correlationId: string;
+  };
+};
+
+export type Product = {
+  productCode: string;
+  name: string;
+  status: string;
+  listPrice: number;
+};
+
+export type Stock = {
+  skuId: string;
+  productCode: string;
+  availableQuantity: number;
+  reservedQuantity: number;
+  version: number;
+};
+
+export type CreateOrderItemRequest = {
+  productCode: string;
+  skuId: string;
+  quantity: number;
+  unitPrice: number;
+};
+
+export type CreateOrderRequest = {
+  memberId: string;
+  paymentMethod: string;
+  items: CreateOrderItemRequest[];
+};
+
+export type CreateOrderResponse = {
+  orderId: string;
+  status: string;
+  sagaStatus: string;
+  paymentMethod: string;
+  totalAmount: number;
+};
+
+export type OrderDetailItem = CreateOrderItemRequest & {
+  lineAmount: number;
+};
+
+export type OrderDetail = {
+  orderId: string;
+  memberId: string;
+  status: string;
+  sagaStatus: string;
+  paymentMethod: string;
+  totalAmount: number;
+  items: OrderDetailItem[];
+};
