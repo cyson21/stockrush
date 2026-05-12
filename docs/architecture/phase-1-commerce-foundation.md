@@ -58,6 +58,7 @@ flowchart LR
 | Flow | Producer Input | Consumer | Relay Output | Verification |
 |---|---|---|---|---|
 | Inventory reservation | `OrderCreated` on `stockrush.order.events.v1` | inventory-service | `InventoryReserved` on `stockrush.inventory.events.v1` | stock update, processed event, outbox row, Kafka event envelope |
+| Inventory finalization | `OrderConfirmed` or `OrderCancelled` on `stockrush.order.events.v1` | inventory-service | `InventoryReservationConfirmed` or `InventoryReservationReleased` on `stockrush.inventory.events.v1` | reservation status, stock recovery/finalization, processed event, outbox row |
 | Payment authorization | `PaymentAuthorizationRequested` on `stockrush.payment.commands.v1` | payment-service | `PaymentAuthorized` on `stockrush.payment.events.v1` | payment row, processed event, outbox row, Kafka event envelope |
 
 Smoke tests use the local Docker Kafka broker at `localhost:19092` and the local PostgreSQL schemas at `localhost:15432`.

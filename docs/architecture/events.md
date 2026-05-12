@@ -51,8 +51,10 @@ Kafka events use a common envelope with event-specific payloads.
 | `PaymentAuthorizationRequested` | `stockrush.payment.commands.v1` | order-service | payment-service |
 | `PaymentAuthorized` | `stockrush.payment.events.v1` | payment-service | order-service |
 | `PaymentAuthorizationFailed` | `stockrush.payment.events.v1` | payment-service | order-service |
-| `OrderConfirmed` | `stockrush.order.events.v1` | order-service | read models |
+| `OrderConfirmed` | `stockrush.order.events.v1` | order-service | inventory-service, read models |
 | `OrderCancelled` | `stockrush.order.events.v1` | order-service | inventory-service, read models |
+| `InventoryReservationConfirmed` | `stockrush.inventory.events.v1` | inventory-service | operations/read models |
+| `InventoryReservationReleased` | `stockrush.inventory.events.v1` | inventory-service | operations/read models |
 
 ## Payload Rules
 
@@ -70,3 +72,12 @@ Kafka events use a common envelope with event-specific payloads.
 | `PaymentAuthorizationFailed` | `orderId`, `amount`, `method`, `reason`, `failedAt` |
 
 `PaymentAuthorizationRequested.method` is stored from the order request. If omitted, Order Service uses `CARD`. The `FAIL_CARD` method is reserved for deterministic local failure simulation and produces `PaymentAuthorizationFailed` with reason `PAYMENT_DECLINED`.
+
+## Phase 1 Inventory Finalization Notes
+
+| Source event | Inventory action | Published event |
+|---|---|---|
+| `OrderConfirmed` | Move reservation from `RESERVED` to `CONFIRMED`, decrement `reserved_quantity` | `InventoryReservationConfirmed` |
+| `OrderCancelled` | Move reservation from `RESERVED` to `RELEASED`, restore `available_quantity`, decrement `reserved_quantity` | `InventoryReservationReleased` |
+
+Inventory Service consumes order result events from `stockrush.order.events.v1` and keeps all stock mutations inside the `inventory` schema.

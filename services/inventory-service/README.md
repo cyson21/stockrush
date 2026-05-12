@@ -5,6 +5,14 @@ Schema: `inventory`
 
 Owns stock items, reservations, inventory events, outbox rows, and processed event records.
 
+## Event Handling
+
+| Consumed event | Action | Published event |
+|---|---|---|
+| `OrderCreated` | Decrease available stock and create `RESERVED` reservations. | `InventoryReserved` or `InventoryReservationFailed` |
+| `OrderConfirmed` | Change `RESERVED` reservations to `CONFIRMED` and decrease `reservedQuantity`. | `InventoryReservationConfirmed` |
+| `OrderCancelled` | Change `RESERVED` reservations to `RELEASED`, restore `availableQuantity`, and decrease `reservedQuantity`. | `InventoryReservationReleased` |
+
 ## HTTP API
 
 | Method | Path | Description |

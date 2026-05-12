@@ -55,7 +55,50 @@ public class InventoryReservationHandler {
         writeReserved(event);
     }
 
-    private boolean markProcessed(KafkaEventEnvelope<OrderCreatedPayload> event) {
+    @Transactional
+    public void handleOrderConfirmed(KafkaEventEnvelope<OrderConfirmedPayload> event) {
+        if (!markProcessed(event)) {
+            return;
+        }
+
+        String orderId = event.payload().orderId();
+        List<ReservationLine> reservations = reservedReservations(orderId);
+        for (ReservationLine reservation : reservations) {
+            confirmReservation(reservation);
+        }
+        updateReservationStatus(orderId, "CONFIRMED");
+        writeOutbox(
+            event,
+            "InventoryReservationConfirmed",
+            new InventoryReservationConfirmedPayload(orderId, toPayloadItems(reservations), clock.instant())
+        );
+    }
+
+    @Transactional
+    public void handleOrderCancelled(KafkaEventEnvelope<OrderCancelledPayload> event) {
+        if (!markProcessed(event)) {
+            return;
+        }
+
+        String orderId = event.payload().orderId();
+        List<ReservationLine> reservations = reservedReservations(orderId);
+        for (ReservationLine reservation : reservations) {
+            releaseReservation(reservation);
+        }
+        updateReservationStatus(orderId, "RELEASED");
+        writeOutbox(
+            event,
+            "InventoryReservationReleased",
+            new InventoryReservationReleasedPayload(
+                orderId,
+                event.payload().reason(),
+                toPayloadItems(reservations),
+                clock.instant()
+            )
+        );
+    }
+
+    private boolean markProcessed(KafkaEventEnvelope<?> event) {
         int inserted = jdbcClient.sql("""
                 insert into processed_events (
                   event_id, consumer_group, event_type, aggregate_id, idempotency_key, processed_at
@@ -71,6 +114,66 @@ public class InventoryReservationHandler {
             .update();
 
         return inserted == 1;
+    }
+
+    private List<ReservationLine> reservedReservations(String orderId) {
+        return jdbcClient.sql("""
+                select si.product_code, sr.sku_id, sr.quantity
+                from stock_reservations sr
+                join stock_items si on si.sku_id = sr.sku_id
+                where sr.order_id = :orderId
+                  and sr.status = 'RESERVED'
+                order by sr.id
+                """)
+            .param("orderId", orderId)
+            .query((rs, rowNum) -> new ReservationLine(
+                rs.getString("product_code"),
+                rs.getString("sku_id"),
+                rs.getInt("quantity")
+            ))
+            .list();
+    }
+
+    private void confirmReservation(ReservationLine reservation) {
+        jdbcClient.sql("""
+                update stock_items
+                set reserved_quantity = reserved_quantity - :quantity,
+                    version = version + 1,
+                    updated_at = now()
+                where sku_id = :skuId
+                  and reserved_quantity >= :quantity
+                """)
+            .param("quantity", reservation.quantity())
+            .param("skuId", reservation.skuId())
+            .update();
+    }
+
+    private void releaseReservation(ReservationLine reservation) {
+        jdbcClient.sql("""
+                update stock_items
+                set available_quantity = available_quantity + :quantity,
+                    reserved_quantity = reserved_quantity - :quantity,
+                    version = version + 1,
+                    updated_at = now()
+                where sku_id = :skuId
+                  and reserved_quantity >= :quantity
+                """)
+            .param("quantity", reservation.quantity())
+            .param("skuId", reservation.skuId())
+            .update();
+    }
+
+    private void updateReservationStatus(String orderId, String status) {
+        jdbcClient.sql("""
+                update stock_reservations
+                set status = :status,
+                    updated_at = now()
+                where order_id = :orderId
+                  and status = 'RESERVED'
+                """)
+            .param("status", status)
+            .param("orderId", orderId)
+            .update();
     }
 
     private boolean hasEnoughStock(List<OrderCreatedItemPayload> items) {
@@ -138,7 +241,13 @@ public class InventoryReservationHandler {
         );
     }
 
-    private void writeOutbox(KafkaEventEnvelope<OrderCreatedPayload> source, String eventType, Object payload) {
+    private List<InventoryReservedItemPayload> toPayloadItems(List<ReservationLine> reservations) {
+        return reservations.stream()
+            .map(item -> new InventoryReservedItemPayload(item.productCode(), item.skuId(), item.quantity()))
+            .toList();
+    }
+
+    private void writeOutbox(KafkaEventEnvelope<?> source, String eventType, Object payload) {
         jdbcClient.sql("""
                 insert into outbox_events (
                   event_id, aggregate_type, aggregate_id, event_type, event_version,
@@ -172,5 +281,8 @@ public class InventoryReservationHandler {
 
     private SqlParameterValue jsonb(String json) {
         return new SqlParameterValue(Types.OTHER, json);
+    }
+
+    private record ReservationLine(String productCode, String skuId, int quantity) {
     }
 }
