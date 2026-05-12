@@ -50,7 +50,7 @@ public class CreateOrderService {
             totalAmount,
             now
         );
-        OutboxEventRecord outboxEvent = new OutboxEventRecord(
+        OutboxEventRecord<OrderCreatedPayload> outboxEvent = new OutboxEventRecord<>(
             eventIdSupplier.get(),
             "OrderCreated",
             1,

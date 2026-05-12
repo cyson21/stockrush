@@ -3,7 +3,7 @@ package com.stockrush.order.application;
 import java.time.Instant;
 import java.util.UUID;
 
-public record OutboxEventRecord(
+public record OutboxEventRecord<T>(
     UUID eventId,
     String eventType,
     int eventVersion,
@@ -17,6 +17,6 @@ public record OutboxEventRecord(
     OutboxEventStatus status,
     String topic,
     String partitionKey,
-    OrderCreatedPayload payload
+    T payload
 ) {
 }

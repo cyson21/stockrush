@@ -2,6 +2,5 @@ package com.stockrush.order.application;
 
 public interface OutboxEventRepository {
 
-    void save(OutboxEventRecord event);
+    void save(OutboxEventRecord<?> event);
 }
-

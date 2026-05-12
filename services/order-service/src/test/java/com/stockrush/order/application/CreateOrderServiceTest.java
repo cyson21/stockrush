@@ -43,7 +43,7 @@ class CreateOrderServiceTest {
         assertEquals(new BigDecimal("29000.00"), result.order().totalAmount());
         assertEquals(NOW, result.order().createdAt());
 
-        OutboxEventRecord event = result.outboxEvent();
+        OutboxEventRecord<OrderCreatedPayload> event = result.outboxEvent();
         assertEquals(EVENT_ID, event.eventId());
         assertEquals("OrderCreated", event.eventType());
         assertEquals(1, event.eventVersion());

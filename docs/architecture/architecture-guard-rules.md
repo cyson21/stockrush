@@ -43,7 +43,9 @@ info: useful design feedback
 
 Severity: error
 
-Services must not access another service schema directly.
+Services must not access another service schema directly through SQL.
+
+Kafka topic names, event names, payload names, and package names are not schema access.
 
 Allowed:
 

@@ -43,6 +43,19 @@ OUTBOX_REQUIRED_COLUMNS = {
     "published_at",
 }
 EXCLUDED_DIRS = {".git", ".worktrees", ".dev-rag", "target", "build", "node_modules", "dist", "coverage"}
+SQL_SCHEMA_REFERENCE_PREFIXES = (
+    r"from",
+    r"join",
+    r"update",
+    r"into",
+    r"references",
+    r"truncate\s+table",
+    r"delete\s+from",
+    r"merge\s+into",
+    r"alter\s+table",
+    r"create\s+(?:table|view|index|unique\s+index)",
+    r"drop\s+(?:table|view|index)",
+)
 
 
 @dataclass(frozen=True)
@@ -190,7 +203,7 @@ def check_schema_ownership(root: Path) -> list[Violation]:
             continue
         text = read_text(path)
         for schema in schema_names - {owned_schema}:
-            if re.search(rf"\b{re.escape(schema)}\s*\.", text):
+            if has_schema_qualified_sql_reference(text, schema):
                 violations.append(
                     Violation(
                         rule_id="ARCH-001",
@@ -201,6 +214,15 @@ def check_schema_ownership(root: Path) -> list[Violation]:
                     )
                 )
     return violations
+
+
+def has_schema_qualified_sql_reference(text: str, schema: str) -> bool:
+    prefixes = "|".join(SQL_SCHEMA_REFERENCE_PREFIXES)
+    pattern = re.compile(
+        rf"\b(?:{prefixes})\s+{re.escape(schema)}\s*\.\s*[a-z_][a-z0-9_]*\b",
+        re.IGNORECASE,
+    )
+    return bool(pattern.search(text))
 
 
 def service_for_path(root: Path, path: Path) -> str | None:

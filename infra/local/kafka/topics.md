@@ -16,7 +16,7 @@ stockrush.<domain>.<message-kind>.v<version>.dlq
 
 | Topic | Key | Producer | Consumer |
 |---|---|---|---|
-| `stockrush.order.events.v1` | `orderId` | order-service | inventory-service, payment-service, read models |
+| `stockrush.order.events.v1` | `orderId` | order-service | inventory-service, read models |
 | `stockrush.inventory.commands.v1` | `orderId` | order-service | inventory-service |
 | `stockrush.inventory.events.v1` | `orderId` | inventory-service | order-service |
 | `stockrush.payment.commands.v1` | `orderId` | order-service | payment-service |
@@ -46,4 +46,3 @@ Retry and DLQ records preserve the original event envelope and add headers.
 | `x-failed-at` | failure timestamp |
 
 Business failures such as insufficient stock or payment decline are domain events, not retry candidates.
-

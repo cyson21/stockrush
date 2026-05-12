@@ -10,6 +10,7 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 @Repository
 class JdbcOutboxEventRepository implements OutboxEventRepository {
@@ -23,7 +24,7 @@ class JdbcOutboxEventRepository implements OutboxEventRepository {
     }
 
     @Override
-    public void save(OutboxEventRecord event) {
+    public void save(OutboxEventRecord<?> event) {
         jdbcClient.sql("""
                 insert into outbox_events (
                   event_id, aggregate_type, aggregate_id, event_type, event_version,
@@ -46,18 +47,33 @@ class JdbcOutboxEventRepository implements OutboxEventRepository {
             .param("correlationId", event.correlationId())
             .param("idempotencyKey", event.idempotencyKey())
             .param("payload", jsonb(writePayload(event)))
-            .param("headers", jsonb("{}"))
+            .param("headers", jsonb(writeHeaders(event)))
             .param("status", event.status().name())
             .param("createdAt", timestampWithTimeZone(event.occurredAt()))
             .param("updatedAt", timestampWithTimeZone(event.occurredAt()))
             .update();
     }
 
-    private String writePayload(OutboxEventRecord event) {
+    private String writePayload(OutboxEventRecord<?> event) {
         try {
             return objectMapper.writeValueAsString(event.payload());
         } catch (JacksonException e) {
             throw new IllegalArgumentException("failed to serialize outbox payload", e);
+        }
+    }
+
+    private String writeHeaders(OutboxEventRecord<?> event) {
+        try {
+            ObjectNode headers = objectMapper.createObjectNode();
+            if (event.causationId() == null) {
+                headers.putNull("causationId");
+            } else {
+                headers.put("causationId", event.causationId().toString());
+            }
+            headers.put("sourceService", event.sourceService());
+            return objectMapper.writeValueAsString(headers);
+        } catch (JacksonException e) {
+            throw new IllegalArgumentException("failed to serialize outbox headers", e);
         }
     }
 

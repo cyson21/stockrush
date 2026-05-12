@@ -33,6 +33,18 @@ flowchart LR
 6. Kafka UI shows the events.
 7. Database tables show outbox and processed event records.
 
+## Order Saga State Transitions
+
+| Source Event | Order Status | Saga Status | Next Message |
+|---|---|---|---|
+| `OrderCreated` | `CREATED` | `STARTED` | `OrderCreated` on `stockrush.order.events.v1` |
+| `InventoryReserved` | `CREATED` | `PAYMENT_REQUESTED` | `PaymentAuthorizationRequested` on `stockrush.payment.commands.v1` |
+| `InventoryReservationFailed` | `CANCELLED` | `FAILED` | `OrderCancelled` on `stockrush.order.events.v1` |
+| `PaymentAuthorized` | `CONFIRMED` | `COMPLETED` | `OrderConfirmed` on `stockrush.order.events.v1` |
+| `PaymentAuthorizationFailed` | `CANCELLED` | `FAILED` | `OrderCancelled` on `stockrush.order.events.v1` |
+
+`causationId` is preserved in outbox headers and copied into the Kafka envelope by the relay publisher.
+
 ## Design Constraints
 
 - Services are independent Maven projects.

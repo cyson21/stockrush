@@ -72,13 +72,55 @@ class ArchitectureGuardTest(unittest.TestCase):
             java_root = root / "services" / "order-service" / "src" / "main" / "java"
             java_root.mkdir(parents=True)
             (java_root / "OrderQuery.java").write_text(
-                'public class OrderQuery { String sql = "select * from inventory.stock"; }\n',
+                'public class OrderQuery {\n'
+                '  String paymentSql = "select * from payment.payments";\n'
+                '  String inventorySql = "select * from inventory.stock_items";\n'
+                '}\n',
                 encoding="utf-8",
             )
 
             violations = architecture_guard.check(root)
 
             self.assertTrue(any(violation.rule_id == "ARCH-001" for violation in violations))
+
+    def test_allows_kafka_payment_inventory_names_in_order_service(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            java_root = root / "services" / "order-service" / "src" / "main" / "java"
+            app_root = java_root / "com" / "stockrush" / "order" / "application"
+            kafka_root = java_root / "com" / "stockrush" / "order" / "infra" / "kafka"
+            app_root.mkdir(parents=True)
+            kafka_root.mkdir(parents=True)
+            (app_root / "PaymentAuthorizedPayload.java").write_text(
+                "public record PaymentAuthorizedPayload(String paymentId) {}\n",
+                encoding="utf-8",
+            )
+            (app_root / "InventoryReservedPayload.java").write_text(
+                "public record InventoryReservedPayload(String reservationId) {}\n",
+                encoding="utf-8",
+            )
+            (kafka_root / "OrderPaymentEventConsumer.java").write_text(
+                'public class OrderPaymentEventConsumer {\n'
+                '  String topic = "stockrush.payment.events.v1";\n'
+                '  String eventName = "payment.authorized";\n'
+                '  String eventType = "PaymentAuthorized";\n'
+                "  PaymentAuthorizedPayload payload;\n"
+                "}\n",
+                encoding="utf-8",
+            )
+            (kafka_root / "OrderInventoryEventConsumer.java").write_text(
+                'public class OrderInventoryEventConsumer {\n'
+                '  String topic = "stockrush.inventory.events.v1";\n'
+                '  String eventName = "inventory.reserved";\n'
+                '  String eventType = "InventoryReserved";\n'
+                "  InventoryReservedPayload payload;\n"
+                "}\n",
+                encoding="utf-8",
+            )
+
+            violations = architecture_guard.check(root)
+
+            self.assertFalse(any(violation.rule_id == "ARCH-001" for violation in violations))
 
     def test_passes_empty_project(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

@@ -39,6 +39,7 @@ class KafkaOutboxEventPublisher implements OutboxEventPublisher {
 
     private String envelopeJson(OutboxRelayEvent event) throws JacksonException {
         JsonNode payload = objectMapper.readTree(event.payload());
+        JsonNode headers = objectMapper.readTree(event.headersJson());
         ObjectNode envelope = objectMapper.createObjectNode();
         envelope.put("eventId", event.eventId().toString());
         envelope.put("eventType", event.eventType());
@@ -46,11 +47,19 @@ class KafkaOutboxEventPublisher implements OutboxEventPublisher {
         envelope.put("aggregateType", event.aggregateType());
         envelope.put("aggregateId", event.aggregateId());
         envelope.put("correlationId", event.correlationId());
-        envelope.putNull("causationId");
+        putNullableText(envelope, "causationId", headers.path("causationId").stringValue(null));
         envelope.put("idempotencyKey", event.idempotencyKey());
         envelope.put("occurredAt", event.occurredAt().toString());
-        envelope.put("sourceService", SOURCE_SERVICE);
+        envelope.put("sourceService", headers.path("sourceService").stringValue(SOURCE_SERVICE));
         envelope.set("payload", payload);
         return objectMapper.writeValueAsString(envelope);
+    }
+
+    private void putNullableText(ObjectNode node, String field, String value) {
+        if (value == null || value.isBlank()) {
+            node.putNull(field);
+            return;
+        }
+        node.put(field, value);
     }
 }
