@@ -1,10 +1,36 @@
-import { useEffect, useMemo, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { ApiClientError } from './api/client';
-import { getOrderSaga, listOutbox, listRecentOrders, retryOutbox, type ServiceDomain } from './api/admin';
-import type { AdminOrderSaga, AdminOrderSummary, OutboxEvent, OutboxRetryResult } from './types/admin';
+import {
+  createCatalogProduct,
+  getOrderSaga,
+  listCatalogProducts,
+  listOutbox,
+  listRecentOrders,
+  listStocksByProductCode,
+  retryOutbox,
+  setStockQuantity,
+  updateCatalogProduct,
+  type ServiceDomain,
+} from './api/admin';
+import type {
+  AdminOrderSaga,
+  AdminOrderSummary,
+  CatalogProduct,
+  OutboxEvent,
+  OutboxRetryResult,
+  ProductCreatePayload,
+  ProductUpdatePayload,
+  SalesStatus,
+  StockItem,
+  StockSetPayload,
+} from './types/admin';
 
-type TabId = 'orders' | 'outbox';
+type TabId = 'orders' | 'outbox' | 'products';
 type LoadState = 'idle' | 'loading' | 'ready' | 'error';
+type SubmitState = 'idle' | 'loading' | 'ready' | 'error';
+type ProductSubmitMode = 'create' | 'update';
+
+const SALES_STATUS_OPTIONS = ['ON_SALE', 'STOPPED'] as const;
 
 function errorMessage(error: unknown): string {
   if (error instanceof ApiClientError && error.apiError) {
@@ -27,6 +53,36 @@ function emptyIfNull(value: string | null | undefined): string {
   return value?.trim() ? value : '-';
 }
 
+function moneyValue(value: number): string {
+  return `₩${value.toLocaleString()}`;
+}
+
+function normalizeSalesStatus(value: string): SalesStatus {
+  return value === 'STOPPED' ? 'STOPPED' : 'ON_SALE';
+}
+
+function statusClass(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, '_');
+}
+
+function randomTextId(prefix: string): string {
+  const suffix = typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
+  return `${prefix}-${suffix}`;
+}
+
+function emptyListMessage(state: LoadState): string {
+  if (state === 'loading') {
+    return '불러오는 중';
+  }
+  if (state === 'ready') {
+    return '조회 결과가 없습니다.';
+  }
+  if (state === 'error') {
+    return '조회 실패';
+  }
+  return '상태 대기';
+}
+
 function EventRow({ event }: { event: OutboxEvent }) {
   return (
     <tr>
@@ -34,7 +90,7 @@ function EventRow({ event }: { event: OutboxEvent }) {
       <td>{emptyIfNull(event.aggregateType)}</td>
       <td>{emptyIfNull(event.aggregateId)}</td>
       <td>{emptyIfNull(event.eventType)}</td>
-      <td className={`status-pill ${event.status.toLowerCase()}`}>{event.status}</td>
+      <td className={`status-pill ${statusClass(event.status)}`}>{event.status}</td>
       <td>
         {event.retryCount} / {event.maxRetryCount}
       </td>
@@ -83,6 +139,12 @@ function OrdersTab() {
   }, []);
 
   useEffect(() => {
+    if (!selectedOrderId && orders.length > 0) {
+      setSelectedOrderId(orders[0].orderId);
+    }
+  }, [orders, selectedOrderId]);
+
+  useEffect(() => {
     if (!selectedOrderId) {
       return;
     }
@@ -113,12 +175,6 @@ function OrdersTab() {
     };
   }, [selectedOrderId]);
 
-  useEffect(() => {
-    if (!selectedOrderId && orders.length > 0) {
-      setSelectedOrderId(orders[0].orderId);
-    }
-  }, [orders, selectedOrderId]);
-
   const selectedOrder = useMemo(
     () => orders.find((order) => order.orderId === selectedOrderId) ?? null,
     [orders, selectedOrderId],
@@ -136,11 +192,7 @@ function OrdersTab() {
         <section className="panel" aria-label="주문 목록">
           <h2>최근 주문</h2>
           <p className="panel-meta">
-            {ordersState === 'loading'
-              ? '불러오는 중'
-              : ordersState === 'ready'
-                ? `총 ${orders.length}건`
-                : '상태 대기'}
+            {ordersState === 'loading' ? '불러오는 중' : ordersState === 'ready' ? `총 ${orders.length}건` : '상태 대기'}
           </p>
 
           {ordersState === 'error' && <p className="empty-message">목록을 읽지 못했습니다.</p>}
@@ -204,7 +256,7 @@ function OrdersTab() {
               </div>
               <div>
                 <span>총액</span>
-                <strong>₩{selectedOrder.totalAmount.toLocaleString()}</strong>
+                <strong>{moneyValue(selectedOrder.totalAmount)}</strong>
               </div>
               <div>
                 <span>항목 수</span>
@@ -252,9 +304,7 @@ function OrdersTab() {
             </div>
           ) : (
             <p className="empty-message">
-              {sagaState === 'loading'
-                ? '상세를 불러오는 중입니다.'
-                : '선택한 주문의 Saga 상세가 여기에 표시됩니다.'}
+              {sagaState === 'loading' ? '상세를 불러오는 중입니다.' : '선택한 주문의 Saga 상세가 여기에 표시됩니다.'}
             </p>
           )}
         </section>
@@ -384,6 +434,562 @@ function OutboxTab() {
   );
 }
 
+function CatalogTab() {
+  const [products, setProducts] = useState<CatalogProduct[]>([]);
+  const [productsState, setProductsState] = useState<LoadState>('idle');
+  const [productsError, setProductsError] = useState<string | null>(null);
+
+  const [selectedProductCode, setSelectedProductCode] = useState<string | null>(null);
+  const [isCreatingProduct, setIsCreatingProduct] = useState(false);
+  const [productCodeInput, setProductCodeInput] = useState('');
+  const [productNameInput, setProductNameInput] = useState('');
+  const [salesStatusInput, setSalesStatusInput] = useState<SalesStatus>('ON_SALE');
+  const [listPriceInput, setListPriceInput] = useState('');
+  const [productSubmitState, setProductSubmitState] = useState<SubmitState>('idle');
+  const [productSubmitError, setProductSubmitError] = useState<string | null>(null);
+  const [productSubmitMessage, setProductSubmitMessage] = useState<string | null>(null);
+
+  const [stockProductCode, setStockProductCode] = useState('');
+  const [stocksState, setStocksState] = useState<LoadState>('idle');
+  const [stocks, setStocks] = useState<StockItem[]>([]);
+  const [stocksError, setStocksError] = useState<string | null>(null);
+  const [skuIdInput, setSkuIdInput] = useState('');
+  const [stockProductCodeInput, setStockProductCodeInput] = useState('');
+  const [stockQuantityInput, setStockQuantityInput] = useState('');
+  const [stockSubmitState, setStockSubmitState] = useState<SubmitState>('idle');
+  const [stockSubmitError, setStockSubmitError] = useState<string | null>(null);
+  const [stockSubmitMessage, setStockSubmitMessage] = useState<string | null>(null);
+  const isMountedRef = useRef(true);
+
+  const productListRequestId = useRef(0);
+  const stockListRequestId = useRef(0);
+  const productSubmitModeRef = useRef<ProductSubmitMode>('create');
+  const productSubmitPayloadRef = useRef('');
+  const productSubmitKeyRef = useRef('');
+
+  const selectedProduct = useMemo(
+    () => products.find((product) => product.productCode === selectedProductCode) ?? null,
+    [selectedProductCode, products],
+  );
+
+  useEffect(() => {
+    isMountedRef.current = true;
+
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
+  const resetProductSubmitDraft = () => {
+    productSubmitModeRef.current = 'create';
+    productSubmitPayloadRef.current = '';
+    productSubmitKeyRef.current = '';
+  };
+
+  const loadProducts = () => {
+    const requestId = ++productListRequestId.current;
+    setProductsState('loading');
+    setProductsError(null);
+
+    listCatalogProducts('ON_SALE')
+      .then((response) => {
+        if (!isMountedRef.current || requestId !== productListRequestId.current) {
+          return;
+        }
+
+        setProducts(response);
+        setProductsState('ready');
+      })
+      .catch((error) => {
+        if (!isMountedRef.current || requestId !== productListRequestId.current) {
+          return;
+        }
+
+        setProductsState('error');
+        setProductsError(errorMessage(error));
+      });
+  };
+
+  useEffect(() => {
+    loadProducts();
+  }, []);
+
+  useEffect(() => {
+    if (!selectedProduct && products.length > 0 && !isCreatingProduct) {
+      const next = products[0].productCode;
+      setSelectedProductCode(next);
+      setStockProductCode(next);
+      return;
+    }
+
+    if (!selectedProduct) {
+      return;
+    }
+
+    setProductCodeInput(selectedProduct.productCode);
+    setProductNameInput(selectedProduct.name);
+    setSalesStatusInput(normalizeSalesStatus(selectedProduct.status));
+    setListPriceInput(String(selectedProduct.listPrice));
+  }, [selectedProduct, products, isCreatingProduct]);
+
+  const onChangeSelectedProduct = (product: CatalogProduct | null) => {
+    resetProductSubmitDraft();
+    if (!product) {
+      setSelectedProductCode(null);
+      setIsCreatingProduct(true);
+      setProductCodeInput('');
+      setProductNameInput('');
+      setSalesStatusInput('ON_SALE');
+      setListPriceInput('');
+      return;
+    }
+
+    setSelectedProductCode(product.productCode);
+    setProductCodeInput(product.productCode);
+    setProductNameInput(product.name);
+    setSalesStatusInput(normalizeSalesStatus(product.status));
+    setListPriceInput(String(product.listPrice));
+    setIsCreatingProduct(false);
+    setStockProductCode(product.productCode);
+    setProductSubmitError(null);
+    setProductSubmitMessage(null);
+  };
+
+  const onSubmitProduct = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    const listPrice = Number(listPriceInput);
+    if (!productCodeInput.trim() || !productNameInput.trim() || !Number.isFinite(listPrice)) {
+      setProductSubmitState('error');
+      setProductSubmitError('상품코드, 상품명, 판매가격을 모두 입력하세요.');
+      return;
+    }
+
+    if (listPrice <= 0) {
+      setProductSubmitState('error');
+      setProductSubmitError('판매가격은 0보다 커야 합니다.');
+      return;
+    }
+
+    const isUpdating = selectedProduct !== null;
+    const requestMode: ProductSubmitMode = isUpdating ? 'update' : 'create';
+    const submitPayload =
+      requestMode === 'update'
+        ? {
+            productCode: selectedProductCode,
+            name: productNameInput.trim(),
+            salesStatus: salesStatusInput,
+            listPrice,
+          }
+        : {
+            productCode: productCodeInput.trim(),
+            name: productNameInput.trim(),
+            salesStatus: salesStatusInput,
+            listPrice,
+          };
+
+    const submitFingerprint = `${requestMode}:${JSON.stringify(submitPayload)}`;
+    const idempotencyKey =
+      productSubmitModeRef.current === requestMode &&
+      productSubmitPayloadRef.current === submitFingerprint &&
+      productSubmitKeyRef.current
+        ? productSubmitKeyRef.current
+        : randomTextId('catalog');
+
+    productSubmitModeRef.current = requestMode;
+    productSubmitPayloadRef.current = submitFingerprint;
+    productSubmitKeyRef.current = idempotencyKey;
+    setProductSubmitState('loading');
+    setProductSubmitError(null);
+    setProductSubmitMessage(null);
+
+    try {
+      let nextSubmitMessage: string;
+
+      if (isUpdating && selectedProductCode) {
+        const payload: ProductUpdatePayload = {
+          name: productNameInput.trim(),
+          salesStatus: salesStatusInput,
+          listPrice,
+        };
+
+        const updated = await updateCatalogProduct(selectedProductCode, payload, idempotencyKey);
+        nextSubmitMessage = `${updated.productCode} 상품 수정이 완료되었습니다.`;
+      } else {
+        const payload: ProductCreatePayload = {
+          productCode: productCodeInput.trim(),
+          name: productNameInput.trim(),
+          salesStatus: salesStatusInput,
+          listPrice,
+        };
+
+        const created = await createCatalogProduct(payload, idempotencyKey);
+        nextSubmitMessage = `${created.productCode} 상품 등록이 완료되었습니다.`;
+      }
+
+      if (!isMountedRef.current) {
+        productSubmitModeRef.current = 'create';
+        productSubmitPayloadRef.current = '';
+        productSubmitKeyRef.current = '';
+        return;
+      }
+
+      setProductSubmitMessage(nextSubmitMessage);
+      setProductSubmitState('ready');
+      setProductsState('idle');
+      await loadProducts();
+
+      productSubmitModeRef.current = 'create';
+      productSubmitPayloadRef.current = '';
+      productSubmitKeyRef.current = '';
+
+      if (!isMountedRef.current) {
+        return;
+      }
+
+      setProductCodeInput('');
+      setProductNameInput('');
+      setSalesStatusInput('ON_SALE');
+      setListPriceInput('');
+      setSelectedProductCode(null);
+      setIsCreatingProduct(false);
+    } catch (error) {
+      if (!isMountedRef.current) {
+        return;
+      }
+
+      setProductSubmitState('error');
+      setProductSubmitError(errorMessage(error));
+    }
+  };
+
+  const loadStocks = async () => {
+    const requestId = ++stockListRequestId.current;
+    if (!stockProductCode.trim()) {
+      setStocksError('상품코드를 입력하거나 상품을 선택해 주세요.');
+      setStocksState('error');
+      return;
+    }
+
+    setStocksState('loading');
+    setStocksError(null);
+    setStockSubmitMessage(null);
+    setStocks([]);
+    setStockSubmitState('idle');
+    setStockSubmitError(null);
+
+    try {
+      const response = await listStocksByProductCode(stockProductCode.trim());
+
+      if (!isMountedRef.current || requestId !== stockListRequestId.current) {
+        return;
+      }
+
+      setStocks(response);
+      setStocksState('ready');
+    } catch (error) {
+      if (!isMountedRef.current || requestId !== stockListRequestId.current) {
+        return;
+      }
+
+      setStocksState('error');
+      setStocksError(errorMessage(error));
+    }
+  };
+
+  const fillStockFormFromItem = (stock: StockItem) => {
+    setSkuIdInput(stock.skuId);
+    setStockProductCodeInput(stock.productCode);
+    setStockQuantityInput(String(stock.availableQuantity));
+    setStockSubmitError(null);
+    setStockSubmitMessage(null);
+  };
+
+  const onSubmitStock = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    const availableQuantity = Number(stockQuantityInput);
+
+    if (!skuIdInput.trim() || !stockProductCodeInput.trim() || !Number.isFinite(availableQuantity)) {
+      setStockSubmitState('error');
+      setStockSubmitError('SKU, 상품코드, 재고 수량을 모두 입력하세요.');
+      return;
+    }
+
+    if (availableQuantity < 0 || !Number.isInteger(availableQuantity)) {
+      setStockSubmitState('error');
+      setStockSubmitError('재고 수량은 0 이상의 정수여야 합니다.');
+      return;
+    }
+
+    const payload: StockSetPayload = {
+      productCode: stockProductCodeInput.trim(),
+      availableQuantity,
+    };
+
+    setStockSubmitState('loading');
+    setStockSubmitError(null);
+    setStockSubmitMessage(null);
+
+    try {
+      const updated = await setStockQuantity(skuIdInput, payload);
+      if (!isMountedRef.current) {
+        return;
+      }
+
+      setStocks((prev) => {
+        const nextIndex = prev.findIndex((stock) => stock.skuId === updated.skuId);
+        if (nextIndex === -1) {
+          return [...prev, updated];
+        }
+
+        return prev.map((stock) => (stock.skuId === updated.skuId ? updated : stock));
+      });
+      setStockSubmitState('ready');
+      setStockSubmitMessage(`${updated.skuId} 재고가 ${updated.availableQuantity}개로 저장되었습니다.`);
+    } catch (error) {
+      if (!isMountedRef.current) {
+        return;
+      }
+
+      setStockSubmitState('error');
+      setStockSubmitError(errorMessage(error));
+    }
+  };
+
+  return (
+    <section className="panel-shell">
+      <section className="panel-grid">
+        <section className="panel" aria-label="상품 목록">
+          <div className="panel-head">
+            <h2>상품 목록</h2>
+            <p className="panel-meta">{emptyListMessage(productsState)}</p>
+          </div>
+          {(productsState === 'error' || productsError) && (
+            <p className="error-banner" role="alert">
+              {productsError}
+            </p>
+          )}
+          {productsState === 'loading' ? (
+            <p className="empty-message">상품을 조회 중입니다.</p>
+          ) : (
+            <>
+              <table className="events-table">
+                <thead>
+                  <tr>
+                    <th>상품코드</th>
+                    <th>상품명</th>
+                    <th>상태</th>
+                    <th>판매가</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {products.map((product) => (
+                    <tr key={product.productCode}>
+                      <td>
+                        <button
+                          type="button"
+                          className={product.productCode === selectedProductCode ? 'catalog-item selected' : 'catalog-item'}
+                          onClick={() => onChangeSelectedProduct(product)}
+                        >
+                          {product.productCode}
+                        </button>
+                      </td>
+                      <td>{product.name}</td>
+                      <td>
+                        <span className={`status-pill ${statusClass(product.status)}`}>{product.status}</span>
+                      </td>
+                      <td>{moneyValue(product.listPrice)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {products.length === 0 && productsState === 'ready' ? (
+                <p className="empty-message">ON_SALE 상품이 없습니다.</p>
+              ) : null}
+            </>
+          )}
+        </section>
+
+        <section className="panel" aria-label="상품 등록 및 수정">
+          <h2>상품 등록 / 수정</h2>
+          <p className="panel-meta">
+            {productSubmitState === 'ready'
+              ? '처리가 완료되었습니다.'
+              : selectedProduct
+                ? `${selectedProduct.productCode} 선택됨`
+                : '상품을 선택하거나 새로 등록하세요'}
+          </p>
+
+          {productSubmitError && (
+            <p className="error-banner" role="alert">
+              {productSubmitError}
+            </p>
+          )}
+
+          <form className="form-grid" onSubmit={onSubmitProduct}>
+            <label className="form-field">
+              <span>상품코드(등록/수정)</span>
+              <input
+                value={productCodeInput}
+                onChange={(event) => setProductCodeInput(event.target.value)}
+                placeholder="예: BAG-001"
+                readOnly={selectedProduct !== null}
+              />
+            </label>
+            <label className="form-field">
+              <span>상품명</span>
+              <input
+                value={productNameInput}
+                onChange={(event) => setProductNameInput(event.target.value)}
+                placeholder="예: premium bag"
+              />
+            </label>
+            <label className="form-field">
+              <span>판매 상태</span>
+              <select
+                value={salesStatusInput}
+                onChange={(event) => setSalesStatusInput(event.target.value as SalesStatus)}
+              >
+                {SALES_STATUS_OPTIONS.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="form-field">
+              <span>가격</span>
+              <input
+                type="number"
+                min="1"
+                step="1"
+                value={listPriceInput}
+                onChange={(event) => setListPriceInput(event.target.value)}
+                placeholder="예: 50000"
+              />
+            </label>
+            <div className="form-actions">
+              <button type="submit" className="action-btn" disabled={productSubmitState === 'loading'}>
+                {productSubmitState === 'loading'
+                  ? selectedProduct
+                    ? '상품 수정 요청 중'
+                    : '상품 등록 요청 중'
+                  : selectedProduct
+                    ? '상품 수정'
+                    : '상품 등록'}
+              </button>
+              <button
+                type="button"
+                className="secondary-btn"
+                onClick={() => onChangeSelectedProduct(null)}
+                disabled={productSubmitState === 'loading'}
+              >
+                새로 등록
+              </button>
+            </div>
+          </form>
+          {productSubmitMessage && <p className="success-banner">{productSubmitMessage}</p>}
+
+          <hr />
+
+          <h2>재고 조회 / 설정</h2>
+          <p className="panel-meta">{emptyListMessage(stocksState)}</p>
+          {stocksError && (
+            <p className="error-banner" role="alert">
+              {stocksError}
+            </p>
+          )}
+          {stockSubmitMessage && <p className="success-banner">{stockSubmitMessage}</p>}
+
+          <form className="stock-search" onSubmit={(event) => {
+            event.preventDefault();
+            loadStocks();
+          }}>
+            <label className="form-field stock-search-field">
+              <span>조회 상품코드</span>
+              <input
+                value={stockProductCode}
+                onChange={(event) => setStockProductCode(event.target.value)}
+                placeholder="상품코드 입력"
+              />
+            </label>
+            <button type="submit" className="action-btn">
+              재고 조회
+            </button>
+          </form>
+
+          <div className="stock-results">
+            <table className="events-table">
+              <thead>
+                <tr>
+                  <th>SKU</th>
+                  <th>상품코드</th>
+                  <th>가능 수량</th>
+                  <th>예약 수량</th>
+                  <th>버전</th>
+                  <th>동작</th>
+                </tr>
+              </thead>
+              <tbody>
+                {stocks.map((stock) => (
+                  <tr key={stock.skuId}>
+                    <td>{stock.skuId}</td>
+                    <td>{stock.productCode}</td>
+                    <td>{stock.availableQuantity}</td>
+                    <td>{stock.reservedQuantity}</td>
+                    <td>{stock.version}</td>
+                    <td>
+                      <button type="button" className="secondary-btn" onClick={() => fillStockFormFromItem(stock)}>
+                        선택
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {stocks.length === 0 && stocksState === 'ready' ? (
+              <p className="empty-message">재고 데이터가 없습니다.</p>
+            ) : null}
+          </div>
+
+          <form className="stock-update" onSubmit={onSubmitStock}>
+            <div className="form-grid">
+              <label className="form-field">
+                <span>SKU</span>
+                <input value={skuIdInput} onChange={(event) => setSkuIdInput(event.target.value)} />
+              </label>
+              <label className="form-field">
+                <span>재고 대상 상품코드</span>
+                <input value={stockProductCodeInput} onChange={(event) => setStockProductCodeInput(event.target.value)} />
+              </label>
+              <label className="form-field">
+                <span>가능 수량</span>
+                <input
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={stockQuantityInput}
+                  onChange={(event) => setStockQuantityInput(event.target.value)}
+                  placeholder="예: 10"
+                />
+              </label>
+            </div>
+            <div className="form-actions">
+              <button type="submit" className="action-btn" disabled={stockSubmitState === 'loading'}>
+                {stockSubmitState === 'loading' ? '재고 저장 중' : '재고 설정'}
+              </button>
+            </div>
+          </form>
+
+          {stocksState === 'loading' && <p className="empty-message">재고를 조회 중입니다.</p>}
+          {stocksState === 'error' && <p className="empty-message">재고 조회를 실패했습니다.</p>}
+        </section>
+      </section>
+    </section>
+  );
+}
+
 export default function App() {
   const [tab, setTab] = useState<TabId>('orders');
 
@@ -394,7 +1000,7 @@ export default function App() {
           <p className="eyebrow">StockRush</p>
           <h1>포트폴리오 운영</h1>
         </div>
-        <p className="runtime-note">Orders / Outbox</p>
+        <p className="runtime-note">Orders / Outbox / Products</p>
       </header>
 
       <div className="segmented" role="tablist" aria-label="작업 영역">
@@ -416,9 +1022,24 @@ export default function App() {
         >
           Outbox
         </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={tab === 'products'}
+          className={tab === 'products' ? 'segment selected' : 'segment'}
+          onClick={() => setTab('products')}
+        >
+          Products
+        </button>
       </div>
 
-      {tab === 'orders' ? <OrdersTab /> : <OutboxTab />}
+      {tab === 'orders' ? (
+        <OrdersTab />
+      ) : tab === 'outbox' ? (
+        <OutboxTab />
+      ) : (
+        <CatalogTab />
+      )}
     </main>
   );
 }

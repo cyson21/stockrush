@@ -1,5 +1,15 @@
 import { apiUrl, request } from './client';
-import type { AdminOrderPage, AdminOrderSaga, OutboxEventPage, OutboxRetryResult } from '../types/admin';
+import type {
+  AdminOrderPage,
+  AdminOrderSaga,
+  CatalogProduct,
+  OutboxEventPage,
+  OutboxRetryResult,
+  ProductCreatePayload,
+  ProductUpdatePayload,
+  StockItem,
+  StockSetPayload,
+} from '../types/admin';
 
 export type ServiceDomain = 'order' | 'inventory' | 'payment';
 
@@ -9,6 +19,50 @@ export function listRecentOrders(): Promise<AdminOrderPage> {
 
 export function getOrderSaga(orderId: string): Promise<AdminOrderSaga> {
   return request<AdminOrderSaga>(apiUrl('order', `/api/admin/orders/${encodeURIComponent(orderId)}/saga`));
+}
+
+export function listCatalogProducts(status: string): Promise<CatalogProduct[]> {
+  return request<CatalogProduct[]>(apiUrl('catalog', '/api/products', { status }));
+}
+
+export function createCatalogProduct(payload: ProductCreatePayload, idempotencyKey: string): Promise<CatalogProduct> {
+  return request<CatalogProduct>(apiUrl('catalog', '/api/admin/products'), {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Idempotency-Key': idempotencyKey,
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
+export function updateCatalogProduct(
+  productCode: string,
+  payload: ProductUpdatePayload,
+  idempotencyKey: string,
+): Promise<CatalogProduct> {
+  return request<CatalogProduct>(apiUrl('catalog', `/api/admin/products/${encodeURIComponent(productCode)}`), {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      'Idempotency-Key': idempotencyKey,
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
+export function listStocksByProductCode(productCode: string): Promise<StockItem[]> {
+  return request<StockItem[]>(apiUrl('inventory', '/api/stocks', { productCode }));
+}
+
+export function setStockQuantity(skuId: string, payload: StockSetPayload): Promise<StockItem> {
+  return request<StockItem>(apiUrl('inventory', `/api/stocks/${encodeURIComponent(skuId)}`), {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
 }
 
 export function listOutbox(service: ServiceDomain): Promise<OutboxEventPage> {

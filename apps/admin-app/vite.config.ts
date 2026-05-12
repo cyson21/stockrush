@@ -20,6 +20,11 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/payment/, ''),
       },
+      '/catalog': {
+        target: 'http://localhost:18081',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/catalog/, ''),
+      },
     },
   },
   test: {

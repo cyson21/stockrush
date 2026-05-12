@@ -59,9 +59,12 @@ p {
   border: 1px solid #c7d2fe;
   background: #eef2ff;
   border-radius: 10px;
-  display: inline-flex;
+  display: flex;
   margin: 0 auto 20px;
-  overflow: hidden;
+  overflow-x: auto;
+  width: 100%;
+  max-width: 640px;
+  scrollbar-width: thin;
 }
 
 .segment {
@@ -69,7 +72,8 @@ p {
   border: 0;
   color: #334155;
   cursor: pointer;
-  min-width: 130px;
+  flex: 1 0 auto;
+  min-width: 102px;
   min-height: 40px;
   padding: 0 16px;
 }
@@ -108,6 +112,10 @@ p {
   display: flex;
   align-items: center;
   justify-content: space-between;
+}
+
+.panel-head h2 {
+  margin: 0;
 }
 
 .service-select {
@@ -290,6 +298,103 @@ hr {
   color: #14532d;
 }
 
+.status-pill.on_sale {
+  background: #dcfce7;
+  color: #14532d;
+}
+
+.status-pill.stopped {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.catalog-item {
+  background: transparent;
+  border: 0;
+  color: #0f172a;
+  cursor: pointer;
+  text-align: left;
+  text-decoration: underline;
+}
+
+.catalog-item:hover {
+  color: #4338ca;
+}
+
+.catalog-item.selected {
+  color: #4338ca;
+  font-weight: 700;
+}
+
+.form-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: 14px 0;
+}
+
+.form-field {
+  display: grid;
+  gap: 6px;
+}
+
+.form-field span {
+  color: #334155;
+  font-size: 13px;
+}
+
+.form-field input,
+.form-field select {
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  min-height: 36px;
+  min-width: 0;
+  padding: 8px 10px;
+}
+
+.form-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.secondary-btn {
+  background: #eef2ff;
+  border: 1px solid #c7d2fe;
+  border-radius: 8px;
+  color: #3730a3;
+  cursor: pointer;
+  min-height: 36px;
+  padding: 0 14px;
+}
+
+.secondary-btn:disabled {
+  background: #e2e8f0;
+  cursor: not-allowed;
+  opacity: 0.8;
+}
+
+.stock-search,
+.stock-update {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.stock-search {
+  align-items: end;
+  grid-template-columns: 1fr auto;
+}
+
+.stock-search-field {
+  margin-right: 8px;
+}
+
+.stock-results {
+  overflow-x: auto;
+  margin-bottom: 12px;
+}
+
 @media (max-width: 1200px) {
   .panel-grid {
     grid-template-columns: 1fr;
@@ -297,5 +402,57 @@ hr {
 
   .segmented {
     width: 100%;
+  }
+}
+
+@media (max-width: 700px) {
+  .app-shell {
+    padding: 16px;
+  }
+
+  .segmented {
+    max-width: 100%;
+    gap: 4px;
+  }
+
+  .segment {
+    min-width: 100px;
+    padding: 0 12px;
+  }
+
+  .panel-grid {
+    gap: 12px;
+  }
+
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .stock-search {
+    grid-template-columns: 1fr;
+  }
+
+  .top-bar {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .events-table th,
+  .events-table td {
+    max-width: 180px;
+  }
+}
+
+@media (max-width: 390px) {
+  .segmented {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    overflow-x: visible;
+  }
+
+  .segment {
+    min-width: 0;
+    padding: 0 6px;
   }
 }

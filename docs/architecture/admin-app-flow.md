@@ -1,11 +1,15 @@
 # Admin App Flow
 
-Admin App은 StockRush 운영 시나리오를 시연하는 React 앱이다. 주문 Saga 상태와 서비스별 outbox 상태를 같은 화면에서 확인하고, due 상태의 pending 이벤트를 수동으로 재시도할 수 있게 한다.
+Admin App은 StockRush 운영 시나리오를 시연하는 React 앱이다. 상품/재고 운영, 주문 Saga 상태, 서비스별 outbox 상태를 같은 앱에서 확인하고, due 상태의 pending 이벤트를 수동으로 재시도할 수 있게 한다.
 
 ## Scope
 
 - 최근 주문 목록
 - 주문별 Saga 상세 조회
+- 상품 목록 조회
+- 관리자 상품 등록/수정
+- 상품코드별 재고 조회
+- SKU 재고 수량 설정
 - order, inventory, payment outbox 이벤트 조회
 - 서비스별 outbox relay 수동 retry
 
@@ -21,6 +25,12 @@ Outbox
   -> Pending/Failed Event List
   -> Manual Retry
   -> Event List Refresh
+
+Products
+  -> ON_SALE Product List
+  -> Product Create / Update
+  -> Stock Search by Product Code
+  -> Stock Quantity Upsert by SKU
 ```
 
 ## API Mapping
@@ -29,6 +39,11 @@ Outbox
 |---|---|---|
 | 주문 목록 | `GET /api/admin/orders` | 최근 주문 상태와 Saga 상태 요약 |
 | Saga 상세 | `GET /api/admin/orders/{orderId}/saga` | 실패 시각, 마지막 이벤트, 비즈니스 실패 사유, 기술 오류 |
+| 상품 목록 | `GET /api/products?status=ON_SALE` | 운영 대상 상품 선택과 재고 조회 기준 |
+| 상품 등록 | `POST /api/admin/products` | 상품코드, 상품명, 판매 상태, 판매가 등록 |
+| 상품 수정 | `PUT /api/admin/products/{productCode}` | 상품명, 판매 상태, 판매가 수정 |
+| 재고 목록 | `GET /api/stocks?productCode={productCode}` | 상품별 SKU 재고와 예약 수량 확인 |
+| 재고 설정 | `PUT /api/stocks/{skuId}` | SKU 기준 재고 수량 설정 또는 신규 SKU 초기화 |
 | Outbox 목록 | `GET /api/admin/outbox-events` | 각 서비스의 pending/failed 이벤트 |
 | Outbox retry | `POST /api/admin/outbox-events/retry` | 각 서비스 relay를 수동 실행 |
 
@@ -38,6 +53,7 @@ Vite 개발 서버는 서비스별 prefix를 backend service로 proxy한다.
 
 | Prefix | Target |
 |---|---|
+| `/catalog` | `http://localhost:18081` |
 | `/orders` | `http://localhost:18083` |
 | `/inventory` | `http://localhost:18082` |
 | `/payment` | `http://localhost:18084` |
@@ -48,5 +64,7 @@ Vite 개발 서버는 서비스별 prefix를 backend service로 proxy한다.
 
 - Admin App은 HTTP API만 호출한다.
 - 한 서비스가 다른 서비스 DB schema를 직접 읽지 않는다.
+- 상품 등록/수정 요청은 `Idempotency-Key`를 전달한다.
+- 동일 상품 등록/수정 입력을 실패 후 재시도하면 같은 멱등 키를 재사용한다.
 - 수동 retry는 existing relay를 실행하는 수준으로 제한한다.
 - 인증과 권한은 이후 phase에서 추가한다.

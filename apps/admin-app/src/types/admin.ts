@@ -67,3 +67,38 @@ export type OutboxRetryResult = {
   published: number;
   failed: number;
 };
+
+export type SalesStatus = 'ON_SALE' | 'STOPPED';
+
+export type CatalogProduct = {
+  productCode: string;
+  name: string;
+  status: SalesStatus | string;
+  listPrice: number;
+};
+
+export type ProductCreatePayload = {
+  productCode: string;
+  name: string;
+  salesStatus: SalesStatus;
+  listPrice: number;
+};
+
+export type ProductUpdatePayload = {
+  name: string;
+  salesStatus: SalesStatus;
+  listPrice: number;
+};
+
+export type StockItem = {
+  skuId: string;
+  productCode: string;
+  availableQuantity: number;
+  reservedQuantity: number;
+  version: number;
+};
+
+export type StockSetPayload = {
+  productCode: string;
+  availableQuantity: number;
+};
