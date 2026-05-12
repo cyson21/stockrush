@@ -87,6 +87,20 @@ Initial roles:
 
 The first version can be a local CLI that writes run records and prompts. LangGraph or OpenAI Agents SDK can be introduced later if durable execution, handoff state, or integrated tracing becomes necessary.
 
+Current runner path:
+
+```text
+tools/agent-runner/
+```
+
+Current commands:
+
+```bash
+./tools/agent-runner/agent-runner start
+./tools/agent-runner/agent-runner list
+./tools/agent-runner/agent-runner verify
+```
+
 ### AI Run Ledger
 
 AI Run Ledger records how each AI-assisted task was performed.

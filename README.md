@@ -79,6 +79,13 @@ Project MCP Server:
 python tools/project-mcp/project_mcp_server.py --root .
 ```
 
+Agent Runner:
+
+```bash
+./tools/agent-runner/agent-runner start --slug phase-0-dev-ops-tools --task "..." --scope "..." --completion "..."
+./tools/agent-runner/agent-runner list
+```
+
 ## 현재 상태
 
 현재는 설계 및 개발 운영 기반을 구축하는 Phase 0 단계입니다.
