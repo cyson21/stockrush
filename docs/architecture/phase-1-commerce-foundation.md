@@ -45,6 +45,14 @@ flowchart LR
 
 `causationId` is preserved in outbox headers and copied into the Kafka envelope by the relay publisher.
 
+## Service Relay Coverage
+
+| Service | Relay Scope | Verification |
+|---|---|---|
+| order-service | `stockrush.order.events.v1`, `stockrush.payment.commands.v1` | pending claim, publish success, retry, failed |
+| inventory-service | `stockrush.inventory.events.v1` | pending claim, publish success, retry, failed, envelope JSON |
+| payment-service | `stockrush.payment.events.v1` | pending claim, publish success, retry, failed, envelope JSON |
+
 ## Design Constraints
 
 - Services are independent Maven projects.
