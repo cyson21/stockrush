@@ -29,6 +29,7 @@ StockRush는 한정 판매 상황을 다루는 커머스/플랫폼 백엔드 포
 - [Customer App Flow](docs/architecture/customer-app-flow.md)
 - [Admin App Flow](docs/architecture/admin-app-flow.md)
 - [Common API Response](docs/api/common.md)
+- [Catalog Admin API](docs/api/catalog-admin.md)
 - [Admin Order API](docs/api/admin-orders.md)
 - [Outbox Admin API](docs/api/outbox-admin.md)
 - [Event Envelope](docs/architecture/events.md)
