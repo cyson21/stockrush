@@ -11,6 +11,7 @@ public record OrderSnapshot(
     String memberId,
     OrderStatus status,
     SagaStatus sagaStatus,
+    String paymentMethod,
     BigDecimal totalAmount,
     Instant createdAt,
     List<OrderLineSnapshot> items
@@ -19,4 +20,3 @@ public record OrderSnapshot(
         items = List.copyOf(items);
     }
 }
-

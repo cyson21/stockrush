@@ -72,7 +72,65 @@ class CreateOrderControllerIntegrationTest {
             .andExpect(jsonPath("$.data.orderId", is("ord_http_001")))
             .andExpect(jsonPath("$.data.status", is("CREATED")))
             .andExpect(jsonPath("$.data.sagaStatus", is("STARTED")))
+            .andExpect(jsonPath("$.data.paymentMethod", is("CARD")))
             .andExpect(jsonPath("$.trace.correlationId", is("corr-http-001")));
+    }
+
+    @Test
+    void creates_order_with_payment_method() throws Exception {
+        mockMvc.perform(post("/api/orders")
+                .header("Idempotency-Key", "idem-http-payment-method")
+                .header("X-Correlation-Id", "corr-http-payment-method")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "memberId": "member-1",
+                      "paymentMethod": "FAIL_CARD",
+                      "items": [
+                        {
+                          "productCode": "LIMITED-001",
+                          "skuId": "SKU-001",
+                          "quantity": 2,
+                          "unitPrice": 12000.00
+                        }
+                      ]
+                    }
+                    """))
+            .andExpect(status().isCreated())
+            .andExpect(header().string("X-Correlation-Id", "corr-http-payment-method"))
+            .andExpect(jsonPath("$.success", is(true)))
+            .andExpect(jsonPath("$.data.paymentMethod", is("FAIL_CARD")))
+            .andExpect(jsonPath("$.trace.correlationId", is("corr-http-payment-method")));
+
+        assertPaymentMethod("FAIL_CARD");
+    }
+
+    @Test
+    void creates_order_with_default_payment_method_when_omitted() throws Exception {
+        mockMvc.perform(post("/api/orders")
+                .header("Idempotency-Key", "idem-http-default-payment")
+                .header("X-Correlation-Id", "corr-http-default-payment")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "memberId": "member-1",
+                      "items": [
+                        {
+                          "productCode": "LIMITED-001",
+                          "skuId": "SKU-001",
+                          "quantity": 1,
+                          "unitPrice": 12000.00
+                        }
+                      ]
+                    }
+                    """))
+            .andExpect(status().isCreated())
+            .andExpect(header().string("X-Correlation-Id", "corr-http-default-payment"))
+            .andExpect(jsonPath("$.success", is(true)))
+            .andExpect(jsonPath("$.data.paymentMethod", is("CARD")))
+            .andExpect(jsonPath("$.trace.correlationId", is("corr-http-default-payment")));
+
+        assertPaymentMethod("CARD");
     }
 
     @Test
@@ -140,5 +198,12 @@ class CreateOrderControllerIntegrationTest {
         Supplier<UUID> fixedEventIdSupplier() {
             return () -> UUID.fromString("018f8d0b-8d32-7c42-9f1b-78328e0f7a22");
         }
+    }
+
+    private void assertPaymentMethod(String expected) {
+        String paymentMethod = jdbcClient.sql("select payment_method from customer_orders where order_id = 'ord_http_001'")
+            .query(String.class)
+            .single();
+        org.junit.jupiter.api.Assertions.assertEquals(expected, paymentMethod);
     }
 }

@@ -17,6 +17,8 @@ public class PaymentAuthorizationHandler {
 
     private static final String CONSUMER_GROUP = "payment-service";
     private static final String PAYMENT_TOPIC = "stockrush.payment.events.v1";
+    private static final String FAIL_CARD_METHOD = "FAIL_CARD";
+    private static final String PAYMENT_DECLINED_REASON = "PAYMENT_DECLINED";
 
     private final JdbcClient jdbcClient;
     private final ObjectMapper objectMapper;
@@ -43,13 +45,14 @@ public class PaymentAuthorizationHandler {
 
         PaymentAuthorizationRequestedPayload payload = event.payload();
         UUID paymentId = idSupplier.get();
+        boolean failedAuthorization = FAIL_CARD_METHOD.equals(payload.method());
         jdbcClient.sql("""
                 insert into payments (
                   payment_id, order_id, amount, method, status, failure_reason,
                   idempotency_key, created_at, updated_at
                 )
                 values (
-                  :paymentId, :orderId, :amount, :method, 'AUTHORIZED', null,
+                  :paymentId, :orderId, :amount, :method, :status, :failureReason,
                   :idempotencyKey, now(), now()
                 )
                 """)
@@ -57,8 +60,25 @@ public class PaymentAuthorizationHandler {
             .param("orderId", payload.orderId())
             .param("amount", payload.amount())
             .param("method", payload.method())
+            .param("status", failedAuthorization ? "FAILED" : "AUTHORIZED")
+            .param("failureReason", failedAuthorization ? PAYMENT_DECLINED_REASON : null)
             .param("idempotencyKey", event.idempotencyKey())
             .update();
+
+        if (failedAuthorization) {
+            writeOutbox(
+                event,
+                "PaymentAuthorizationFailed",
+                new PaymentAuthorizationFailedPayload(
+                    payload.orderId(),
+                    payload.amount(),
+                    payload.method(),
+                    PAYMENT_DECLINED_REASON,
+                    clock.instant()
+                )
+            );
+            return;
+        }
 
         writeOutbox(
             event,

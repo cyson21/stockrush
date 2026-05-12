@@ -48,6 +48,7 @@ class CreateOrderController {
 
 record CreateOrderRequest(
     @NotBlank String memberId,
+    String paymentMethod,
     @NotEmpty List<@Valid CreateOrderItemRequest> items
 ) {
 
@@ -56,6 +57,7 @@ record CreateOrderRequest(
             memberId,
             idempotencyKey,
             correlationId,
+            paymentMethod,
             items.stream().map(CreateOrderItemRequest::toCommand).toList()
         );
     }
@@ -77,6 +79,7 @@ record CreateOrderResponse(
     String orderId,
     String status,
     String sagaStatus,
+    String paymentMethod,
     BigDecimal totalAmount
 ) {
 
@@ -85,6 +88,7 @@ record CreateOrderResponse(
             result.order().orderId(),
             result.order().status().name(),
             result.order().sagaStatus().name(),
+            result.order().paymentMethod(),
             result.order().totalAmount()
         );
     }

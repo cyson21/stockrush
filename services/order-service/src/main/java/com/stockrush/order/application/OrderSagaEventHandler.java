@@ -16,7 +16,6 @@ public class OrderSagaEventHandler {
     private static final String CONSUMER_GROUP = "order-service";
     private static final String ORDER_TOPIC = "stockrush.order.events.v1";
     private static final String PAYMENT_COMMAND_TOPIC = "stockrush.payment.commands.v1";
-    private static final String DEFAULT_PAYMENT_METHOD = "CARD";
 
     private final JdbcClient jdbcClient;
     private final OutboxEventRepository outboxEventRepository;
@@ -42,13 +41,13 @@ public class OrderSagaEventHandler {
         }
 
         String orderId = event.payload().orderId();
-        BigDecimal totalAmount = totalAmount(orderId);
+        PaymentRequestOrder order = paymentRequestOrder(orderId);
         updateOrder(orderId, "CREATED", "PAYMENT_REQUESTED");
         saveOutbox(
             event,
             "PaymentAuthorizationRequested",
             PAYMENT_COMMAND_TOPIC,
-            new PaymentAuthorizationRequestedPayload(orderId, totalAmount, DEFAULT_PAYMENT_METHOD)
+            new PaymentAuthorizationRequestedPayload(orderId, order.totalAmount(), order.paymentMethod())
         );
     }
 
@@ -118,10 +117,17 @@ public class OrderSagaEventHandler {
         return inserted == 1;
     }
 
-    private BigDecimal totalAmount(String orderId) {
-        return jdbcClient.sql("select total_amount from customer_orders where order_id = :orderId")
+    private PaymentRequestOrder paymentRequestOrder(String orderId) {
+        return jdbcClient.sql("""
+                select total_amount, payment_method
+                from customer_orders
+                where order_id = :orderId
+                """)
             .param("orderId", orderId)
-            .query(BigDecimal.class)
+            .query((rs, rowNum) -> new PaymentRequestOrder(
+                rs.getBigDecimal("total_amount"),
+                rs.getString("payment_method")
+            ))
             .single();
     }
 
@@ -165,5 +171,8 @@ public class OrderSagaEventHandler {
             source.aggregateId(),
             payload
         ));
+    }
+
+    private record PaymentRequestOrder(BigDecimal totalAmount, String paymentMethod) {
     }
 }

@@ -61,3 +61,12 @@ Kafka events use a common envelope with event-specific payloads.
 - Business failures are represented as failure events.
 - Technical failures are handled by retry topics and DLQ.
 
+## Phase 1 Payment Payload Notes
+
+| Event | Required payload fields |
+|---|---|
+| `PaymentAuthorizationRequested` | `orderId`, `amount`, `method` |
+| `PaymentAuthorized` | `paymentId`, `orderId`, `amount`, `method`, `authorizedAt` |
+| `PaymentAuthorizationFailed` | `orderId`, `amount`, `method`, `reason`, `failedAt` |
+
+`PaymentAuthorizationRequested.method` is stored from the order request. If omitted, Order Service uses `CARD`. The `FAIL_CARD` method is reserved for deterministic local failure simulation and produces `PaymentAuthorizationFailed` with reason `PAYMENT_DECLINED`.

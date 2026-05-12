@@ -33,12 +33,14 @@ public class CreateOrderService {
         BigDecimal totalAmount = lines.stream()
             .map(OrderLineSnapshot::lineAmount)
             .reduce(BigDecimal.ZERO, BigDecimal::add);
+        String paymentMethod = paymentMethod(command.paymentMethod());
 
         OrderSnapshot order = new OrderSnapshot(
             orderId,
             command.memberId(),
             OrderStatus.CREATED,
             SagaStatus.STARTED,
+            paymentMethod,
             totalAmount,
             now,
             lines
@@ -89,6 +91,9 @@ public class CreateOrderService {
         if (command.items() == null || command.items().isEmpty()) {
             throw new IllegalArgumentException("order items must not be empty");
         }
+        if (command.paymentMethod() != null && command.paymentMethod().isBlank()) {
+            throw new IllegalArgumentException("payment method must not be blank");
+        }
         for (CreateOrderItemCommand item : command.items()) {
             if (item.quantity() <= 0) {
                 throw new IllegalArgumentException("order item quantity must be positive");
@@ -101,5 +106,12 @@ public class CreateOrderService {
 
     private boolean isBlank(String value) {
         return value == null || value.isBlank();
+    }
+
+    private String paymentMethod(String paymentMethod) {
+        if (paymentMethod == null) {
+            return "CARD";
+        }
+        return paymentMethod.trim();
     }
 }

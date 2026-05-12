@@ -48,12 +48,14 @@ class PersistentCreateOrderServiceIntegrationTest {
             "member-1",
             "idem-001",
             "corr-001",
+            "FAIL_CARD",
             List.of(new CreateOrderItemCommand("LIMITED-001", "SKU-001", 2, new BigDecimal("12000.00")))
         );
 
         CreateOrderResult result = service.create(command);
 
         assertEquals(1, count("customer_orders"));
+        assertEquals("FAIL_CARD", jdbcClient.sql("select payment_method from customer_orders").query(String.class).single());
         assertEquals(1, count("order_items"));
         assertEquals(1, count("outbox_events"));
         assertEquals("ord_test_001", result.order().orderId());

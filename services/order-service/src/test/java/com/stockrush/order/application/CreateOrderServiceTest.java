@@ -40,6 +40,7 @@ class CreateOrderServiceTest {
         assertEquals("ord_20260512_000001", result.order().orderId());
         assertEquals(OrderStatus.CREATED, result.order().status());
         assertEquals(SagaStatus.STARTED, result.order().sagaStatus());
+        assertEquals("CARD", result.order().paymentMethod());
         assertEquals(new BigDecimal("29000.00"), result.order().totalAmount());
         assertEquals(NOW, result.order().createdAt());
 
@@ -63,9 +64,25 @@ class CreateOrderServiceTest {
     }
 
     @Test
+    void creates_order_with_requested_payment_method() {
+        CreateOrderService service = newService();
+        CreateOrderCommand command = new CreateOrderCommand(
+            "member-1",
+            "idem-001",
+            "corr-001",
+            "FAIL_CARD",
+            List.of(new CreateOrderItemCommand("LIMITED-001", "SKU-001", 1, new BigDecimal("12000.00")))
+        );
+
+        CreateOrderResult result = service.create(command);
+
+        assertEquals("FAIL_CARD", result.order().paymentMethod());
+    }
+
+    @Test
     void rejects_order_without_items() {
         CreateOrderService service = newService();
-        CreateOrderCommand command = new CreateOrderCommand("member-1", "idem-001", "corr-001", List.of());
+        CreateOrderCommand command = new CreateOrderCommand("member-1", "idem-001", "corr-001", "CARD", List.of());
 
         IllegalArgumentException error = assertThrows(IllegalArgumentException.class, () -> service.create(command));
 
@@ -79,6 +96,7 @@ class CreateOrderServiceTest {
             "member-1",
             "idem-001",
             "corr-001",
+            "CARD",
             List.of(new CreateOrderItemCommand("LIMITED-001", "SKU-001", 0, new BigDecimal("12000.00")))
         );
 
@@ -94,6 +112,7 @@ class CreateOrderServiceTest {
             "member-1",
             "idem-001",
             "corr-001",
+            "CARD",
             List.of(new CreateOrderItemCommand("LIMITED-001", "SKU-001", 1, BigDecimal.ZERO))
         );
 
@@ -109,6 +128,7 @@ class CreateOrderServiceTest {
             " ",
             "idem-001",
             "corr-001",
+            "CARD",
             List.of(new CreateOrderItemCommand("LIMITED-001", "SKU-001", 1, new BigDecimal("12000.00")))
         );
 
@@ -124,6 +144,7 @@ class CreateOrderServiceTest {
             "member-1",
             " ",
             "corr-001",
+            "CARD",
             List.of(new CreateOrderItemCommand("LIMITED-001", "SKU-001", 1, new BigDecimal("12000.00")))
         );
 
