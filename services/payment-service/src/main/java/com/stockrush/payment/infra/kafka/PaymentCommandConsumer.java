@@ -21,7 +21,7 @@ class PaymentCommandConsumer {
 
     @KafkaListener(
         topics = "stockrush.payment.commands.v1",
-        groupId = "payment-service",
+        groupId = "${stockrush.kafka.consumer.group-id:payment-service}",
         autoStartup = "${stockrush.kafka.listeners.enabled:false}"
     )
     void consume(String message) {

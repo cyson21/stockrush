@@ -18,6 +18,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Primary;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.test.context.TestPropertySource;
@@ -168,6 +169,7 @@ class InventoryOutboxRelayServiceIntegrationTest {
     static class PublisherConfig {
 
         @Bean
+        @Primary
         RecordingOutboxEventPublisher recordingOutboxEventPublisher() {
             return new RecordingOutboxEventPublisher();
         }

@@ -21,7 +21,7 @@ class InventoryOrderEventConsumer {
 
     @KafkaListener(
         topics = "stockrush.order.events.v1",
-        groupId = "inventory-service",
+        groupId = "${stockrush.kafka.consumer.group-id:inventory-service}",
         autoStartup = "${stockrush.kafka.listeners.enabled:false}"
     )
     void consume(String message) {

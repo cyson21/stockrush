@@ -1,7 +1,6 @@
 package com.stockrush.order.infra.outbox;
 
 import java.util.concurrent.TimeUnit;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
 import tools.jackson.core.JacksonException;
@@ -10,7 +9,6 @@ import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
 
 @Component
-@ConditionalOnMissingBean(OutboxEventPublisher.class)
 class KafkaOutboxEventPublisher implements OutboxEventPublisher {
 
     private static final int SEND_TIMEOUT_SECONDS = 10;
