@@ -23,10 +23,10 @@ Initial sources:
 
 External local references:
 
-- `/Users/chanyang.son/agent-rules/sources/AGENTS_BASE.md`
-- `/Users/chanyang.son/agent-rules/sources/AGENTS_OPERATIONS.md`
-- `/Users/chanyang.son/agent-rules/sources/projects/java-backend-rule-chain.md`
-- relevant managed skills under `/Users/chanyang.son/agent-rules/sources/skills`
+- local `agent-rules` base rules when available
+- local `agent-rules` operations guide when available
+- local Java backend rule chain when available
+- relevant local managed skills when available
 
 ## Initial Storage
 
@@ -149,24 +149,6 @@ The first usable version is complete when:
 - generated Context Packs include source paths
 - excluded paths are skipped
 
-## Current Implementation
+## Tool Documentation
 
-The first CLI implementation exists under:
-
-```text
-tools/dev-rag/
-```
-
-Implemented commands:
-
-```bash
-./tools/dev-rag/dev-rag ingest
-./tools/dev-rag/dev-rag search "Kafka Saga"
-./tools/dev-rag/dev-rag context "Inventory reservation 동시성 구현"
-```
-
-Verification command:
-
-```bash
-python -m unittest discover tools/dev-rag/tests
-```
+Command usage, current implementation details, and verification commands are documented in `tools/dev-rag/README.md`.

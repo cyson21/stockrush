@@ -95,15 +95,16 @@ def init_db(conn: sqlite3.Connection) -> None:
 
 
 def default_sources(root: Path) -> list[SourceFile]:
+    agent_rules_root = Path.home() / "agent-rules"
     candidates = [
         SourceFile(root / "AGENTS.md", "project-rule"),
         SourceFile(root / "TODO.md", "project-task"),
         SourceFile(root / "README.md", "project-overview"),
         SourceFile(root / "docs", "project-doc"),
         SourceFile(root / ".ai-runs", "ai-run-ledger"),
-        SourceFile(Path("/Users/chanyang.son/agent-rules/sources/AGENTS_BASE.md"), "agent-rule"),
-        SourceFile(Path("/Users/chanyang.son/agent-rules/sources/AGENTS_OPERATIONS.md"), "agent-rule"),
-        SourceFile(Path("/Users/chanyang.son/agent-rules/sources/projects/java-backend-rule-chain.md"), "agent-rule"),
+        SourceFile(agent_rules_root / "sources" / "AGENTS_BASE.md", "agent-rule"),
+        SourceFile(agent_rules_root / "sources" / "AGENTS_OPERATIONS.md", "agent-rule"),
+        SourceFile(agent_rules_root / "sources" / "projects" / "java-backend-rule-chain.md", "agent-rule"),
     ]
     return [source for source in candidates if source.path.exists()]
 
@@ -260,10 +261,18 @@ def ingest(index_path: Path, root: Path, sources: Sequence[SourceFile]) -> int:
     with open_db(index_path) as conn:
         init_db(conn)
         count = 0
+        seen_paths: set[str] = set()
         for source in sources:
             for source_file in iter_files(source, root):
+                seen_paths.add(display_path(source_file.path, root))
                 upsert_document(conn, source_file, root)
                 count += 1
+        if seen_paths:
+            placeholders = ",".join("?" for _ in seen_paths)
+            conn.execute(
+                f"DELETE FROM documents WHERE path NOT IN ({placeholders})",
+                tuple(sorted(seen_paths)),
+            )
         conn.commit()
         return count
 

@@ -4,28 +4,7 @@
 
 Architecture Guard prevents AI-assisted implementation from drifting away from the StockRush service boundaries and event rules.
 
-The first version is documentation-backed. Later versions can become CLI checks under `tools/architecture-guard`.
-
-## Current Implementation
-
-The first CLI implementation exists under:
-
-```text
-tools/architecture-guard/
-```
-
-Implemented commands:
-
-```bash
-./tools/architecture-guard/architecture-guard check
-./tools/architecture-guard/architecture-guard check --format json
-```
-
-Verification command:
-
-```bash
-python -m unittest discover tools/architecture-guard/tests
-```
+This document owns rule definitions. Command usage and CLI behavior are documented in `tools/architecture-guard/README.md`.
 
 ## Rule Report Format
 
@@ -48,6 +27,17 @@ info: useful design feedback
 ```
 
 ## Rules
+
+| Rule | Status |
+|---|---|
+| ARCH-001 Service Schema Ownership | Implemented |
+| ARCH-002 Controller Response Boundary | Implemented |
+| ARCH-003 Kafka Event Envelope | Implemented |
+| ARCH-004 Outbox Structure | Implemented |
+| ARCH-005 Consumer Idempotency | Planned |
+| ARCH-006 Synchronous Call Allow List | Planned |
+| ARCH-007 Correlation ID Propagation | Planned |
+| ARCH-008 Retry and DLQ Visibility | Planned |
 
 ### ARCH-001: Service Schema Ownership
 

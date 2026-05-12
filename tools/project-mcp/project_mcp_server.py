@@ -160,8 +160,8 @@ def build_resource_list() -> list[Resource]:
         ),
         Resource(
             uri="stockrush://tracking",
-            name="StockRush Project Tracking",
-            description="Architecture and decision tracking document",
+            name="StockRush Project Status",
+            description="Current status, document ownership, and work log",
             mimeType="text/markdown",
         ),
         Resource(
@@ -297,4 +297,3 @@ def main(argv: list[str] | None = None) -> None:
 
 if __name__ == "__main__":
     main()
-

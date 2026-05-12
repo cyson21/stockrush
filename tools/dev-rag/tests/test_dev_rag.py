@@ -64,6 +64,26 @@ class DevRagTest(unittest.TestCase):
         self.assertTrue(any(heading == "Root > Inventory" for heading, _ in chunks))
         self.assertTrue(any("Reservation TTL" in chunk for _, chunk in chunks))
 
+    def test_ingest_removes_stale_documents(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "README.md").write_text("# StockRush\n\nCurrent docs only.", encoding="utf-8")
+            stale = root / "docs" / "old.md"
+            stale.parent.mkdir(parents=True)
+            stale.write_text("# Old\n\nKafka stale document.", encoding="utf-8")
+            index = root / ".dev-rag" / "index.sqlite3"
+            sources = [
+                dev_rag.SourceFile(root / "README.md", "project-overview"),
+                dev_rag.SourceFile(root / "docs", "project-doc"),
+            ]
+
+            dev_rag.ingest(index, root, sources)
+            stale.unlink()
+            dev_rag.ingest(index, root, sources)
+            results = dev_rag.search(index, "Kafka stale", 5)
+
+            self.assertEqual(results, [])
+
 
 if __name__ == "__main__":
     unittest.main()

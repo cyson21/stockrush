@@ -23,8 +23,9 @@ JSON output:
 - `ARCH-003`: Kafka event envelope fields must exist
 - `ARCH-004`: Outbox table must include required columns
 
+Additional planned rules are defined in `docs/architecture/architecture-guard-rules.md`.
+
 ## Exit Codes
 
 - `0`: no violations
 - `1`: one or more violations
-

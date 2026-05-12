@@ -14,16 +14,21 @@ StockRush는 한정 판매 상황을 다루는 커머스/플랫폼 백엔드 포
 - CQRS Read Model 기반 조회 분리
 - Dev RAG, Project MCP, AI Run Ledger, Architecture Guard 기반 agentic development
 
-## 주요 문서
+## 문서 구조
+
+공개 설명과 내부 실행 기록을 분리합니다.
+
+### 공개 문서
 
 - [ADR 0001: Kafka 기반 MSA 선택](docs/adr/0001-kafka-based-msa.md)
 - [ADR 0002: 개발 운영용 RAG 우선 구축](docs/adr/0002-dev-rag-first.md)
 - [ADR 0003: 서비스별 독립 프로젝트 구조 선택](docs/adr/0003-independent-services.md)
 - [Development Operations Architecture](docs/architecture/development-operations.md)
-- [Dev RAG Design](docs/dev-rag/design.md)
 - [Architecture Guard Rules](docs/architecture/architecture-guard-rules.md)
-- [Master Implementation Plan](docs/superpowers/plans/2026-05-12-stockrush-master-plan.md)
-- [Phase 0 Implementation Plan](docs/superpowers/plans/2026-05-12-phase-0-development-operations-plan.md)
+- [AI Development Process](docs/ai-development-process.md)
+
+### 내부 실행 기록
+
 
 ## 예정 아키텍처
 
@@ -58,36 +63,10 @@ StockRush는 기능 구현과 별개로 AI 기반 개발 운영 체계를 프로
 - `tools/project-mcp`: AI Agent가 프로젝트 상태와 문서를 표준 도구로 조회하는 MCP 서버
 - `tools/architecture-guard`: 서비스 경계와 Kafka 이벤트 규칙을 자동 점검하는 guard
 
-Dev RAG 최소 CLI:
-
-```bash
-./tools/dev-rag/dev-rag ingest
-./tools/dev-rag/dev-rag search "Kafka Saga"
-./tools/dev-rag/dev-rag context "Inventory reservation 동시성 구현"
-```
-
-Architecture Guard 최소 CLI:
-
-```bash
-./tools/architecture-guard/architecture-guard check
-./tools/architecture-guard/architecture-guard check --format json
-```
-
-Project MCP Server:
-
-```bash
-python tools/project-mcp/project_mcp_server.py --root .
-```
-
-Agent Runner:
-
-```bash
-./tools/agent-runner/agent-runner start --slug phase-0-dev-ops-tools --task "..." --scope "..." --completion "..."
-./tools/agent-runner/agent-runner list
-```
+공개 포트폴리오에서는 raw 실행 기록 대신 [AI Development Process](docs/ai-development-process.md)에 정리된 검증 흐름과 결과를 중심으로 설명합니다.
 
 ## 현재 상태
 
-현재는 설계 및 개발 운영 기반을 구축하는 Phase 0 단계입니다.
+현재는 Phase 0 개발 운영 도구 구현을 마치고 브랜치 정리/반영을 앞둔 상태입니다.
 
 첫 구현 목표는 서비스 코드가 아니라, 이후 구현을 안정적으로 진행하기 위한 문서, 의사결정 기록, Dev RAG 최소 설계, AI Run Ledger, Architecture Guard 기준을 고정하는 것입니다.
