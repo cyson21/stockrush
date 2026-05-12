@@ -1,0 +1,38 @@
+# macOS
+.DS_Store
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# Java
+target/
+build/
+.gradle/
+out/
+*.class
+
+# Node
+node_modules/
+dist/
+coverage/
+.vite/
+
+# Logs
+*.log
+logs/
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Docker and local runtime data
+.docker/
+tmp/
+data/
+
+# AI run generated scratch files
+.ai-runs/**/scratch/
+
