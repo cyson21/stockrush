@@ -85,6 +85,36 @@ curl -sSf http://localhost:18084/actuator/health
 - Admin App: `http://localhost:5174`
 - Kafka UI: `http://localhost:19090`
 
+## 반복 실행용 Local E2E Runner
+
+수동 curl 절차 외에 동일 SKU 최종 상태를 반복 확인하는 CLI를 제공한다.
+
+```bash
+./tools/local-e2e/local-e2e same-sku-concurrency \
+  --orders 6 \
+  --initial-stock 3 \
+  --quantity 1 \
+  --max-attempts 12
+```
+
+이 runner는 같은 SKU로 주문 생성 API를 병렬 호출한 뒤, 서비스별 outbox retry API를 순차 호출해 최종 주문/재고/outbox 상태를 확인한다. 로컬 회귀 확인용이며 외부 부하 벤치마크나 Kafka consumer 병렬성 검증으로 해석하지 않는다.
+
+기대 결과:
+
+- `CONFIRMED/COMPLETED` 3건
+- `CANCELLED/FAILED` 3건
+- 최종 재고 `availableQuantity=0`, `reservedQuantity=0`
+- Order/Inventory/Payment `pendingOutboxDelta=0`
+
+최근 검증 증거:
+
+- 실행 시각: 2026-05-13 10:42 KST
+- productCode: `CONC-E2E-20260513104212-e3025d67`
+- skuId: `CONC-E2E-20260513104212-e3025d67-S`
+- 주문 6건 중 3건 `CONFIRMED/COMPLETED`, 3건 `CANCELLED/FAILED`
+- 최종 재고: `availableQuantity=0`, `reservedQuantity=0`
+- `pendingOutboxBaseline`, `pendingOutboxCounts`, `pendingOutboxDelta`: Order/Inventory/Payment 모두 `0`
+
 ## CARD 성공 시나리오
 
 1. 운영용 샘플 상품/재고를 준비한다.
