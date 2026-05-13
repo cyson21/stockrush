@@ -28,6 +28,8 @@ StockRush는 한정 판매 주문 흐름에서 Kafka, Outbox, Saga를 묶은 엔
 - [Event Envelope](docs/architecture/events.md)
 - [Outbox and Consumer Idempotency](docs/architecture/outbox.md)
 - [Test Strategy](docs/test-strategy.md)
+- [Portfolio Summary](docs/portfolio-summary.md)
+- [Troubleshooting](docs/troubleshooting/phase-1-commerce-foundation.md)
 - [Catalog and Inventory API](docs/api/catalog-inventory.md)
 - [Customer Order API](docs/api/customer-orders.md)
 - [Catalog Admin API](docs/api/catalog-admin.md)
