@@ -55,9 +55,19 @@
 | 해결 | 390px 이하에서 3-column tab layout으로 전환하고 320px 화면까지 확인 |
 | 재발 방지 | 운영 화면 변경 시 desktop, 390px, 320px 화면을 같이 확인하고 text overflow를 별도 체크 |
 
+### 6. 지연 결제 취소 E2E가 stale 이벤트에 오염될 수 있음
+
+| 항목 | 내용 |
+|---|---|
+| 증상 | 오래된 Kafka topic 메시지나 due `PENDING` outbox가 남아 있으면 새 지연 결제 E2E 주문이 이전 주문 이벤트와 섞여 상태 전이가 늦거나 실패할 수 있음 |
+| 원인 | 수동 retry API는 aggregate별 필터 없이 due `PENDING` outbox를 `created_at` 순서로 발행하고, 고정 consumer group은 이전 topic offset을 이어받음 |
+| 해결 | listener 비활성 상태에서 기존 due `PENDING` outbox를 배출한 뒤, 새 consumer group과 `latest` offset으로 서비스를 재기동해 `ord_20260513012031_8c06cd49` 흐름을 검증 |
+| 재발 방지 | 로컬 E2E 전 PENDING outbox 확인, fresh consumer group 사용, 지연 결제 주문 id/SKU/멱등 키 분리 절차를 runbook 운영 습관으로 유지 |
+| 근거 | [README](../../README.md), [Test Strategy](../test-strategy.md), [Local E2E Runbook](../runbooks/local-e2e.md) |
+
 ## 검증 공백
 
-### 6. Gateway 경유 E2E가 아직 없음
+### 7. Gateway 경유 E2E가 아직 없음
 
 | 항목 | 내용 |
 |---|---|
@@ -67,7 +77,7 @@
 | 재발 방지 | README 검증 요약에 Gateway 기준 검증 여부를 별도 표기하고, gateway routing이 추가되면 runbook 예시를 gateway URL로 전환 |
 | 근거 | [README](../../README.md), [Local E2E Runbook](../runbooks/local-e2e.md), [Gateway README](../../services/gateway/README.md), [Test Strategy](../test-strategy.md) |
 
-### 7. 동시 주문 경합 E2E/부하 검증은 아직 부족함
+### 8. 동시 주문 경합 E2E/부하 검증은 아직 부족함
 
 | 항목 | 내용 |
 |---|---|
@@ -76,7 +86,7 @@
 | 보강 방향 | 동일 SKU에 대해 주문 API를 여러 개 병렬 호출하고 주문 결과, 재고 수량, outbox 상태를 함께 검증하는 E2E/부하 테스트 추가 |
 | 재발 방지 | 재고 선점 로직을 수정할 때마다 단일 주문 테스트, 동일 SKU 동시 주문 회귀 테스트, E2E 경합 체크리스트를 같이 실행 |
 
-### 8. Kafka 장애와 장기 체류 Outbox 복구 자동화가 아직 부족함
+### 9. Kafka 장애와 장기 체류 Outbox 복구 자동화가 아직 부족함
 
 | 항목 | 내용 |
 |---|---|
@@ -86,7 +96,7 @@
 | 재발 방지 | 운영 runbook에 broker 장애 시 확인 순서와 outbox admin API 사용 기준을 추가 |
 | 근거 | [Outbox and Consumer Idempotency](../architecture/outbox.md), [Outbox Admin API](../api/outbox-admin.md), [Test Strategy](../test-strategy.md) |
 
-### 9. `FAILED -> PENDING` 수동 복구 액션은 아직 제외됨
+### 10. `FAILED -> PENDING` 수동 복구 액션은 아직 제외됨
 
 | 항목 | 내용 |
 |---|---|
@@ -95,7 +105,7 @@
 | 보강 방향 | 별도 운영 권한, 확인 절차, 감사 로그, 상태 전이 검사를 둔 뒤 `FAILED -> PENDING` 액션을 추가 |
 | 재발 방지 | 수동 상태 변경 API는 일반 retry와 분리하고, 실패 원인과 재시도 횟수를 화면에서 같이 노출 |
 
-### 10. 인증/권한은 현재 slice 밖에 있음
+### 11. 인증/권한은 현재 slice 밖에 있음
 
 | 항목 | 내용 |
 |---|---|

@@ -57,11 +57,13 @@ Local end-to-end verification follows [Local E2E Runbook](runbooks/local-e2e.md)
 |---|---|---|
 | `CARD` order success | Order API, Inventory reservation, Payment authorization, Order Saga handler tests | `CARD 성공 시나리오` in `docs/runbooks/local-e2e.md` |
 | `FAIL_CARD` cancellation and stock release | Payment failure, Order cancellation, Inventory release tests | `FAIL_CARD 실패 시나리오 + 재고 복구` |
-| `DELAY_CARD` delayed payment | Payment delay, Order `PAYMENT_DELAYED`, Customer App delayed state tests | `DELAY_CARD 지연 시나리오` |
-| Admin delayed payment cancellation | Admin cancel API, `PaymentCancelRequested`, `PaymentCanceled`, Admin App retry key tests | `지연 결제 관리자 취소 시나리오` |
+| `DELAY_CARD` delayed payment | Payment delay, Order `PAYMENT_DELAYED`, Customer App delayed state tests | 로컬 서비스 E2E 증거: `ord_20260513012031_8c06cd49` |
+| Admin delayed payment cancellation | Admin cancel API, `PaymentCancelRequested`, `PaymentCanceled`, Admin App retry key tests | 로컬 서비스 E2E 증거: `CANCELLED/FAILED`, 재고 복구 |
 | Concurrent same-SKU reservation | Inventory handler PostgreSQL integration race test | E2E/load scenario remains future scope |
 | Outbox retry and relay | Service-local outbox relay tests | Admin App outbox operation checklist |
 | Event duplicate handling | `processed_events` and replay tests in Order/Payment handlers | Outbox and Kafka UI checks |
+
+최근 로컬 E2E 증거: `ord_20260513012031_8c06cd49` 주문이 `CREATED/PAYMENT_DELAYED`에 도달한 뒤 관리자 취소로 `CANCELLED/FAILED`가 됐고, SKU `DELAY-E2E-102029-S`는 `availableQuantity=20`, `reservedQuantity=0`으로 복구됐다. Order/Inventory/Payment `PENDING` outbox 목록은 모두 비어 있었다.
 
 ## Stability Rules
 

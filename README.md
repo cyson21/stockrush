@@ -4,7 +4,7 @@ StockRush는 한정 판매 주문 흐름에서 Kafka, Outbox, Saga를 묶은 엔
 
 ## 현재 구현/검증 상태(요약)
 
-이 단계에서 아래 구간은 구현되어 있으며, `CARD`/`FAIL_CARD`는 실제 로컬 E2E까지 확인했습니다. `DELAY_CARD`와 지연 결제 취소는 자동 테스트와 runbook 기준을 갖췄고, 실제 서비스 기동 E2E는 후속 확인 항목으로 남겼습니다.
+이 단계에서 아래 구간은 구현되어 있으며, `CARD`/`FAIL_CARD`/`DELAY_CARD`와 지연 결제 취소는 실제 로컬 서비스와 Kafka로 E2E 확인했습니다.
 
 - 고객 앱(`apps/customer-app`) + 주문 생성/조회 플로우
 - 관리자 앱(`apps/admin-app`) + 운영 화면(상품, 재고, 주문, Saga, Outbox)
@@ -99,8 +99,9 @@ docker compose up -d
 - 고객/관리자 앱은 Vitest와 production build로 API 호출 모양, 상태 렌더링, 재시도 키 재사용을 검증합니다.
 - `./tools/architecture-guard/architecture-guard check`로 schema ownership, Controller 반환 타입, 이벤트 envelope, Outbox table shape를 점검합니다.
 - 실제 로컬 E2E는 [Local E2E Runbook](docs/runbooks/local-e2e.md)의 `CARD`, `FAIL_CARD`, `DELAY_CARD`, 지연 결제 취소 시나리오를 기준으로 재현합니다.
+- 최근 지연 결제 취소 E2E 증거: `ord_20260513012031_8c06cd49` 주문이 `CREATED/PAYMENT_DELAYED` 도달 후 관리자 취소로 `CANCELLED/FAILED`가 됐고, SKU `DELAY-E2E-102029-S` 재고는 `available=20`, `reserved=0`으로 복구됐습니다.
 
 ## 현재 한계
 
 - Gateway는 헬스체크 중심의 기본 진입점이며, 주요 E2E는 서비스 포트 직접 호출 기준입니다.
-- 지연 결제 취소 실제 서비스 E2E, 인증/권한, 동시성 경합 E2E/부하 테스트, Kafka 장애 복구 자동화는 후속 확장 범위입니다.
+- 인증/권한, 동시성 경합 E2E/부하 테스트, Kafka 장애 복구 자동화는 후속 확장 범위입니다.
