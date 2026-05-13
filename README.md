@@ -101,8 +101,9 @@ docker compose up -d
 - 실제 로컬 E2E는 [Local E2E Runbook](docs/runbooks/local-e2e.md)의 `CARD`, `FAIL_CARD`, `DELAY_CARD`, 지연 결제 취소 시나리오를 기준으로 재현합니다.
 - 최근 지연 결제 취소 E2E 증거: `ord_20260513012031_8c06cd49` 주문이 `CREATED/PAYMENT_DELAYED` 도달 후 관리자 취소로 `CANCELLED/FAILED`가 됐고, SKU `DELAY-E2E-102029-S` 재고는 `available=20`, `reserved=0`으로 복구됐습니다.
 - 동일 SKU 최종 상태 E2E 증거: `tools/local-e2e/local-e2e same-sku-concurrency` 실행에서 주문 6건, 초기 재고 3개 기준 3건 완료/3건 취소, 재고 `available=0`, `reserved=0`, 서비스별 `pendingOutboxDelta=0`을 확인했습니다.
+- Gateway 주문 라우팅 smoke 증거: fake Order Service 기준 `POST /api/orders`, `GET /api/orders/{orderId}`가 method, path, body, `Idempotency-Key`, `X-Correlation-Id`, status, `Location`, body를 전달하는지 `services/gateway` Maven 테스트로 확인했습니다.
 
 ## 현재 한계
 
-- Gateway는 헬스체크 중심의 기본 진입점이며, 주요 E2E는 서비스 포트 직접 호출 기준입니다.
+- Gateway는 주문 생성/조회 라우팅 smoke까지만 검증됐고, 전체 로컬 E2E는 아직 서비스 포트 직접 호출 기준입니다.
 - 인증/권한, 부하 벤치마크, Kafka consumer 병렬성 검증, Kafka 장애 복구 자동화는 후속 확장 범위입니다.

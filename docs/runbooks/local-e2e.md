@@ -85,6 +85,17 @@ curl -sSf http://localhost:18084/actuator/health
 - Admin App: `http://localhost:5174`
 - Kafka UI: `http://localhost:19090`
 
+## Gateway 주문 라우팅 Smoke
+
+Gateway는 주문 생성/조회 라우팅 smoke를 제공한다. 실제 주문 Saga E2E는 아직 서비스 포트 직접 호출 기준이지만, Gateway가 Order Service로 method, path, body, 핵심 헤더와 응답을 전달하는지는 테스트로 고정했다.
+
+```bash
+cd services/gateway
+JAVA_HOME=/Users/chanyang.son/Library/Java/JavaVirtualMachines/ms-17.0.18/Contents/Home mvn test
+```
+
+로컬 기동 시 Gateway는 기본적으로 `ORDER_SERVICE_URL=http://localhost:18083`으로 Order Service를 호출한다.
+
 ## 반복 실행용 Local E2E Runner
 
 수동 curl 절차 외에 동일 SKU 최종 상태를 반복 확인하는 CLI를 제공한다.

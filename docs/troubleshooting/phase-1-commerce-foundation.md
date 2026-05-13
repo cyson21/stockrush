@@ -67,14 +67,14 @@
 
 ## 검증 공백
 
-### 7. Gateway 경유 E2E가 아직 없음
+### 7. Gateway 경유 전체 E2E는 아직 없음
 
 | 항목 | 내용 |
 |---|---|
-| 증상 | 현재 로컬 E2E는 서비스 포트 직접 호출 중심이라 Gateway 라우팅 오류를 놓칠 수 있음 |
-| 원인 | Phase 1에서는 gateway를 healthcheck 중심의 얇은 진입점으로 두고, 핵심 주문 흐름을 먼저 완성함 |
-| 보강 방향 | `POST /api/orders`, `GET /api/orders/{orderId}`를 Gateway 기준으로 호출하는 smoke test 추가 |
-| 재발 방지 | README 검증 요약에 Gateway 기준 검증 여부를 별도 표기하고, gateway routing이 추가되면 runbook 예시를 gateway URL로 전환 |
+| 증상 | Gateway 주문 생성/조회 라우팅 smoke는 추가했지만, 현재 로컬 Saga E2E는 여전히 서비스 포트 직접 호출 중심임 |
+| 원인 | Gateway는 먼저 `POST /api/orders`, `GET /api/orders/{orderId}` 요청 전달을 fake upstream으로 고정했고, 실제 Kafka/Saga E2E 전체를 Gateway 경유로 전환하지는 않음 |
+| 보강 방향 | `CARD`, `FAIL_CARD`, `DELAY_CARD`, 지연 결제 취소 runbook 예시를 Gateway URL 기준으로 전환하고 실제 서비스 조합으로 재검증 |
+| 재발 방지 | README 검증 요약에 Gateway smoke와 전체 E2E 경유 여부를 분리 표기 |
 | 근거 | [README](../../README.md), [Local E2E Runbook](../runbooks/local-e2e.md), [Gateway README](../../services/gateway/README.md), [Test Strategy](../test-strategy.md) |
 
 ### 8. 동시 주문 부하/consumer 병렬성 검증은 아직 부족함
@@ -118,7 +118,7 @@
 ## 면접에서 피해야 할 주장
 
 - “모든 API 경로를 Gateway 기준으로 검증했다.”
-  - 현재 증거는 서비스 포트 직접 호출과 Vite proxy 검증 중심이다.
+  - 주문 생성/조회 라우팅 smoke는 있지만, 전체 Saga E2E는 아직 서비스 포트 직접 호출 기준이다.
 - “동시 주문 경합은 상용 부하까지 검증됐다.”
   - 서비스 단위 동일 SKU race test와 로컬 최종 상태 E2E runner는 있지만, 부하 벤치마크와 Kafka consumer 병렬성 검증은 아직 남아 있다.
 - “Kafka 장애가 나도 자동으로 항상 복구된다.”
@@ -130,7 +130,7 @@
 
 ## 다음 보강 순서
 
-1. Gateway 기준 주문 생성/조회 smoke test 추가
+1. Gateway 기준 전체 Saga E2E runbook 전환
 2. 동일 SKU 부하 벤치마크와 Kafka consumer 병렬성 검증 추가
 3. Kafka 장애 주입과 outbox 장기 체류 복구 runbook 확장
 4. `FAILED -> PENDING` 운영 액션 설계와 권한/감사 로그 추가

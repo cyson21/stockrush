@@ -20,6 +20,7 @@ StockRush 테스트 전략은 한정 판매 주문 흐름에서 서비스별 도
 | Outbox relay | `PENDING` claim, Kafka publish, retry, `PUBLISHED`/`FAILED` 전이를 확인 | `services/order-service/src/test/java/com/stockrush/order/infra/outbox/OutboxRelayServiceIntegrationTest.java`, `services/inventory-service/src/test/java/com/stockrush/inventory/infra/outbox/InventoryOutboxRelayServiceIntegrationTest.java`, `services/payment-service/src/test/java/com/stockrush/payment/infra/outbox/PaymentOutboxRelayServiceIntegrationTest.java` |
 | Kafka smoke | 실제 로컬 Kafka에 publish/consume이 되는지 확인 | `services/inventory-service/src/test/java/com/stockrush/inventory/infra/kafka/InventoryKafkaSmokeIntegrationTest.java`, `services/payment-service/src/test/java/com/stockrush/payment/infra/kafka/PaymentKafkaSmokeIntegrationTest.java` |
 | UI behavior | 고객/관리자 앱의 API 호출, 상태 렌더링, 재시도 키 재사용 확인 | `apps/customer-app/src/App.test.tsx`, `apps/admin-app/src/App.test.tsx` |
+| Gateway routing smoke | Gateway가 주문 생성/조회 요청을 Order Service로 전달하는지 확인 | `services/gateway/src/test/java/com/stockrush/gateway/api/OrderGatewayControllerIntegrationTest.java` |
 | Architecture Guard | schema ownership, Controller 반환 타입, event envelope, outbox table shape 확인 | `tools/architecture-guard/tests/test_architecture_guard.py`, `tools/architecture-guard/architecture_guard.py` |
 | Manual E2E | 실제 서비스 기동 후 `CARD`, `FAIL_CARD`, `DELAY_CARD`, 관리자 취소, 동일 SKU 최종 상태 확인 | `docs/runbooks/local-e2e.md`, `tools/local-e2e` |
 
@@ -44,6 +45,12 @@ npm --prefix apps/admin-app run build
 ```
 
 Architecture Guard is a separate quality gate.
+
+Gateway routing smoke runs inside the Gateway module.
+
+```bash
+cd services/gateway && mvn test
+```
 
 ```bash
 ./tools/architecture-guard/architecture-guard check
@@ -81,7 +88,7 @@ Local end-to-end verification follows [Local E2E Runbook](runbooks/local-e2e.md)
 
 These are known gaps, not hidden assumptions.
 
-- Gateway has no routing test yet; current E2E calls service ports directly.
+- Gateway has order create/query routing smoke coverage with a fake upstream, but current full local E2E still calls service ports directly.
 - Inventory handler has a focused same-SKU concurrent reservation regression test and a local final-state E2E runner. Kafka consumer parallelism, external load benchmarking, and duplicate command race windows remain future scope.
 - Kafka broker outage and long-lived `PENDING`/`FAILED` recovery scenarios are documented but not fully automated.
 - Authentication and authorization tests are outside the current public slice.
