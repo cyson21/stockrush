@@ -9,6 +9,7 @@ StockRush는 한정 판매 주문 흐름에서 Kafka, Outbox, Saga를 묶은 엔
 - 고객 앱(`apps/customer-app`) + 주문 생성/조회 플로우
 - 관리자 앱(`apps/admin-app`) + 운영 화면(상품, 재고, 주문, Saga, Outbox)
 - Catalog / Inventory / Order / Payment API 체인
+- Promotion Service 쿠폰 등록/목록/할인 견적 API 1차
 - Kafka + 서비스 로컬 Outbox + Saga 상태 전이
 - `CARD` 성공, `FAIL_CARD` 실패/재고 복구, `DELAY_CARD` 지연 결제와 관리자 취소 흐름
 
@@ -24,6 +25,7 @@ StockRush는 한정 판매 주문 흐름에서 Kafka, Outbox, Saga를 묶은 엔
 
 1. `infra/local`에서 PostgreSQL, Redis, Kafka, Kafka UI를 실행합니다.
 2. gateway, catalog-service, inventory-service, order-service, payment-service를 각각 기동합니다.
+   - 쿠폰 API를 확인할 때는 promotion-service도 함께 기동합니다.
 3. customer-app과 admin-app을 실행합니다.
 4. [Local E2E Runbook](docs/runbooks/local-e2e.md)에 따라 `CARD`, `FAIL_CARD`, `DELAY_CARD`, 지연 결제 취소 시나리오를 확인합니다.
 
@@ -49,6 +51,7 @@ docker compose up -d
 - [Catalog and Inventory API](docs/api/catalog-inventory.md)
 - [Customer Order API](docs/api/customer-orders.md)
 - [Catalog Admin API](docs/api/catalog-admin.md)
+- [Promotion API](docs/api/promotion.md)
 - [Admin Order API](docs/api/admin-orders.md)
 - [Outbox Admin API](docs/api/outbox-admin.md)
 - [Kafka 기반 MSA 선택 ADR](docs/adr/0001-kafka-based-msa.md)
@@ -59,7 +62,7 @@ docker compose up -d
 
 | 영역 | 선택 |
 |---|---|
-| 서비스 구조 | gateway, catalog-service, inventory-service, order-service, payment-service |
+| 서비스 구조 | gateway, catalog-service, inventory-service, order-service, payment-service, promotion-service |
 | 비동기 메시징 | Apache Kafka topic 기반 event/command 흐름 |
 | 일관성 처리 | Order Service 중심 Saga Orchestration |
 | 발행 안정성 | 서비스별 Outbox relay와 retry/failed 상태 |
@@ -83,6 +86,7 @@ docker compose up -d
 - 결제 서비스는 `CARD` 승인, `FAIL_CARD` 실패, `DELAY_CARD` 지연, 지연 결제 취소 분기 검증이 가능하며, 주문 상태와 Saga 상태 변화가 연동되어 보입니다.
 - 관리자 앱에서 상품 등록/수정, SKU 재고 설정, 지연 결제 취소, 주문 Saga 추적, Outbox retry와 failed requeue를 한 흐름으로 확인할 수 있습니다.
 - Outbox 운영 액션은 `X-Operator-Id`, `X-Correlation-Id`, batch size, 처리 건수를 서비스별 감사 테이블에 남깁니다.
+- Promotion Service는 쿠폰 등록/목록과 주문 전 할인 견적 계산을 서비스 단독 API로 제공합니다.
 
 ## 대표 시나리오
 
@@ -93,6 +97,7 @@ docker compose up -d
 | `DELAY_CARD` 주문 | 주문 `CREATED`, Saga `PAYMENT_DELAYED`, 관리자 취소 가능 |
 | 지연 결제 취소 | `PaymentCancelRequested`와 `PaymentCanceled` 이후 주문 취소 및 재고 복구 |
 | Outbox 운영 | 서비스별 outbox 조회, due `PENDING` 이벤트 retry, `FAILED` 이벤트 requeue |
+| 쿠폰 견적 | 쿠폰 코드와 주문 금액으로 적용 여부, 할인액, 결제 예정 금액 산출 |
 
 ## 검증 요약
 
@@ -104,8 +109,10 @@ docker compose up -d
 - 동일 SKU 최종 상태 E2E 증거: `tools/local-e2e/local-e2e same-sku-concurrency` 실행에서 주문 생성/조회는 Gateway를 경유했고, 주문 6건, 초기 재고 3개 기준 3건 완료/3건 취소, 재고 `available=0`, `reserved=0`, 서비스별 `pendingOutboxDelta=0`을 확인했습니다.
 - Gateway 주문/운영 라우팅 smoke 증거: fake upstream 기준 주문 생성/조회, 관리자 주문 조회/취소, Outbox 조회/재시도/requeue가 method, path, query, body, 핵심 헤더, status, body를 전달하는지 `services/gateway` Maven 테스트로 확인했습니다.
 - Gateway 주문 시나리오 E2E 증거: `GW-E2E-20260513111940-332ba0dc` 기준 `CARD`, `FAIL_CARD`, `DELAY_CARD`, 지연 결제 취소가 Gateway 주문 경로에서 처리됐고, 최종 재고 `available=19`, `reserved=0`, 서비스별 `pendingOutboxDelta=0`을 확인했습니다.
+- Promotion Service 집중 검증: `PromotionCouponControllerIntegrationTest`로 쿠폰 생성, 상태별 목록, 퍼센트 할인 상한, 최소 주문 금액 미달, 중복 쿠폰 코드 응답을 확인했습니다.
 
 ## 현재 한계
 
 - Gateway는 주문 생성/조회, 관리자 주문 조회/취소, Outbox 조회/재시도/requeue 라우팅 smoke와 동일 SKU runner/runbook의 Gateway 경유 경로까지 검증 범위를 넓혔습니다.
+- Promotion Service는 아직 Gateway, 앱 UI, 주문 생성 할인 반영, 쿠폰 사용/복구 이벤트와 연결하지 않았습니다.
 - 인증/권한, 부하 벤치마크, Kafka consumer 병렬성 검증, Kafka 장애 복구 자동화는 후속 확장 범위입니다.

@@ -33,6 +33,7 @@ cd services/catalog-service && mvn test
 cd services/inventory-service && mvn test
 cd services/order-service && mvn test
 cd services/payment-service && mvn test
+cd services/promotion-service && mvn test
 ```
 
 Frontend verification runs both behavior tests and production build.
@@ -68,6 +69,7 @@ Local end-to-end verification follows [Local E2E Runbook](runbooks/local-e2e.md)
 | Admin delayed payment cancellation | Admin cancel API, `PaymentCancelRequested`, `PaymentCanceled`, Admin App retry key tests | 로컬 서비스 E2E 증거: `CANCELLED/FAILED`, 재고 복구 |
 | Concurrent same-SKU reservation | Inventory handler PostgreSQL integration race test | `tools/local-e2e/local-e2e same-sku-concurrency`로 Gateway 주문 생성/조회, Gateway Outbox route, 서비스 최종 상태 확인 |
 | Outbox retry, requeue and relay | Service-local outbox relay/admin tests, Gateway outbox routing smoke | Admin App outbox operation checklist |
+| Coupon quote | Promotion coupon controller integration test | Direct `promotion-service` API smoke |
 | Event duplicate handling | `processed_events` and replay tests in Order/Payment handlers | Outbox and Kafka UI checks |
 
 최근 로컬 E2E 증거:
@@ -84,6 +86,7 @@ Local end-to-end verification follows [Local E2E Runbook](runbooks/local-e2e.md)
 - Outbox rows are written with domain state before Kafka publish is attempted.
 - Failed outbox requeue should reset only retry state and error detail, then rely on the existing relay path.
 - Outbox retry/requeue requests should store an admin action audit row with operator id, correlation id, batch size, and affected count.
+- Coupon quote should keep order integration separate until coupon usage/recovery events are designed.
 - Replay of already processed cancel commands must be harmless.
 - Tests should assert both business state and operational state where possible: order status, saga status, outbox event type, retry status, and stock quantities.
 
@@ -94,6 +97,7 @@ These are known gaps, not hidden assumptions.
 - Gateway has order create/query, admin order list/saga/cancel, and Outbox admin routing smoke coverage with fake upstreams. The same-SKU local E2E runner and runbook send order-facing calls and outbox retry/query calls through Gateway.
 - Inventory handler has a focused same-SKU concurrent reservation regression test and a local final-state E2E runner. Kafka consumer parallelism, external load benchmarking, and duplicate command race windows remain future scope.
 - Kafka broker outage and long-lived `PENDING` recovery scenarios are documented but not fully automated. `FAILED` requeue is covered at API/UI/smoke level, but not as a full outage drill.
+- Promotion Service currently covers coupon definition and quote only; Gateway routing, UI, order discount application, and coupon usage/recovery are future scope.
 - Authentication and authorization tests are outside the current public slice.
 - Customer API documentation is now separated from runbook examples, but inventory customer query docs can still be expanded later.
 

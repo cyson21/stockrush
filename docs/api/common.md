@@ -46,6 +46,7 @@ If `X-Correlation-Id` is absent, the receiving service creates one and returns i
 | `INVENTORY_` | inventory-service |
 | `ORDER_` | order-service |
 | `PAYMENT_` | payment-service |
+| `PROMOTION_` | promotion-service |
 
 ## HTTP Status Guide
 
@@ -59,4 +60,3 @@ If `X-Correlation-Id` is absent, the receiving service creates one and returns i
 | 409 | duplicate or invalid state transition |
 | 422 | business rule failure |
 | 500 | unexpected server failure |
-

@@ -11,6 +11,7 @@ StockRush uses independent Spring Boot projects under `services/<service-name>`.
 | inventory-service | 18082 | inventory | stock reservation |
 | order-service | 18083 | orders | order API and Saga Orchestrator |
 | payment-service | 18084 | payment | payment simulation |
+| promotion-service | 18085 | promotion | coupon definition and quote API |
 
 ## Local Java
 
@@ -34,5 +35,7 @@ cd services/inventory-service && STOCKRUSH_KAFKA_LISTENERS_ENABLED=true mvn spri
 cd services/order-service && STOCKRUSH_KAFKA_LISTENERS_ENABLED=true mvn spring-boot:run
 cd services/payment-service && STOCKRUSH_KAFKA_LISTENERS_ENABLED=true mvn spring-boot:run
 ```
+
+Promotion Service is currently service-local and is not proxied by Gateway.
 
 First run may download Maven dependencies.

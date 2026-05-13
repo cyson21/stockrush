@@ -38,4 +38,4 @@ JAVA_HOME=/Users/chanyang.son/Library/Java/JavaVirtualMachines/ms-17.0.18/Conten
 
 The routing smoke test uses fake upstream services and verifies method, path, query string, body, `Idempotency-Key`, `X-Correlation-Id`, `X-Operator-Id`, response status, `Location`, and response body propagation for customer order routes, admin order routes, and Outbox admin routes including failed requeue.
 
-Auth and broader service routing remain future scope.
+Promotion routing, Auth, and broader service routing remain future scope.

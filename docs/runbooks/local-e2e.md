@@ -5,6 +5,7 @@
 ## Scope
 
 - Customer App, Admin App, Catalog / Inventory / Order / Payment 서비스의 연동 확인
+- Promotion Service 쿠폰 API는 현재 주문 E2E와 분리해 직접 호출 smoke로 확인
 - Kafka 이벤트 발행/소비와 서비스 로컬 Outbox 동작 확인
 - `CARD`(성공), `FAIL_CARD`(실패·재고 복구), `DELAY_CARD`(결제 지연) 시나리오 재현
 - 운영 화면(관리자) 점검 포인트와 Outbox retry/requeue 경로 정리
@@ -19,7 +20,7 @@
 - `mvn -version`, `node -v`, `npm -v`, `jq --version`이 동작해야 함
 - 포트 충돌이 없어야 함:
   - 15432(PostgreSQL), 16379(Redis), 19092(Kafka), 19090(Kafka UI)
-  - 18080~18084(Backend), 5173, 5174(Frontend)
+  - 18080~18085(Backend), 5173, 5174(Frontend)
 
 ## Infrastructure
 
@@ -39,6 +40,7 @@ docker compose ps
 | Inventory Service | 18082 | `http://localhost:18082` |
 | Order Service | 18083 | `http://localhost:18083` |
 | Payment Service | 18084 | `http://localhost:18084` |
+| Promotion Service | 18085 | `http://localhost:18085` |
 | Customer App | 5173 | `http://localhost:5173` |
 | Admin App | 5174 | `http://localhost:5174` |
 | PostgreSQL | 15432 | `localhost:15432` |
@@ -58,6 +60,7 @@ cd services/catalog-service && mvn spring-boot:run
 cd services/inventory-service && STOCKRUSH_KAFKA_LISTENERS_ENABLED=true mvn spring-boot:run
 cd services/order-service && STOCKRUSH_KAFKA_LISTENERS_ENABLED=true mvn spring-boot:run
 cd services/payment-service && STOCKRUSH_KAFKA_LISTENERS_ENABLED=true mvn spring-boot:run
+cd services/promotion-service && mvn spring-boot:run
 ```
 
 2. Start frontend apps.
@@ -77,6 +80,7 @@ curl -sSf http://localhost:18081/actuator/health
 curl -sSf http://localhost:18082/actuator/health
 curl -sSf http://localhost:18083/actuator/health
 curl -sSf http://localhost:18084/actuator/health
+curl -sSf http://localhost:18085/actuator/health
 ```
 
 4. (옵션) 브라우저로 확인:
@@ -95,6 +99,8 @@ JAVA_HOME=/Users/chanyang.son/Library/Java/JavaVirtualMachines/ms-17.0.18/Conten
 ```
 
 로컬 기동 시 Gateway는 기본적으로 `ORDER_SERVICE_URL=http://localhost:18083`, `INVENTORY_SERVICE_URL=http://localhost:18082`, `PAYMENT_SERVICE_URL=http://localhost:18084`로 각 서비스를 호출한다. Outbox admin API는 `service` path 값으로 `order`, `inventory`, `payment`를 선택한다.
+
+Promotion Service는 현재 Gateway를 거치지 않는 직접 호출 API로 확인한다. 쿠폰 시나리오는 주문 Saga E2E와 분리된 서비스-local smoke로 다룬다.
 
 ## 반복 실행용 Local E2E Runner
 
@@ -299,7 +305,7 @@ Admin App에서 아래 화면을 순차적으로 확인한다.
 ## Verification Checklist
 
 - [ ] Docker 컨테이너가 모두 실행 중이며 Postgres, Kafka, Kafka UI가 정상 기동
-- [ ] 18080~18084 모든 서비스 `actuator/health` 응답 200
+- [ ] 18080~18085 모든 서비스 `actuator/health` 응답 200
 - [ ] Customer App / Admin App 접속 가능
 - [ ] `CARD` 주문에서 주문이 `CONFIRMED`/`COMPLETED` 전환
 - [ ] `FAIL_CARD` 주문에서 주문이 `CANCELLED`/`FAILED` 전환

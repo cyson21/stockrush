@@ -33,7 +33,7 @@ The single local PostgreSQL instance is split by schema.
 | `orders` | order-service |
 | `payment` | payment-service |
 | `auth` | future auth-service |
-| `promotion` | future promotion-service |
+| `promotion` | promotion-service |
 | `fulfillment` | future fulfillment-service |
 | `read_model` | future read model services |
 
