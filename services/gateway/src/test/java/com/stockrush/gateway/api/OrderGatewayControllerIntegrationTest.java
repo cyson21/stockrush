@@ -109,6 +109,68 @@ class OrderGatewayControllerIntegrationTest {
         assertThat(forwarded.firstHeader("X-Correlation-Id")).contains("corr-gateway-query");
     }
 
+    @Test
+    void routes_admin_order_list_query_to_order_service() throws Exception {
+        HttpRequest request = HttpRequest.newBuilder(
+                gatewayUri("/api/admin/orders?page=0&size=5&status=CREATED&sagaStatus=PAYMENT_DELAYED")
+            )
+            .header("X-Correlation-Id", "corr-gateway-admin-list")
+            .GET()
+            .build();
+
+        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.headers().firstValue("X-Correlation-Id")).contains("corr-gateway-admin-list");
+        assertThat(response.body()).contains("\"orderId\":\"ord_gateway_delay\"");
+
+        RecordedRequest forwarded = STUB_ORDER_SERVICE.singleRequest();
+        assertThat(forwarded.method()).isEqualTo("GET");
+        assertThat(forwarded.path()).isEqualTo("/api/admin/orders");
+        assertThat(forwarded.query()).contains("page=0&size=5&status=CREATED&sagaStatus=PAYMENT_DELAYED");
+        assertThat(forwarded.firstHeader("X-Correlation-Id")).contains("corr-gateway-admin-list");
+    }
+
+    @Test
+    void routes_admin_order_saga_query_to_order_service() throws Exception {
+        HttpRequest request = HttpRequest.newBuilder(gatewayUri("/api/admin/orders/ord_gateway_delay/saga"))
+            .header("X-Correlation-Id", "corr-gateway-admin-saga")
+            .GET()
+            .build();
+
+        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.headers().firstValue("X-Correlation-Id")).contains("corr-gateway-admin-saga");
+        assertThat(response.body()).contains("\"sagaStatus\":\"PAYMENT_DELAYED\"");
+
+        RecordedRequest forwarded = STUB_ORDER_SERVICE.singleRequest();
+        assertThat(forwarded.method()).isEqualTo("GET");
+        assertThat(forwarded.path()).isEqualTo("/api/admin/orders/ord_gateway_delay/saga");
+        assertThat(forwarded.firstHeader("X-Correlation-Id")).contains("corr-gateway-admin-saga");
+    }
+
+    @Test
+    void routes_admin_order_cancel_command_to_order_service() throws Exception {
+        HttpRequest request = HttpRequest.newBuilder(gatewayUri("/api/admin/orders/ord_gateway_delay/cancel"))
+            .header("Idempotency-Key", "idem-gateway-admin-cancel")
+            .header("X-Correlation-Id", "corr-gateway-admin-cancel")
+            .POST(HttpRequest.BodyPublishers.noBody())
+            .build();
+
+        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+
+        assertThat(response.statusCode()).isEqualTo(202);
+        assertThat(response.headers().firstValue("X-Correlation-Id")).contains("corr-gateway-admin-cancel");
+        assertThat(response.body()).contains("\"sagaStatus\":\"PAYMENT_CANCEL_REQUESTED\"");
+
+        RecordedRequest forwarded = STUB_ORDER_SERVICE.singleRequest();
+        assertThat(forwarded.method()).isEqualTo("POST");
+        assertThat(forwarded.path()).isEqualTo("/api/admin/orders/ord_gateway_delay/cancel");
+        assertThat(forwarded.firstHeader("Idempotency-Key")).contains("idem-gateway-admin-cancel");
+        assertThat(forwarded.firstHeader("X-Correlation-Id")).contains("corr-gateway-admin-cancel");
+    }
+
     private URI gatewayUri(String path) {
         return URI.create("http://localhost:" + gatewayPort + path);
     }
@@ -127,6 +189,7 @@ class OrderGatewayControllerIntegrationTest {
                 throw new IllegalStateException("Failed to start stub order service", exception);
             }
             server.createContext("/api/orders", this::handle);
+            server.createContext("/api/admin/orders", this::handle);
             server.start();
         }
 
@@ -152,7 +215,8 @@ class OrderGatewayControllerIntegrationTest {
         private void handle(HttpExchange exchange) throws IOException {
             String body = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
             String path = exchange.getRequestURI().getPath();
-            requests.add(new RecordedRequest(exchange.getRequestMethod(), path, exchange.getRequestHeaders(), body));
+            String query = exchange.getRequestURI().getRawQuery();
+            requests.add(new RecordedRequest(exchange.getRequestMethod(), path, query, exchange.getRequestHeaders(), body));
 
             if ("POST".equals(exchange.getRequestMethod()) && "/api/orders".equals(path)) {
                 writeJson(exchange, 201, "corr-gateway-create", "/api/orders/ord_gateway_001", """
@@ -163,6 +227,24 @@ class OrderGatewayControllerIntegrationTest {
             if ("GET".equals(exchange.getRequestMethod()) && "/api/orders/ord_gateway_001".equals(path)) {
                 writeJson(exchange, 200, "corr-gateway-query", null, """
                     {"success":true,"data":{"orderId":"ord_gateway_001","memberId":"member-gateway","status":"CONFIRMED","sagaStatus":"COMPLETED","paymentMethod":"CARD","totalAmount":12000.0,"items":[]},"error":null,"trace":{"correlationId":"corr-gateway-query"}}
+                    """);
+                return;
+            }
+            if ("GET".equals(exchange.getRequestMethod()) && "/api/admin/orders".equals(path)) {
+                writeJson(exchange, 200, "corr-gateway-admin-list", null, """
+                    {"success":true,"data":{"page":0,"size":5,"items":[{"orderId":"ord_gateway_delay","memberId":"member-gateway","status":"CREATED","sagaStatus":"PAYMENT_DELAYED","paymentMethod":"DELAY_CARD","totalAmount":12000.0,"itemCount":1,"createdAt":"2026-05-13T02:00:00Z","updatedAt":"2026-05-13T02:01:00Z"}]},"error":null,"trace":{"correlationId":"corr-gateway-admin-list"}}
+                    """);
+                return;
+            }
+            if ("GET".equals(exchange.getRequestMethod()) && "/api/admin/orders/ord_gateway_delay/saga".equals(path)) {
+                writeJson(exchange, 200, "corr-gateway-admin-saga", null, """
+                    {"success":true,"data":{"orderId":"ord_gateway_delay","orderStatus":"CREATED","sagaStatus":"PAYMENT_DELAYED","failedAt":null,"businessReason":null,"technicalErrorMessage":null,"lastEventType":"PaymentAuthorizationDelayed","outboxAttempts":0},"error":null,"trace":{"correlationId":"corr-gateway-admin-saga"}}
+                    """);
+                return;
+            }
+            if ("POST".equals(exchange.getRequestMethod()) && "/api/admin/orders/ord_gateway_delay/cancel".equals(path)) {
+                writeJson(exchange, 202, "corr-gateway-admin-cancel", null, """
+                    {"success":true,"data":{"orderId":"ord_gateway_delay","status":"CREATED","sagaStatus":"PAYMENT_CANCEL_REQUESTED"},"error":null,"trace":{"correlationId":"corr-gateway-admin-cancel"}}
                     """);
                 return;
             }
@@ -194,6 +276,7 @@ class OrderGatewayControllerIntegrationTest {
     private record RecordedRequest(
         String method,
         String path,
+        String query,
         Map<String, List<String>> headers,
         String body
     ) {

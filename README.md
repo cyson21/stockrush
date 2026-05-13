@@ -102,8 +102,9 @@ docker compose up -d
 - 최근 지연 결제 취소 E2E 증거: `ord_20260513012031_8c06cd49` 주문이 `CREATED/PAYMENT_DELAYED` 도달 후 관리자 취소로 `CANCELLED/FAILED`가 됐고, SKU `DELAY-E2E-102029-S` 재고는 `available=20`, `reserved=0`으로 복구됐습니다.
 - 동일 SKU 최종 상태 E2E 증거: `tools/local-e2e/local-e2e same-sku-concurrency` 실행에서 주문 생성/조회는 Gateway를 경유했고, 주문 6건, 초기 재고 3개 기준 3건 완료/3건 취소, 재고 `available=0`, `reserved=0`, 서비스별 `pendingOutboxDelta=0`을 확인했습니다.
 - Gateway 주문 라우팅 smoke 증거: fake Order Service 기준 `POST /api/orders`, `GET /api/orders/{orderId}`가 method, path, body, `Idempotency-Key`, `X-Correlation-Id`, status, `Location`, body를 전달하는지 `services/gateway` Maven 테스트로 확인했습니다.
+- Gateway 주문 시나리오 E2E 증거: `GW-E2E-20260513111940-332ba0dc` 기준 `CARD`, `FAIL_CARD`, `DELAY_CARD`, 지연 결제 취소가 Gateway 주문 경로에서 처리됐고, 최종 재고 `available=19`, `reserved=0`, 서비스별 `pendingOutboxDelta=0`을 확인했습니다.
 
 ## 현재 한계
 
-- Gateway는 주문 생성/조회 라우팅 smoke와 동일 SKU runner의 주문 생성/조회 경로까지 검증했습니다. `CARD`/`FAIL_CARD`/`DELAY_CARD`와 지연 결제 취소 runbook 예시는 아직 서비스 포트 직접 호출 기준입니다.
+- Gateway는 주문 생성/조회와 관리자 주문 조회/취소 라우팅 smoke, 동일 SKU runner의 주문 생성/조회 경로, runbook의 주문 생성/조회/취소 경로까지 검증 범위를 넓혔습니다. Outbox admin API는 아직 서비스 포트 직접 호출 기준입니다.
 - 인증/권한, 부하 벤치마크, Kafka consumer 병렬성 검증, Kafka 장애 복구 자동화는 후속 확장 범위입니다.

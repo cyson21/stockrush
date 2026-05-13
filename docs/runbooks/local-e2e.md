@@ -87,14 +87,14 @@ curl -sSf http://localhost:18084/actuator/health
 
 ## Gateway 주문 라우팅 Smoke
 
-Gateway는 주문 생성/조회 라우팅 smoke를 제공한다. 이 테스트는 Gateway가 Order Service로 method, path, body, 핵심 헤더와 응답을 전달하는지를 fake upstream으로 고정한다.
+Gateway는 주문 생성/조회와 관리자 주문 조회/취소 라우팅 smoke를 제공한다. 이 테스트는 Gateway가 Order Service로 method, path, query string, body, 핵심 헤더와 응답을 전달하는지를 fake upstream으로 고정한다.
 
 ```bash
 cd services/gateway
 JAVA_HOME=/Users/chanyang.son/Library/Java/JavaVirtualMachines/ms-17.0.18/Contents/Home mvn test
 ```
 
-로컬 기동 시 Gateway는 기본적으로 `ORDER_SERVICE_URL=http://localhost:18083`으로 Order Service를 호출한다.
+로컬 기동 시 Gateway는 기본적으로 `ORDER_SERVICE_URL=http://localhost:18083`으로 Order Service를 호출한다. Outbox admin API는 서비스별 운영 경로이므로 현재 runbook에서는 서비스 포트를 직접 호출한다.
 
 ## 반복 실행용 Local E2E Runner
 
@@ -126,6 +126,19 @@ JAVA_HOME=/Users/chanyang.son/Library/Java/JavaVirtualMachines/ms-17.0.18/Conten
 - 최종 재고: `availableQuantity=0`, `reservedQuantity=0`
 - `pendingOutboxBaseline`, `pendingOutboxCounts`, `pendingOutboxDelta`: Order/Inventory/Payment 모두 `0`
 
+최근 Gateway 주문 시나리오 검증 증거:
+
+- 실행 시각: 2026-05-13 11:19 KST
+- productCode: `GW-E2E-20260513111940-332ba0dc`
+- skuId: `GW-E2E-20260513111940-332ba0dc-S`
+- Gateway(`http://localhost:18080`)로 `CARD`, `FAIL_CARD`, `DELAY_CARD` 주문 생성/조회와 지연 결제 취소 요청을 검증
+- 주문 결과:
+  - `CARD`: `ord_20260513021940_57874d04` -> `CONFIRMED/COMPLETED`
+  - `FAIL_CARD`: `ord_20260513021940_5ea74236` -> `CANCELLED/FAILED`
+  - `DELAY_CARD`: `ord_20260513021940_8c5b95cf` -> `PAYMENT_DELAYED` 확인 후 Gateway 관리자 취소로 `CANCELLED/FAILED`
+- 최종 재고: `availableQuantity=19`, `reservedQuantity=0`
+- `pendingOutboxBaseline`, `pendingOutboxCounts`, `pendingOutboxDelta`: Order/Inventory/Payment 모두 `0`
+
 ## CARD 성공 시나리오
 
 1. 운영용 샘플 상품/재고를 준비한다.
@@ -148,7 +161,7 @@ curl -sS -X PUT http://localhost:18082/api/stocks/"$SKU_ID" \
 2. 주문 생성 API 호출:
 
 ```bash
-CARD_ORDER_ID=$(curl -sS -X POST http://localhost:18083/api/orders \
+CARD_ORDER_ID=$(curl -sS -X POST http://localhost:18080/api/orders \
   -H 'Content-Type: application/json' \
   -H 'Idempotency-Key: card-demo-001' \
   -d "{\"memberId\":\"$MEMBER_ID\",\"paymentMethod\":\"CARD\",\"items\":[{\"productCode\":\"$PRODUCT_CODE\",\"skuId\":\"$SKU_ID\",\"quantity\":1,\"unitPrice\":12000}]}" \
@@ -160,7 +173,7 @@ echo "$CARD_ORDER_ID"
 3. 상태 폴링:
 
 ```bash
-curl -sS http://localhost:18083/api/orders/"$CARD_ORDER_ID"
+curl -sS http://localhost:18080/api/orders/"$CARD_ORDER_ID"
 ```
 
 예상 결과:
@@ -190,7 +203,7 @@ curl -sS 'http://localhost:18084/api/admin/outbox-events?status=PENDING,FAILED'
 동일한 샘플 상품을 사용해 결제 실패를 강제한다.
 
 ```bash
-FAIL_ORDER_ID=$(curl -sS -X POST http://localhost:18083/api/orders \
+FAIL_ORDER_ID=$(curl -sS -X POST http://localhost:18080/api/orders \
   -H 'Content-Type: application/json' \
   -H 'Idempotency-Key: failcard-demo-001' \
   -d "{\"memberId\":\"$MEMBER_ID\",\"paymentMethod\":\"FAIL_CARD\",\"items\":[{\"productCode\":\"$PRODUCT_CODE\",\"skuId\":\"$SKU_ID\",\"quantity\":1,\"unitPrice\":12000}]}" \
@@ -202,7 +215,7 @@ echo "$FAIL_ORDER_ID"
 1. 상태 조회:
 
 ```bash
-curl -sS http://localhost:18083/api/orders/"$FAIL_ORDER_ID"
+curl -sS http://localhost:18080/api/orders/"$FAIL_ORDER_ID"
 ```
 
 2. 재고 복구 확인:
@@ -223,7 +236,7 @@ curl -sS http://localhost:18082/api/stocks/"$SKU_ID"
 결제 지연을 강제해 주문이 열린 상태로 남는지 확인한다.
 
 ```bash
-DELAY_ORDER_ID=$(curl -sS -X POST http://localhost:18083/api/orders \
+DELAY_ORDER_ID=$(curl -sS -X POST http://localhost:18080/api/orders \
   -H 'Content-Type: application/json' \
   -H 'Idempotency-Key: delaycard-demo-001' \
   -d "{\"memberId\":\"$MEMBER_ID\",\"paymentMethod\":\"DELAY_CARD\",\"items\":[{\"productCode\":\"$PRODUCT_CODE\",\"skuId\":\"$SKU_ID\",\"quantity\":1,\"unitPrice\":12000}]}" \
@@ -235,7 +248,7 @@ echo "$DELAY_ORDER_ID"
 상태 조회:
 
 ```bash
-curl -sS http://localhost:18083/api/orders/"$DELAY_ORDER_ID"
+curl -sS http://localhost:18080/api/orders/"$DELAY_ORDER_ID"
 ```
 
 예상 결과:
@@ -249,14 +262,14 @@ curl -sS http://localhost:18083/api/orders/"$DELAY_ORDER_ID"
 `DELAY_CARD` 주문에 대해 운영자가 결제 취소를 요청하고 재고가 복구되는지 확인한다.
 
 ```bash
-curl -sS -X POST http://localhost:18083/api/admin/orders/"$DELAY_ORDER_ID"/cancel \
+curl -sS -X POST http://localhost:18080/api/admin/orders/"$DELAY_ORDER_ID"/cancel \
   -H 'Idempotency-Key: admin-cancel-delaycard-demo-001'
 ```
 
 상태 조회:
 
 ```bash
-curl -sS http://localhost:18083/api/orders/"$DELAY_ORDER_ID"
+curl -sS http://localhost:18080/api/orders/"$DELAY_ORDER_ID"
 curl -sS http://localhost:18082/api/stocks/"$SKU_ID"
 ```
 

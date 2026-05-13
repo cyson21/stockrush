@@ -20,7 +20,7 @@ StockRush 테스트 전략은 한정 판매 주문 흐름에서 서비스별 도
 | Outbox relay | `PENDING` claim, Kafka publish, retry, `PUBLISHED`/`FAILED` 전이를 확인 | `services/order-service/src/test/java/com/stockrush/order/infra/outbox/OutboxRelayServiceIntegrationTest.java`, `services/inventory-service/src/test/java/com/stockrush/inventory/infra/outbox/InventoryOutboxRelayServiceIntegrationTest.java`, `services/payment-service/src/test/java/com/stockrush/payment/infra/outbox/PaymentOutboxRelayServiceIntegrationTest.java` |
 | Kafka smoke | 실제 로컬 Kafka에 publish/consume이 되는지 확인 | `services/inventory-service/src/test/java/com/stockrush/inventory/infra/kafka/InventoryKafkaSmokeIntegrationTest.java`, `services/payment-service/src/test/java/com/stockrush/payment/infra/kafka/PaymentKafkaSmokeIntegrationTest.java` |
 | UI behavior | 고객/관리자 앱의 API 호출, 상태 렌더링, 재시도 키 재사용 확인 | `apps/customer-app/src/App.test.tsx`, `apps/admin-app/src/App.test.tsx` |
-| Gateway routing smoke | Gateway가 주문 생성/조회 요청을 Order Service로 전달하는지 확인 | `services/gateway/src/test/java/com/stockrush/gateway/api/OrderGatewayControllerIntegrationTest.java` |
+| Gateway routing smoke | Gateway가 주문 생성/조회와 관리자 주문 조회/취소 요청을 Order Service로 전달하는지 확인 | `services/gateway/src/test/java/com/stockrush/gateway/api/OrderGatewayControllerIntegrationTest.java` |
 | Architecture Guard | schema ownership, Controller 반환 타입, event envelope, outbox table shape 확인 | `tools/architecture-guard/tests/test_architecture_guard.py`, `tools/architecture-guard/architecture_guard.py` |
 | Manual E2E | 실제 서비스 기동 후 `CARD`, `FAIL_CARD`, `DELAY_CARD`, 관리자 취소, Gateway 경유 동일 SKU 최종 상태 확인 | `docs/runbooks/local-e2e.md`, `tools/local-e2e` |
 
@@ -74,6 +74,7 @@ Local end-to-end verification follows [Local E2E Runbook](runbooks/local-e2e.md)
 
 - `ord_20260513012031_8c06cd49` 주문이 `CREATED/PAYMENT_DELAYED`에 도달한 뒤 관리자 취소로 `CANCELLED/FAILED`가 됐고, SKU `DELAY-E2E-102029-S`는 `availableQuantity=20`, `reservedQuantity=0`으로 복구됐다. Order/Inventory/Payment `PENDING` outbox 목록은 모두 비어 있었다.
 - `tools/local-e2e/local-e2e same-sku-concurrency --orders 6 --initial-stock 3 --quantity 1 --max-attempts 12` 실행에서 productCode `CONC-E2E-20260513110249-07e052f0`, SKU `CONC-E2E-20260513110249-07e052f0-S` 기준 주문 생성/조회는 Gateway 기본 URL(`http://localhost:18080`)을 경유했다. 주문 6건 중 3건은 `CONFIRMED/COMPLETED`, 3건은 `CANCELLED/FAILED`가 됐다. 최종 재고는 `availableQuantity=0`, `reservedQuantity=0`이고 Order/Inventory/Payment `pendingOutboxDelta`는 모두 0이었다.
+- Gateway(`http://localhost:18080`) 기준 주문 생성/조회/취소 E2E에서 productCode `GW-E2E-20260513111940-332ba0dc`, SKU `GW-E2E-20260513111940-332ba0dc-S`를 사용했다. `CARD` 주문 `ord_20260513021940_57874d04`는 `CONFIRMED/COMPLETED`, `FAIL_CARD` 주문 `ord_20260513021940_5ea74236`은 `CANCELLED/FAILED`, `DELAY_CARD` 주문 `ord_20260513021940_8c5b95cf`는 `PAYMENT_DELAYED` 확인 후 Gateway 관리자 취소로 `CANCELLED/FAILED`가 됐다. 최종 재고는 `availableQuantity=19`, `reservedQuantity=0`이고 Order/Inventory/Payment `pendingOutboxDelta`는 모두 0이었다.
 
 ## Stability Rules
 
@@ -88,7 +89,7 @@ Local end-to-end verification follows [Local E2E Runbook](runbooks/local-e2e.md)
 
 These are known gaps, not hidden assumptions.
 
-- Gateway has order create/query routing smoke coverage with a fake upstream, and the same-SKU local E2E runner now sends order create/query through Gateway. The `CARD`/`FAIL_CARD`/`DELAY_CARD` runbook examples and admin cancel flow still call service ports directly.
+- Gateway has order create/query and admin order list/saga/cancel routing smoke coverage with a fake upstream. The same-SKU local E2E runner and order-facing runbook examples send order create/query/cancel through Gateway. Outbox admin APIs still call service ports directly.
 - Inventory handler has a focused same-SKU concurrent reservation regression test and a local final-state E2E runner. Kafka consumer parallelism, external load benchmarking, and duplicate command race windows remain future scope.
 - Kafka broker outage and long-lived `PENDING`/`FAILED` recovery scenarios are documented but not fully automated.
 - Authentication and authorization tests are outside the current public slice.
