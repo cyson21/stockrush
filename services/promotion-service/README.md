@@ -3,7 +3,7 @@
 Port: `18085`
 Schema: `promotion`
 
-Promotion Service owns coupon definitions and discount quote calculation.
+Promotion Service owns coupon definitions, discount quote calculation, and order-event-driven coupon usage state.
 
 ## APIs
 
@@ -15,9 +15,21 @@ Promotion Service owns coupon definitions and discount quote calculation.
 | `POST` | `/api/coupons/quote` | calculate coupon discount quote |
 | `GET` | `/ping` | local ping |
 
-This first slice is service-local. Gateway routing, app UI, and Order Saga integration remain future scope.
+Gateway routing and admin usage screens remain future scope. Customer App and Order Service already use the quote API, and the service can consume order events for coupon usage state.
 
 Admin create requests require `Idempotency-Key`. Reusing the same key with the same request body returns the existing coupon; reusing it with a different body returns `409`.
+
+## Event Handling
+
+When `PROMOTION_KAFKA_LISTENERS_ENABLED=true`, the service consumes `stockrush.order.events.v1`.
+
+| Event | Action |
+|---|---|
+| `OrderCreated` with coupon fields | insert `coupon_usages` row as `RESERVED` |
+| `OrderConfirmed` | move usage to `CONSUMED` |
+| `OrderCancelled` | move usage to `RELEASED` |
+
+Processed event ids are stored in `processed_events` so duplicate delivery is harmless.
 
 ## Run
 

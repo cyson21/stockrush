@@ -72,6 +72,10 @@ class PersistentCreateOrderServiceIntegrationTest {
             "SKU-001",
             queryString("select payload #>> '{items,0,skuId}' from outbox_events where aggregate_id = :orderId", result.order().orderId())
         );
+        assertEquals(
+            "24000.00",
+            queryString("select payload ->> 'payableAmount' from outbox_events where aggregate_id = :orderId", result.order().orderId())
+        );
     }
 
     @Test
@@ -101,6 +105,18 @@ class PersistentCreateOrderServiceIntegrationTest {
                 .param("orderId", result.order().orderId())
                 .query(BigDecimal.class)
                 .single()
+        );
+        assertEquals(
+            "WELCOME10",
+            queryString("select payload ->> 'couponCode' from outbox_events where aggregate_id = :orderId", result.order().orderId())
+        );
+        assertEquals(
+            "3000.00",
+            queryString("select payload ->> 'discountAmount' from outbox_events where aggregate_id = :orderId", result.order().orderId())
+        );
+        assertEquals(
+            "21000.00",
+            queryString("select payload ->> 'payableAmount' from outbox_events where aggregate_id = :orderId", result.order().orderId())
         );
     }
 

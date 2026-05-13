@@ -1,6 +1,6 @@
 # Promotion API
 
-Promotion API는 쿠폰 정의와 주문 전 할인 견적을 다룬다. 현재 1차 범위는 `promotion-service` 직접 호출 기준이며, Gateway와 주문 Saga 연동은 후속 범위이다.
+Promotion API는 쿠폰 정의와 주문 전 할인 견적을 다룬다. 현재 API 호출은 `promotion-service` 직접 호출 기준이며, 주문 이벤트 소비로 쿠폰 사용 상태도 기록한다. Gateway route는 후속 범위이다.
 
 Base URL: `http://localhost:18085`
 
@@ -110,6 +110,18 @@ Response:
 | `minOrderAmount` | returns `applied=false` when not met |
 | period | returns `applied=false` with `COUPON_OUT_OF_PERIOD` when outside `startsAt` and `endsAt` |
 | status | returns `applied=false` with `COUPON_NOT_ACTIVE` when not `ACTIVE` |
+
+## Order Event Consumer
+
+Promotion Service consumes `stockrush.order.events.v1` when `PROMOTION_KAFKA_LISTENERS_ENABLED=true`.
+
+| Event | Required payload fields | Usage state |
+|---|---|---|
+| `OrderCreated` | `orderId`, `memberId`, `couponCode`, `totalAmount`, `discountAmount`, `payableAmount`, `createdAt` | insert `RESERVED` usage when `couponCode` is present |
+| `OrderConfirmed` | `orderId`, `confirmedAt` | move matching `RESERVED` usage to `CONSUMED` |
+| `OrderCancelled` | `orderId`, `reason`, `cancelledAt` | move matching `RESERVED` usage to `RELEASED` |
+
+Duplicate event delivery is handled by the Promotion `processed_events` table with `(event_id, consumer_group)` as the unique key.
 
 ## Error Codes
 

@@ -9,7 +9,7 @@ StockRush는 한정 판매 주문 흐름에서 Kafka, Outbox, Saga를 묶은 엔
 - 고객 앱(`apps/customer-app`) + 주문 생성/조회 플로우
 - 관리자 앱(`apps/admin-app`) + 운영 화면(상품, 재고, 주문, Saga, Outbox)
 - Catalog / Inventory / Order / Payment API 체인
-- Promotion Service 쿠폰 등록/목록/할인 견적 API 1차
+- Promotion Service 쿠폰 등록/목록/할인 견적 API와 주문 이벤트 기반 사용 상태 기록
 - 고객 앱 쿠폰 견적 UI와 Order Service 주문 할인 반영
 - Kafka + 서비스 로컬 Outbox + Saga 상태 전이
 - `CARD` 성공, `FAIL_CARD` 실패/재고 복구, `DELAY_CARD` 지연 결제와 관리자 취소 흐름
@@ -87,7 +87,7 @@ docker compose up -d
 - 결제 서비스는 `CARD` 승인, `FAIL_CARD` 실패, `DELAY_CARD` 지연, 지연 결제 취소 분기 검증이 가능하며, 주문 상태와 Saga 상태 변화가 연동되어 보입니다.
 - 관리자 앱에서 상품 등록/수정, SKU 재고 설정, 지연 결제 취소, 주문 Saga 추적, Outbox retry와 failed requeue를 한 흐름으로 확인할 수 있습니다.
 - Outbox 운영 액션은 `X-Operator-Id`, `X-Correlation-Id`, batch size, 처리 건수를 서비스별 감사 테이블에 남깁니다.
-- Promotion Service는 쿠폰 등록/목록과 주문 전 할인 견적 계산을 제공하고, Order Service는 주문 생성 시 할인 가격 snapshot을 저장해 결제 예정 금액을 Payment command로 전달합니다.
+- Promotion Service는 쿠폰 등록/목록과 주문 전 할인 견적 계산을 제공하고, 주문 이벤트를 소비해 쿠폰 사용 상태를 기록합니다. Order Service는 주문 생성 시 할인 가격 snapshot을 저장해 결제 예정 금액을 Payment command로 전달합니다.
 
 ## 대표 시나리오
 
@@ -99,6 +99,7 @@ docker compose up -d
 | 지연 결제 취소 | `PaymentCancelRequested`와 `PaymentCanceled` 이후 주문 취소 및 재고 복구 |
 | Outbox 운영 | 서비스별 outbox 조회, due `PENDING` 이벤트 retry, `FAILED` 이벤트 requeue |
 | 쿠폰 견적/주문 할인 | 쿠폰 코드와 주문 금액으로 할인액을 산출하고, 주문 생성 후 결제 예정 금액으로 결제 요청 |
+| 쿠폰 사용 복구 | `OrderCreated` 쿠폰 사용 기록 후 `OrderConfirmed`는 사용 완료, `OrderCancelled`는 사용 해제 |
 
 ## 검증 요약
 
@@ -112,9 +113,10 @@ docker compose up -d
 - Gateway 주문 시나리오 E2E 증거: `GW-E2E-20260513111940-332ba0dc` 기준 `CARD`, `FAIL_CARD`, `DELAY_CARD`, 지연 결제 취소가 Gateway 주문 경로에서 처리됐고, 최종 재고 `available=19`, `reserved=0`, 서비스별 `pendingOutboxDelta=0`을 확인했습니다.
 - Promotion Service 집중 검증: `PromotionCouponControllerIntegrationTest`로 쿠폰 생성, 상태별 목록, 퍼센트 할인 상한, 최소 주문 금액 미달, 중복 쿠폰 코드 응답을 확인했습니다.
 - 쿠폰 주문 반영 검증: Order Service 테스트로 quote 실패/타임아웃/금액 일관성, 주문 저장 가격 snapshot, Payment command 결제 예정 금액을 확인하고 Customer App Vitest/build로 쿠폰 UI를 확인했습니다.
+- 쿠폰 사용 이벤트 검증: Promotion Service 테스트로 `OrderCreated` 사용 기록, `OrderConfirmed` 사용 완료, `OrderCancelled` 사용 해제와 중복 이벤트 무해 처리를 확인했습니다.
 
 ## 현재 한계
 
 - Gateway는 주문 생성/조회, 관리자 주문 조회/취소, Outbox 조회/재시도/requeue 라우팅 smoke와 동일 SKU runner/runbook의 Gateway 경유 경로까지 검증 범위를 넓혔습니다.
-- Promotion Service는 아직 Gateway route와 쿠폰 사용/복구 이벤트까지는 연결하지 않았습니다.
+- Promotion Service는 주문 이벤트 기반 쿠폰 사용 상태까지 연결했습니다. Gateway route와 관리자 사용 이력 화면은 후속 확장 범위입니다.
 - 인증/권한, 부하 벤치마크, Kafka consumer 병렬성 검증, Kafka 장애 복구 자동화는 후속 확장 범위입니다.

@@ -109,6 +109,7 @@ The customer app reads order status through `GET /api/orders/{orderId}`. The adm
 |---|---|---|---|---|
 | Inventory reservation | `OrderCreated` on `stockrush.order.events.v1` | inventory-service | `InventoryReserved` on `stockrush.inventory.events.v1` | stock update, processed event, outbox row, Kafka event envelope |
 | Inventory finalization | `OrderConfirmed` or `OrderCancelled` on `stockrush.order.events.v1` | inventory-service | `InventoryReservationConfirmed` or `InventoryReservationReleased` on `stockrush.inventory.events.v1` | reservation status, stock recovery/finalization, processed event, outbox row |
+| Coupon usage lifecycle | `OrderCreated`, `OrderConfirmed`, or `OrderCancelled` on `stockrush.order.events.v1` | promotion-service | none | coupon usage state, processed event |
 | Payment authorization | `PaymentAuthorizationRequested` on `stockrush.payment.commands.v1` | payment-service | `PaymentAuthorized` on `stockrush.payment.events.v1` | payment row, processed event, outbox row, Kafka event envelope |
 | Payment cancellation | `PaymentCancelRequested` on `stockrush.payment.commands.v1` | payment-service | `PaymentCanceled` on `stockrush.payment.events.v1` | delayed payment update, processed event, outbox row, Kafka event envelope |
 

@@ -72,6 +72,9 @@ public class CreateOrderService {
             command.memberId(),
             command.items().stream().map(this::toPayloadItem).toList(),
             totalAmount,
+            couponPrice.couponCode(),
+            couponPrice.discountAmount(),
+            couponPrice.payableAmount(),
             now
         );
         OutboxEventRecord<OrderCreatedPayload> outboxEvent = new OutboxEventRecord<>(

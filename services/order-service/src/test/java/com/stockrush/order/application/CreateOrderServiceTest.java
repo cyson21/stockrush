@@ -110,6 +110,9 @@ class CreateOrderServiceTest {
         assertEquals("WELCOME10", result.order().couponCode());
         assertEquals(new BigDecimal("5000.00"), result.order().discountAmount());
         assertEquals(new BigDecimal("24000.00"), result.order().payableAmount());
+        assertEquals("WELCOME10", result.outboxEvent().payload().couponCode());
+        assertEquals(new BigDecimal("5000.00"), result.outboxEvent().payload().discountAmount());
+        assertEquals(new BigDecimal("24000.00"), result.outboxEvent().payload().payableAmount());
     }
 
     @Test

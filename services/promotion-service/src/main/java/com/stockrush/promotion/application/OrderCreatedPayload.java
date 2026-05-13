@@ -1,4 +1,4 @@
-package com.stockrush.inventory.application;
+package com.stockrush.promotion.application;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -14,10 +14,6 @@ public record OrderCreatedPayload(
     BigDecimal payableAmount,
     Instant createdAt
 ) {
-    public OrderCreatedPayload(String orderId, String memberId, List<OrderCreatedItemPayload> items, BigDecimal totalAmount, Instant createdAt) {
-        this(orderId, memberId, items, totalAmount, null, BigDecimal.ZERO, totalAmount, createdAt);
-    }
-
     public OrderCreatedPayload {
         items = List.copyOf(items);
     }

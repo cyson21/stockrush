@@ -24,6 +24,7 @@ class InventoryOrderEventConsumerIntegrationTest {
 
     private static final UUID ORDER_CONFIRMED_EVENT_ID = UUID.fromString("018f8d0b-8d32-7c42-9f1b-78328e0f7b10");
     private static final UUID ORDER_CANCELLED_EVENT_ID = UUID.fromString("018f8d0b-8d32-7c42-9f1b-78328e0f7b11");
+    private static final UUID ORDER_CREATED_EVENT_ID = UUID.fromString("018f8d0b-8d32-7c42-9f1b-78328e0f7b12");
     private static final String ORDER_ID = "ord_inventory_consumer_001";
     private static final String SKU_ID = "SKU-CONSUMER-001";
 
@@ -64,6 +65,17 @@ class InventoryOrderEventConsumerIntegrationTest {
     }
 
     @Test
+    void dispatches_order_created_json_with_coupon_fields_to_reserve_inventory() {
+        consumer.consume(orderCreatedJson());
+
+        assertEquals(2, queryInt("select available_quantity from stock_items where sku_id = '" + SKU_ID + "'"));
+        assertEquals(3, queryInt("select reserved_quantity from stock_items where sku_id = '" + SKU_ID + "'"));
+        assertEquals(1, queryInt("select count(*) from stock_reservations where order_id = 'ord_inventory_consumer_created_001'"));
+        assertEquals(1, queryInt("select count(*) from processed_events where event_id = '" + ORDER_CREATED_EVENT_ID + "'"));
+        assertEquals("InventoryReserved", queryString("select event_type from outbox_events"));
+    }
+
+    @Test
     void dispatches_order_confirmed_json_to_confirm_inventory_reservation() {
         consumer.consume(orderConfirmedJson());
 
@@ -85,6 +97,40 @@ class InventoryOrderEventConsumerIntegrationTest {
         assertEquals(1, queryInt("select count(*) from processed_events where event_id = '" + ORDER_CANCELLED_EVENT_ID + "'"));
         assertEquals(1, queryInt("select count(*) from outbox_events"));
         assertEquals("InventoryReservationReleased", queryString("select event_type from outbox_events"));
+    }
+
+    private String orderCreatedJson() {
+        return """
+            {
+              "eventId": "%s",
+              "eventType": "OrderCreated",
+              "eventVersion": 1,
+              "aggregateType": "order",
+              "aggregateId": "ord_inventory_consumer_created_001",
+              "correlationId": "corr-inventory-consumer-created",
+              "causationId": null,
+              "idempotencyKey": "idem-inventory-consumer-created",
+              "occurredAt": "2026-05-12T17:00:00Z",
+              "sourceService": "order-service",
+              "payload": {
+                "orderId": "ord_inventory_consumer_created_001",
+                "memberId": "member-1",
+                "items": [
+                  {
+                    "productCode": "LIMITED-CONSUMER-001",
+                    "skuId": "%s",
+                    "quantity": 1,
+                    "unitPrice": 80000.00
+                  }
+                ],
+                "totalAmount": 80000.00,
+                "couponCode": "WELCOME10",
+                "discountAmount": 5000.00,
+                "payableAmount": 75000.00,
+                "createdAt": "2026-05-12T17:00:00Z"
+              }
+            }
+            """.formatted(ORDER_CREATED_EVENT_ID, SKU_ID);
     }
 
     private String orderConfirmedJson() {

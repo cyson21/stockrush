@@ -45,7 +45,7 @@ Kafka events use a common envelope with event-specific payloads.
 
 | Event | Topic | Producer | Consumer |
 |---|---|---|---|
-| `OrderCreated` | `stockrush.order.events.v1` | order-service | inventory-service |
+| `OrderCreated` | `stockrush.order.events.v1` | order-service | inventory-service, promotion-service |
 | `InventoryReserved` | `stockrush.inventory.events.v1` | inventory-service | order-service |
 | `InventoryReservationFailed` | `stockrush.inventory.events.v1` | inventory-service | order-service |
 | `PaymentAuthorizationRequested` | `stockrush.payment.commands.v1` | order-service | payment-service |
@@ -54,8 +54,8 @@ Kafka events use a common envelope with event-specific payloads.
 | `PaymentAuthorizationFailed` | `stockrush.payment.events.v1` | payment-service | order-service |
 | `PaymentAuthorizationDelayed` | `stockrush.payment.events.v1` | payment-service | order-service |
 | `PaymentCanceled` | `stockrush.payment.events.v1` | payment-service | order-service |
-| `OrderConfirmed` | `stockrush.order.events.v1` | order-service | inventory-service, read models |
-| `OrderCancelled` | `stockrush.order.events.v1` | order-service | inventory-service, read models |
+| `OrderConfirmed` | `stockrush.order.events.v1` | order-service | inventory-service, promotion-service, read models |
+| `OrderCancelled` | `stockrush.order.events.v1` | order-service | inventory-service, promotion-service, read models |
 | `InventoryReservationConfirmed` | `stockrush.inventory.events.v1` | inventory-service | operations/read models |
 | `InventoryReservationReleased` | `stockrush.inventory.events.v1` | inventory-service | operations/read models |
 
@@ -80,6 +80,20 @@ Kafka events use a common envelope with event-specific payloads.
 `PaymentAuthorizationRequested.method` is stored from the order request. If omitted, Order Service uses `CARD`. The `FAIL_CARD` method is reserved for deterministic local failure simulation and produces `PaymentAuthorizationFailed` with reason `PAYMENT_DECLINED`.
 The `DELAY_CARD` method is reserved for deterministic local delay simulation and produces `PaymentAuthorizationDelayed` with reason `PAYMENT_DELAYED`.
 Admin cancellation for delayed orders produces `PaymentCancelRequested`, then Payment Service updates the delayed payment to `CANCELED` and emits `PaymentCanceled` with reason `PAYMENT_CANCELED`.
+
+## Promotion Payload Notes
+
+`OrderCreated` carries coupon pricing fields when a coupon was accepted during order creation.
+
+| Event | Promotion use |
+|---|---|
+| `OrderCreated` | Record coupon usage as `RESERVED` from `couponCode`, `totalAmount`, `discountAmount`, and `payableAmount` |
+| `OrderConfirmed` | Move reserved usage to `CONSUMED` |
+| `OrderCancelled` | Move reserved usage to `RELEASED` with the cancellation reason |
+
+Order events without `couponCode` are still marked processed by Promotion Service but do not create usage rows.
+
+Promotion's Phase 1 usage lifecycle assumes `OrderCreated` is processed before `OrderConfirmed` or `OrderCancelled` for the same order. Out-of-order result-event recovery is a future hardening item.
 
 ## Phase 1 Inventory Finalization Notes
 

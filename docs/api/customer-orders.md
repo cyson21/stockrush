@@ -96,7 +96,7 @@ Body:
 }
 ```
 
-The response means the order row and `OrderCreated` outbox row were stored. Inventory and payment processing continue asynchronously through Kafka.
+The response means the order row and `OrderCreated` outbox row were stored. Inventory, payment, and coupon usage processing continue asynchronously through Kafka. When a coupon is accepted, `OrderCreated` includes the same `couponCode`, `discountAmount`, and `payableAmount` snapshot.
 
 ## Get Order Detail
 

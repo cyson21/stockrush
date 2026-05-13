@@ -100,7 +100,7 @@ JAVA_HOME=/Users/chanyang.son/Library/Java/JavaVirtualMachines/ms-17.0.18/Conten
 
 로컬 기동 시 Gateway는 기본적으로 `ORDER_SERVICE_URL=http://localhost:18083`, `INVENTORY_SERVICE_URL=http://localhost:18082`, `PAYMENT_SERVICE_URL=http://localhost:18084`로 각 서비스를 호출한다. Outbox admin API는 `service` path 값으로 `order`, `inventory`, `payment`를 선택한다.
 
-Promotion Service는 현재 Gateway를 거치지 않는 API로 확인한다. Customer App은 `/promotion` Vite proxy로 quote API를 호출하고, Order Service는 `PROMOTION_SERVICE_URL`로 quote API를 호출한다. 쿠폰 사용 기록과 실패 복구 이벤트는 후속 시나리오로 분리한다.
+Promotion Service는 현재 Gateway를 거치지 않는 API로 확인한다. Customer App은 `/promotion` Vite proxy로 quote API를 호출하고, Order Service는 `PROMOTION_SERVICE_URL`로 quote API를 호출한다. `PROMOTION_KAFKA_LISTENERS_ENABLED=true`로 기동하면 주문 이벤트를 소비해 쿠폰 사용 상태를 `RESERVED`, `CONSUMED`, `RELEASED`로 기록한다.
 
 ## 반복 실행용 Local E2E Runner
 

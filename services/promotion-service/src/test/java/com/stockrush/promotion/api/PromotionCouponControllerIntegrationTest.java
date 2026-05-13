@@ -40,6 +40,8 @@ class PromotionCouponControllerIntegrationTest {
     @BeforeEach
     void setUp() {
         mockMvc = MockMvcBuilders.webAppContextSetup(webApplicationContext).build();
+        jdbcClient.sql("delete from processed_events").update();
+        jdbcClient.sql("delete from coupon_usages").update();
         jdbcClient.sql("delete from admin_coupon_command_idempotency").update();
         jdbcClient.sql("delete from coupons").update();
         insertCoupon("WELCOME10", "Welcome 10%", "PERCENTAGE", new BigDecimal("10.00"), new BigDecimal("20000.00"), new BigDecimal("5000.00"), "ACTIVE");
