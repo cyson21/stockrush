@@ -36,6 +36,6 @@ Phase 1 keeps the gateway light and focused on routing smoke coverage.
 JAVA_HOME=/Users/chanyang.son/Library/Java/JavaVirtualMachines/ms-17.0.18/Contents/Home mvn test
 ```
 
-The routing smoke test uses fake upstream services and verifies method, path, query string, body, `Idempotency-Key`, `X-Correlation-Id`, response status, `Location`, and response body propagation for customer order routes, admin order routes, and Outbox admin routes including failed requeue.
+The routing smoke test uses fake upstream services and verifies method, path, query string, body, `Idempotency-Key`, `X-Correlation-Id`, `X-Operator-Id`, response status, `Location`, and response body propagation for customer order routes, admin order routes, and Outbox admin routes including failed requeue.
 
 Auth and broader service routing remain future scope.

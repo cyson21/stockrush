@@ -21,7 +21,7 @@ JSON output:
 - `ARCH-001`: service schema ownership
 - `ARCH-002`: controller must not return JPA entities directly
 - `ARCH-003`: Kafka event envelope fields must exist
-- `ARCH-004`: Outbox table must include required columns
+- `ARCH-004`: `outbox_events` table must include required columns
 
 Additional planned rules are defined in `docs/architecture/architecture-guard-rules.md`.
 

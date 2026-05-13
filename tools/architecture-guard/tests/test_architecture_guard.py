@@ -66,6 +66,24 @@ class ArchitectureGuardTest(unittest.TestCase):
 
             self.assertTrue(any(violation.rule_id == "ARCH-004" for violation in violations))
 
+    def test_allows_outbox_admin_action_table(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            migration_root = root / "services" / "order-service" / "src" / "main" / "resources" / "db"
+            migration_root.mkdir(parents=True)
+            (migration_root / "V2__create_outbox_admin_actions.sql").write_text(
+                "CREATE TABLE outbox_admin_actions ("
+                "id bigserial primary key,"
+                "action varchar(50) not null,"
+                "affected_count integer not null"
+                ");\n",
+                encoding="utf-8",
+            )
+
+            violations = architecture_guard.check(root)
+
+            self.assertFalse(any(violation.rule_id == "ARCH-004" for violation in violations))
+
     def test_detects_cross_schema_access(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

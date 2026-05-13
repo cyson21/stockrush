@@ -48,6 +48,7 @@ class InventoryOutboxControllerIntegrationTest {
     @BeforeEach
     void setUp() {
         mockMvc = MockMvcBuilders.webAppContextSetup(webApplicationContext).build();
+        jdbcClient.sql("delete from outbox_admin_actions").update();
         jdbcClient.sql("delete from outbox_events").update();
     }
 
@@ -96,7 +97,8 @@ class InventoryOutboxControllerIntegrationTest {
 
         mockMvc.perform(post("/api/admin/outbox-events/retry")
                 .param("batchSize", "10")
-                .header("X-Correlation-Id", CORRELATION_ID))
+                .header("X-Correlation-Id", CORRELATION_ID)
+                .header("X-Operator-Id", "operator-inventory"))
             .andExpect(status().isOk())
             .andExpect(header().string("X-Correlation-Id", CORRELATION_ID))
             .andExpect(jsonPath("$.success", is(true)))
@@ -104,6 +106,19 @@ class InventoryOutboxControllerIntegrationTest {
             .andExpect(jsonPath("$.data.published", is(1)))
             .andExpect(jsonPath("$.data.failed", is(0)))
             .andExpect(jsonPath("$.trace.correlationId", is(CORRELATION_ID)));
+
+        assertEquals(
+            1,
+            queryInt("""
+                select count(*)
+                from outbox_admin_actions
+                where action = 'RETRY_PENDING'
+                  and requested_batch_size = 10
+                  and affected_count = 1
+                  and operator_id = 'operator-inventory'
+                  and correlation_id = 'corr-admin-outbox'
+                """)
+        );
     }
 
     @Test
@@ -125,7 +140,8 @@ class InventoryOutboxControllerIntegrationTest {
 
         mockMvc.perform(post("/api/admin/outbox-events/failed/requeue")
                 .param("batchSize", "10")
-                .header("X-Correlation-Id", CORRELATION_ID))
+                .header("X-Correlation-Id", CORRELATION_ID)
+                .header("X-Operator-Id", "operator-inventory"))
             .andExpect(status().isOk())
             .andExpect(header().string("X-Correlation-Id", CORRELATION_ID))
             .andExpect(jsonPath("$.success", is(true)))
@@ -136,6 +152,18 @@ class InventoryOutboxControllerIntegrationTest {
         assertEquals(0, queryInt("select retry_count from outbox_events"));
         assertEquals(1, queryInt("select count(*) from outbox_events where next_retry_at is null"));
         assertEquals(1, queryInt("select count(*) from outbox_events where error_message is null"));
+        assertEquals(
+            1,
+            queryInt("""
+                select count(*)
+                from outbox_admin_actions
+                where action = 'REQUEUE_FAILED'
+                  and requested_batch_size = 10
+                  and affected_count = 1
+                  and operator_id = 'operator-inventory'
+                  and correlation_id = 'corr-admin-outbox'
+                """)
+        );
     }
 
     @Test

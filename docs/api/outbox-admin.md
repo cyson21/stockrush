@@ -59,6 +59,13 @@ Allowed `service` values: `order`, `inventory`, `payment`.
 
 `POST /api/admin/outbox-services/{service}/events/retry`
 
+### Headers
+
+| Name | Required | Description |
+|---|---:|---|
+| `X-Correlation-Id` | no | trace id echoed by Gateway and upstream service |
+| `X-Operator-Id` | no | operator id stored in `outbox_admin_actions`; defaults to `unknown` |
+
 ### Query Parameters
 
 | Name | Required | Default | Description |
@@ -78,6 +85,13 @@ Allowed `service` values: `order`, `inventory`, `payment`.
 ## Requeue Failed Events
 
 `POST /api/admin/outbox-services/{service}/events/failed/requeue`
+
+### Headers
+
+| Name | Required | Description |
+|---|---:|---|
+| `X-Correlation-Id` | no | trace id echoed by Gateway and upstream service |
+| `X-Operator-Id` | no | operator id stored in `outbox_admin_actions`; defaults to `unknown` |
 
 ### Query Parameters
 
@@ -102,10 +116,24 @@ Allowed `service` values: `order`, `inventory`, `payment`.
 - Keeps `maxRetryCount` and `publishedAt` unchanged.
 - Existing retry API or relay loop publishes the requeued rows.
 
+## Admin Action Audit
+
+Each producing service stores retry and requeue requests in `outbox_admin_actions`.
+
+| Column | Description |
+|---|---|
+| `action` | `RETRY_PENDING` or `REQUEUE_FAILED` |
+| `requested_batch_size` | requested batch size |
+| `affected_count` | claimed or updated row count |
+| `operator_id` | value from `X-Operator-Id`, or `unknown` |
+| `correlation_id` | resolved trace id |
+| `created_at` | DB timestamp |
+
 ## Rules
 
 - Retry only claims `PENDING` events whose `next_retry_at` is null or due.
 - Requeue only changes `FAILED` events back to `PENDING`; it does not publish directly.
 - Each service publishes through its existing relay service.
+- Retry and requeue actions write an audit row after the service action succeeds.
 - Gateway rejects unknown service values before calling an upstream service.
 - Authentication is still out of scope and must be added before public deployment.

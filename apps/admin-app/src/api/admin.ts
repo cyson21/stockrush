@@ -91,7 +91,12 @@ export function retryOutbox(service: ServiceDomain, batchSize = 10): Promise<Out
     gatewayApiUrl(`/api/admin/outbox-services/${service}/events/retry`, {
       batchSize: String(batchSize),
     }),
-    { method: 'POST' },
+    {
+      method: 'POST',
+      headers: {
+        'X-Operator-Id': 'admin-app',
+      },
+    },
   );
 }
 
@@ -100,6 +105,11 @@ export function requeueFailedOutbox(service: ServiceDomain, batchSize = 10): Pro
     gatewayApiUrl(`/api/admin/outbox-services/${service}/events/failed/requeue`, {
       batchSize: String(batchSize),
     }),
-    { method: 'POST' },
+    {
+      method: 'POST',
+      headers: {
+        'X-Operator-Id': 'admin-app',
+      },
+    },
   );
 }

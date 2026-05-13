@@ -249,6 +249,7 @@ class OrderGatewayControllerIntegrationTest {
                 gatewayUri("/api/admin/outbox-services/payment/events/failed/requeue?batchSize=3")
             )
             .header("X-Correlation-Id", "corr-gateway-payment-requeue")
+            .header("X-Operator-Id", "operator-gateway")
             .POST(HttpRequest.BodyPublishers.noBody())
             .build();
 
@@ -264,6 +265,7 @@ class OrderGatewayControllerIntegrationTest {
         assertThat(forwarded.path()).isEqualTo("/api/admin/outbox-events/failed/requeue");
         assertThat(forwarded.query()).contains("batchSize=3");
         assertThat(forwarded.firstHeader("X-Correlation-Id")).contains("corr-gateway-payment-requeue");
+        assertThat(forwarded.firstHeader("X-Operator-Id")).contains("operator-gateway");
         STUB_ORDER_SERVICE.assertNoRequests();
         STUB_INVENTORY_SERVICE.assertNoRequests();
     }

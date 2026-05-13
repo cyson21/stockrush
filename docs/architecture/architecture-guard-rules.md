@@ -115,11 +115,11 @@ Suggested fix:
 Wrap domain payloads in the common event envelope before publishing.
 ```
 
-### ARCH-004: Outbox Structure
+### ARCH-004: Outbox Events Structure
 
 Severity: error
 
-Outbox rows must include:
+`outbox_events` rows used by the event relay must include:
 
 - event id
 - aggregate id

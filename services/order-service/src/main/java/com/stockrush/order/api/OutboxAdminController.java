@@ -3,6 +3,7 @@ package com.stockrush.order.api;
 import com.stockrush.order.infra.outbox.OutboxEventPage;
 import com.stockrush.order.infra.outbox.OutboxEventQueryService;
 import com.stockrush.order.infra.outbox.OutboxEventView;
+import com.stockrush.order.infra.outbox.OutboxAdminAuditRepository;
 import com.stockrush.order.infra.outbox.OutboxRequeueResult;
 import com.stockrush.order.infra.outbox.OutboxRelayResult;
 import com.stockrush.order.infra.outbox.OutboxRelayService;
@@ -21,12 +22,20 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/admin/outbox-events")
 class OutboxAdminController {
 
+    private static final String OPERATOR_HEADER_NAME = "X-Operator-Id";
+
     private final OutboxEventQueryService queryService;
     private final OutboxRelayService relayService;
+    private final OutboxAdminAuditRepository auditRepository;
 
-    OutboxAdminController(OutboxEventQueryService queryService, OutboxRelayService relayService) {
+    OutboxAdminController(
+        OutboxEventQueryService queryService,
+        OutboxRelayService relayService,
+        OutboxAdminAuditRepository auditRepository
+    ) {
         this.queryService = queryService;
         this.relayService = relayService;
+        this.auditRepository = auditRepository;
     }
 
     @GetMapping
@@ -47,14 +56,17 @@ class OutboxAdminController {
     @PostMapping("/retry")
     ResponseEntity<ApiResponse<OutboxRetryResponse>> retry(
         @RequestParam(defaultValue = "10") int batchSize,
-        @RequestHeader(value = CorrelationIds.HEADER_NAME, required = false) String correlationId
+        @RequestHeader(value = CorrelationIds.HEADER_NAME, required = false) String correlationId,
+        @RequestHeader(value = OPERATOR_HEADER_NAME, required = false) String operatorId
     ) {
         if (batchSize < 1 || batchSize > 100) {
             throw new IllegalArgumentException("batchSize must be between 1 and 100");
         }
 
         String resolvedCorrelationId = CorrelationIds.resolve(correlationId);
-        OutboxRetryResponse response = OutboxRetryResponse.from(relayService.publishPending(batchSize));
+        OutboxRelayResult result = relayService.publishPending(batchSize);
+        auditRepository.record("RETRY_PENDING", batchSize, result.claimed(), operatorId, resolvedCorrelationId);
+        OutboxRetryResponse response = OutboxRetryResponse.from(result);
 
         return ResponseEntity.ok()
             .header(CorrelationIds.HEADER_NAME, resolvedCorrelationId)
@@ -64,14 +76,17 @@ class OutboxAdminController {
     @PostMapping("/failed/requeue")
     ResponseEntity<ApiResponse<OutboxRequeueResponse>> requeueFailed(
         @RequestParam(defaultValue = "10") int batchSize,
-        @RequestHeader(value = CorrelationIds.HEADER_NAME, required = false) String correlationId
+        @RequestHeader(value = CorrelationIds.HEADER_NAME, required = false) String correlationId,
+        @RequestHeader(value = OPERATOR_HEADER_NAME, required = false) String operatorId
     ) {
         if (batchSize < 1 || batchSize > 100) {
             throw new IllegalArgumentException("batchSize must be between 1 and 100");
         }
 
         String resolvedCorrelationId = CorrelationIds.resolve(correlationId);
-        OutboxRequeueResponse response = OutboxRequeueResponse.from(relayService.requeueFailed(batchSize));
+        OutboxRequeueResult result = relayService.requeueFailed(batchSize);
+        auditRepository.record("REQUEUE_FAILED", batchSize, result.updated(), operatorId, resolvedCorrelationId);
+        OutboxRequeueResponse response = OutboxRequeueResponse.from(result);
 
         return ResponseEntity.ok()
             .header(CorrelationIds.HEADER_NAME, resolvedCorrelationId)

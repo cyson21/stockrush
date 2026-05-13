@@ -83,6 +83,7 @@ Local end-to-end verification follows [Local E2E Runbook](runbooks/local-e2e.md)
 - Consumers insert `processed_events` in the same transaction as state changes.
 - Outbox rows are written with domain state before Kafka publish is attempted.
 - Failed outbox requeue should reset only retry state and error detail, then rely on the existing relay path.
+- Outbox retry/requeue requests should store an admin action audit row with operator id, correlation id, batch size, and affected count.
 - Replay of already processed cancel commands must be harmless.
 - Tests should assert both business state and operational state where possible: order status, saga status, outbox event type, retry status, and stock quantities.
 

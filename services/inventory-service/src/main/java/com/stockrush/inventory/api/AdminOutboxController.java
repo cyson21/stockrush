@@ -2,6 +2,7 @@ package com.stockrush.inventory.api;
 
 import com.stockrush.inventory.application.OutboxAdminService;
 import com.stockrush.inventory.application.OutboxEventSnapshot;
+import com.stockrush.inventory.infra.outbox.OutboxAdminAuditRepository;
 import com.stockrush.inventory.infra.outbox.OutboxRequeueResult;
 import com.stockrush.inventory.infra.outbox.OutboxRelayResult;
 import java.time.Instant;
@@ -18,10 +19,17 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/admin/outbox-events")
 class AdminOutboxController {
 
-    private final OutboxAdminService outboxAdminService;
+    private static final String OPERATOR_HEADER_NAME = "X-Operator-Id";
 
-    AdminOutboxController(OutboxAdminService outboxAdminService) {
+    private final OutboxAdminService outboxAdminService;
+    private final OutboxAdminAuditRepository auditRepository;
+
+    AdminOutboxController(
+        OutboxAdminService outboxAdminService,
+        OutboxAdminAuditRepository auditRepository
+    ) {
         this.outboxAdminService = outboxAdminService;
+        this.auditRepository = auditRepository;
     }
 
     @GetMapping
@@ -45,10 +53,12 @@ class AdminOutboxController {
     @PostMapping("/retry")
     ResponseEntity<ApiResponse<OutboxRelayResult>> retryOutboxEvents(
         @RequestParam(defaultValue = "10") int batchSize,
-        @RequestHeader(value = CorrelationIds.HEADER_NAME, required = false) String correlationId
+        @RequestHeader(value = CorrelationIds.HEADER_NAME, required = false) String correlationId,
+        @RequestHeader(value = OPERATOR_HEADER_NAME, required = false) String operatorId
     ) {
         String resolvedCorrelationId = CorrelationIds.resolve(correlationId);
         OutboxRelayResult response = outboxAdminService.retryOutboxEvents(batchSize);
+        auditRepository.record("RETRY_PENDING", batchSize, response.claimed(), operatorId, resolvedCorrelationId);
 
         return ResponseEntity.ok()
             .header(CorrelationIds.HEADER_NAME, resolvedCorrelationId)
@@ -58,10 +68,12 @@ class AdminOutboxController {
     @PostMapping("/failed/requeue")
     ResponseEntity<ApiResponse<OutboxRequeueResult>> requeueFailedOutboxEvents(
         @RequestParam(defaultValue = "10") int batchSize,
-        @RequestHeader(value = CorrelationIds.HEADER_NAME, required = false) String correlationId
+        @RequestHeader(value = CorrelationIds.HEADER_NAME, required = false) String correlationId,
+        @RequestHeader(value = OPERATOR_HEADER_NAME, required = false) String operatorId
     ) {
         String resolvedCorrelationId = CorrelationIds.resolve(correlationId);
         OutboxRequeueResult response = outboxAdminService.requeueFailedOutboxEvents(batchSize);
+        auditRepository.record("REQUEUE_FAILED", batchSize, response.updated(), operatorId, resolvedCorrelationId);
 
         return ResponseEntity.ok()
             .header(CorrelationIds.HEADER_NAME, resolvedCorrelationId)

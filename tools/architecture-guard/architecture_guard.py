@@ -42,6 +42,10 @@ OUTBOX_REQUIRED_COLUMNS = {
     "created_at",
     "published_at",
 }
+OUTBOX_EVENTS_TABLE_PATTERN = re.compile(
+    r"\bcreate\s+table\s+(?:if\s+not\s+exists\s+)?(?:[a-z_][a-z0-9_]*\.)?outbox_events\b",
+    re.IGNORECASE,
+)
 EXCLUDED_DIRS = {".git", ".worktrees", ".dev-rag", "target", "build", "node_modules", "dist", "coverage"}
 SQL_SCHEMA_REFERENCE_PREFIXES = (
     r"from",
@@ -174,9 +178,9 @@ def check_outbox_tables(root: Path) -> list[Violation]:
         if path.suffix != ".sql":
             continue
         text = read_text(path)
-        lower = text.lower()
-        if "outbox" not in lower or "create table" not in lower:
+        if not OUTBOX_EVENTS_TABLE_PATTERN.search(text):
             continue
+        lower = text.lower()
         missing = sorted(column for column in OUTBOX_REQUIRED_COLUMNS if column not in lower)
         if missing:
             violations.append(

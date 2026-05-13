@@ -294,6 +294,7 @@ Admin App에서 아래 화면을 순차적으로 확인한다.
   - `PENDING`/`FAILED` 이벤트 노출
   - retry가 필요한 경우 수동 재시도 버튼 동작
   - failed 이벤트를 pending 재처리 대상으로 되돌리는 버튼 동작
+  - retry/requeue 요청 후 서비스별 `outbox_admin_actions`에 operator id와 처리 건수가 남는지 확인
 
 ## Verification Checklist
 

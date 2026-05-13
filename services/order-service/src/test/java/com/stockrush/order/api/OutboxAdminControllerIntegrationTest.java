@@ -48,6 +48,7 @@ class OutboxAdminControllerIntegrationTest {
     void setUp() {
         mockMvc = MockMvcBuilders.webAppContextSetup(webApplicationContext).build();
         publisher.reset();
+        jdbcClient.sql("delete from outbox_admin_actions").update();
         jdbcClient.sql("delete from outbox_events").update();
     }
 
@@ -110,7 +111,8 @@ class OutboxAdminControllerIntegrationTest {
 
         mockMvc.perform(post("/api/admin/outbox-events/retry")
                 .param("batchSize", "10")
-                .header("X-Correlation-Id", "corr-outbox-retry"))
+                .header("X-Correlation-Id", "corr-outbox-retry")
+                .header("X-Operator-Id", "operator-order"))
             .andExpect(status().isOk())
             .andExpect(header().string("X-Correlation-Id", "corr-outbox-retry"))
             .andExpect(jsonPath("$.success", is(true)))
@@ -121,6 +123,18 @@ class OutboxAdminControllerIntegrationTest {
 
         org.junit.jupiter.api.Assertions.assertEquals(1, publisher.events.size());
         org.junit.jupiter.api.Assertions.assertEquals("PUBLISHED", queryString("select status from outbox_events"));
+        org.junit.jupiter.api.Assertions.assertEquals(
+            1,
+            queryInt("""
+                select count(*)
+                from outbox_admin_actions
+                where action = 'RETRY_PENDING'
+                  and requested_batch_size = 10
+                  and affected_count = 1
+                  and operator_id = 'operator-order'
+                  and correlation_id = 'corr-outbox-retry'
+                """)
+        );
     }
 
     @Test
@@ -137,7 +151,8 @@ class OutboxAdminControllerIntegrationTest {
 
         mockMvc.perform(post("/api/admin/outbox-events/failed/requeue")
                 .param("batchSize", "10")
-                .header("X-Correlation-Id", "corr-outbox-requeue"))
+                .header("X-Correlation-Id", "corr-outbox-requeue")
+                .header("X-Operator-Id", "operator-order"))
             .andExpect(status().isOk())
             .andExpect(header().string("X-Correlation-Id", "corr-outbox-requeue"))
             .andExpect(jsonPath("$.success", is(true)))
@@ -148,6 +163,18 @@ class OutboxAdminControllerIntegrationTest {
         org.junit.jupiter.api.Assertions.assertEquals(0, queryInt("select retry_count from outbox_events"));
         org.junit.jupiter.api.Assertions.assertEquals(1, queryInt("select count(*) from outbox_events where next_retry_at is null"));
         org.junit.jupiter.api.Assertions.assertEquals(1, queryInt("select count(*) from outbox_events where error_message is null"));
+        org.junit.jupiter.api.Assertions.assertEquals(
+            1,
+            queryInt("""
+                select count(*)
+                from outbox_admin_actions
+                where action = 'REQUEUE_FAILED'
+                  and requested_batch_size = 10
+                  and affected_count = 1
+                  and operator_id = 'operator-order'
+                  and correlation_id = 'corr-outbox-requeue'
+                """)
+        );
     }
 
     private void insertOutboxEvent(

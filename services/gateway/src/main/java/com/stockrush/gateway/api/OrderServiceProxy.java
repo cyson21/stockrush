@@ -20,7 +20,8 @@ class OrderServiceProxy {
     private static final Set<String> REQUEST_HEADERS = Set.of(
         "content-type",
         "idempotency-key",
-        "x-correlation-id"
+        "x-correlation-id",
+        "x-operator-id"
     );
     private static final Set<String> RESPONSE_HEADERS = Set.of(
         "content-type",

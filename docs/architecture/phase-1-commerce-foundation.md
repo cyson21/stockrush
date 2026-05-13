@@ -125,6 +125,7 @@ Smoke tests use the local Docker Kafka broker at `localhost:19092` and the local
 | Payment authorization is delayed | Order remains `CREATED` / `PAYMENT_DELAYED` until admin action | payment/order tests and local `DELAY_CARD` runbook |
 | Admin cancels delayed payment | `PaymentCancelRequested` leads to `PaymentCanceled`, then `OrderCancelled` and stock release | admin cancel API/app tests |
 | Outbox row exhausts retry attempts | Admin can requeue `FAILED` rows to `PENDING`; existing relay publishes them later | service-local admin tests, Gateway smoke, Admin App test |
+| Operator runs outbox retry/requeue | Service writes `outbox_admin_actions` with operator id, correlation id, batch size, and affected count | service-local admin tests, Admin App test, Gateway smoke |
 
 Failed outbox requeue resets only retry state and error detail. It does not publish directly.
 

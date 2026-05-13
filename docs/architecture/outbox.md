@@ -65,6 +65,8 @@ The API never reads another service schema. The `service` value selects `order`,
 
 The failed requeue action selects only `FAILED` rows, moves them to `PENDING`, resets `retry_count` to `0`, clears `next_retry_at` and `error_message`, and keeps `max_retry_count` and `published_at` unchanged. Publishing still happens through the existing relay or retry operation.
 
+Each service also stores operator-triggered retry/requeue actions in `outbox_admin_actions`. The log captures action name, requested batch size, affected count, operator id, correlation id, and creation time. The current public slice accepts `X-Operator-Id` as a lightweight operator marker; full authentication-backed identity remains future scope.
+
 ## Consumer Idempotency Table
 
 Each Kafka-consuming service owns `processed_events` in its schema.

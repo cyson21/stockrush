@@ -92,9 +92,18 @@
 | 해결 | Order/Inventory/Payment Service에 `POST /api/admin/outbox-events/failed/requeue`를 추가하고 Gateway의 service별 route와 Admin App 버튼까지 연결 |
 | 재발 방지 | requeue는 `FAILED` row만 대상으로 삼고, `status`, `retry_count`, `next_retry_at`, `error_message`만 변경하도록 서비스별 통합 테스트로 고정 |
 
+### 10. Outbox 운영 액션 감사 로그를 추가함
+
+| 항목 | 내용 |
+|---|---|
+| 증상 | 운영자가 retry/requeue를 실행해도 누가 어떤 batch size로 몇 건을 처리했는지 DB 증거가 남지 않았음 |
+| 원인 | 기존 outbox admin API는 상태 조회와 실행 결과 반환에 집중했고, 운영 액션 자체의 별도 기록 테이블이 없었음 |
+| 해결 | Order/Inventory/Payment Service에 `outbox_admin_actions`를 추가하고 `RETRY_PENDING`, `REQUEUE_FAILED` 요청의 operator id, correlation id, batch size, 처리 건수를 저장 |
+| 재발 방지 | 서비스별 admin controller 통합 테스트와 Admin App 테스트에서 `X-Operator-Id` 전달과 감사 row 생성을 고정 |
+
 ## 검증 공백
 
-### 10. 동시 주문 부하/consumer 병렬성 검증은 아직 부족함
+### 11. 동시 주문 부하/consumer 병렬성 검증은 아직 부족함
 
 | 항목 | 내용 |
 |---|---|
@@ -103,7 +112,7 @@
 | 보강 방향 | inventory listener concurrency 설정, SKU key 기반 파티셔닝 전략, 반복 부하 도구, consumer lag/처리량 지표를 묶은 별도 부하 검증 추가 |
 | 재발 방지 | 문서에서 `same-sku-concurrency`를 로컬 최종 상태 E2E로만 설명하고, 부하/병렬성 검증은 별도 TODO로 추적 |
 
-### 11. Kafka 장애와 장기 체류 Outbox 복구 자동화가 아직 부족함
+### 12. Kafka 장애와 장기 체류 Outbox 복구 자동화가 아직 부족함
 
 | 항목 | 내용 |
 |---|---|
@@ -113,7 +122,7 @@
 | 재발 방지 | 운영 runbook에 broker 장애 시 확인 순서와 outbox admin API 사용 기준을 추가 |
 | 근거 | [Outbox and Consumer Idempotency](../architecture/outbox.md), [Outbox Admin API](../api/outbox-admin.md), [Test Strategy](../test-strategy.md) |
 
-### 12. 인증/권한은 현재 slice 밖에 있음
+### 13. 인증/권한은 현재 slice 밖에 있음
 
 | 항목 | 내용 |
 |---|---|
@@ -132,7 +141,7 @@
 - “Kafka 장애가 나도 자동으로 항상 복구된다.”
   - Outbox retry/failed 전이는 검증했지만 broker 장애 주입 자동화는 아직 부족하다.
 - “Outbox 운영 복구가 상용 운영 수준으로 완성됐다.”
-  - `FAILED` requeue 경로는 있지만 인증/권한, 감사 로그, broker 장애 주입 자동화는 아직 후속 범위다.
+  - `FAILED` requeue와 최소 감사 로그는 있지만 인증/권한, broker 장애 주입 자동화는 아직 후속 범위다.
 - “운영 배포 수준의 인증/권한이 포함돼 있다.”
   - 인증/권한은 현재 공개 slice 밖으로 명시했다.
 
@@ -140,5 +149,5 @@
 
 1. 동일 SKU 부하 벤치마크와 Kafka consumer 병렬성 검증 추가
 2. Kafka 장애 주입과 outbox 장기 체류 복구 runbook 확장
-3. 관리자 API 인증/권한과 감사 로그 추가
+3. 관리자 API 인증/권한과 인증 주체 기반 operator id 연동
 4. OpenTelemetry, 지표, 알림 기준 추가
