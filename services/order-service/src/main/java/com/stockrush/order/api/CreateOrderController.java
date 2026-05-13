@@ -49,6 +49,7 @@ class CreateOrderController {
 record CreateOrderRequest(
     @NotBlank String memberId,
     String paymentMethod,
+    String couponCode,
     @NotEmpty List<@Valid CreateOrderItemRequest> items
 ) {
 
@@ -58,6 +59,7 @@ record CreateOrderRequest(
             idempotencyKey,
             correlationId,
             paymentMethod,
+            couponCode,
             items.stream().map(CreateOrderItemRequest::toCommand).toList()
         );
     }
@@ -80,7 +82,10 @@ record CreateOrderResponse(
     String status,
     String sagaStatus,
     String paymentMethod,
-    BigDecimal totalAmount
+    String couponCode,
+    BigDecimal totalAmount,
+    BigDecimal discountAmount,
+    BigDecimal payableAmount
 ) {
 
     static CreateOrderResponse from(CreateOrderResult result) {
@@ -89,7 +94,10 @@ record CreateOrderResponse(
             result.order().status().name(),
             result.order().sagaStatus().name(),
             result.order().paymentMethod(),
-            result.order().totalAmount()
+            result.order().couponCode(),
+            result.order().totalAmount(),
+            result.order().discountAmount(),
+            result.order().payableAmount()
         );
     }
 }

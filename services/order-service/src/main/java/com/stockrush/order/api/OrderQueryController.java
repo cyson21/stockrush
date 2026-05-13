@@ -42,7 +42,10 @@ record OrderDetailResponse(
     String status,
     String sagaStatus,
     String paymentMethod,
+    String couponCode,
     BigDecimal totalAmount,
+    BigDecimal discountAmount,
+    BigDecimal payableAmount,
     List<OrderDetailItemResponse> items
 ) {
 
@@ -53,7 +56,10 @@ record OrderDetailResponse(
             snapshot.status().name(),
             snapshot.sagaStatus().name(),
             snapshot.paymentMethod(),
+            snapshot.couponCode(),
             snapshot.totalAmount(),
+            snapshot.discountAmount(),
+            snapshot.payableAmount(),
             snapshot.items().stream().map(OrderDetailItemResponse::from).toList()
         );
     }

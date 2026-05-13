@@ -6,7 +6,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.stockrush.order.application.CouponQuoteClient;
+import com.stockrush.order.application.CouponQuoteResult;
+import com.stockrush.order.application.CouponQuoteUnavailableException;
 import com.stockrush.order.application.OrderIdGenerator;
+import java.math.BigDecimal;
 import java.util.UUID;
 import java.util.function.Supplier;
 import org.junit.jupiter.api.BeforeEach;
@@ -106,6 +110,96 @@ class CreateOrderControllerIntegrationTest {
     }
 
     @Test
+    void creates_order_with_coupon_pricing() throws Exception {
+        mockMvc.perform(post("/api/orders")
+                .header("Idempotency-Key", "idem-http-coupon")
+                .header("X-Correlation-Id", "corr-http-coupon")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "memberId": "member-1",
+                      "paymentMethod": "CARD",
+                      "couponCode": "WELCOME10",
+                      "items": [
+                        {
+                          "productCode": "LIMITED-001",
+                          "skuId": "SKU-001",
+                          "quantity": 2,
+                          "unitPrice": 12000.00
+                        }
+                      ]
+                    }
+                    """))
+            .andExpect(status().isCreated())
+            .andExpect(header().string("X-Correlation-Id", "corr-http-coupon"))
+            .andExpect(jsonPath("$.success", is(true)))
+            .andExpect(jsonPath("$.data.couponCode", is("WELCOME10")))
+            .andExpect(jsonPath("$.data.totalAmount", is(24000.00)))
+            .andExpect(jsonPath("$.data.discountAmount", is(3000.00)))
+            .andExpect(jsonPath("$.data.payableAmount", is(21000.00)))
+            .andExpect(jsonPath("$.trace.correlationId", is("corr-http-coupon")));
+
+        assertCouponPricing("WELCOME10", "3000.00", "21000.00");
+    }
+
+    @Test
+    void rejects_order_when_coupon_is_not_applicable() throws Exception {
+        mockMvc.perform(post("/api/orders")
+                .header("Idempotency-Key", "idem-http-coupon-invalid")
+                .header("X-Correlation-Id", "corr-http-coupon-invalid")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "memberId": "member-1",
+                      "paymentMethod": "CARD",
+                      "couponCode": "EXPIRED10",
+                      "items": [
+                        {
+                          "productCode": "LIMITED-001",
+                          "skuId": "SKU-001",
+                          "quantity": 2,
+                          "unitPrice": 12000.00
+                        }
+                      ]
+                    }
+                    """))
+            .andExpect(status().isBadRequest())
+            .andExpect(header().string("X-Correlation-Id", "corr-http-coupon-invalid"))
+            .andExpect(jsonPath("$.success", is(false)))
+            .andExpect(jsonPath("$.error.code", is("ORDER_COUPON_NOT_APPLICABLE")))
+            .andExpect(jsonPath("$.error.message", is("Coupon could not be applied: COUPON_OUT_OF_PERIOD")))
+            .andExpect(jsonPath("$.trace.correlationId", is("corr-http-coupon-invalid")));
+    }
+
+    @Test
+    void returns_bad_gateway_when_coupon_quote_is_unavailable() throws Exception {
+        mockMvc.perform(post("/api/orders")
+                .header("Idempotency-Key", "idem-http-coupon-unavailable")
+                .header("X-Correlation-Id", "corr-http-coupon-unavailable")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "memberId": "member-1",
+                      "paymentMethod": "CARD",
+                      "couponCode": "SLOW10",
+                      "items": [
+                        {
+                          "productCode": "LIMITED-001",
+                          "skuId": "SKU-001",
+                          "quantity": 2,
+                          "unitPrice": 12000.00
+                        }
+                      ]
+                    }
+                    """))
+            .andExpect(status().isBadGateway())
+            .andExpect(header().string("X-Correlation-Id", "corr-http-coupon-unavailable"))
+            .andExpect(jsonPath("$.success", is(false)))
+            .andExpect(jsonPath("$.error.code", is("ORDER_COUPON_QUOTE_UNAVAILABLE")))
+            .andExpect(jsonPath("$.trace.correlationId", is("corr-http-coupon-unavailable")));
+    }
+
+    @Test
     void creates_order_with_default_payment_method_when_omitted() throws Exception {
         mockMvc.perform(post("/api/orders")
                 .header("Idempotency-Key", "idem-http-default-payment")
@@ -198,6 +292,26 @@ class CreateOrderControllerIntegrationTest {
         Supplier<UUID> fixedEventIdSupplier() {
             return () -> UUID.fromString("018f8d0b-8d32-7c42-9f1b-78328e0f7a22");
         }
+
+        @Bean
+        @Primary
+        CouponQuoteClient fixedCouponQuoteClient() {
+            return (couponCode, orderAmount, correlationId) -> {
+                if ("EXPIRED10".equals(couponCode)) {
+                    return new CouponQuoteResult(couponCode, false, BigDecimal.ZERO, orderAmount, "COUPON_OUT_OF_PERIOD");
+                }
+                if ("SLOW10".equals(couponCode)) {
+                    throw new CouponQuoteUnavailableException("Coupon quote request timed out.");
+                }
+                return new CouponQuoteResult(
+                    couponCode,
+                    true,
+                    new BigDecimal("3000.00"),
+                    orderAmount.subtract(new BigDecimal("3000.00")),
+                    "APPLIED"
+                );
+            };
+        }
     }
 
     private void assertPaymentMethod(String expected) {
@@ -205,5 +319,21 @@ class CreateOrderControllerIntegrationTest {
             .query(String.class)
             .single();
         org.junit.jupiter.api.Assertions.assertEquals(expected, paymentMethod);
+    }
+
+    private void assertCouponPricing(String couponCode, String discountAmount, String payableAmount) {
+        String actualCouponCode = jdbcClient.sql("select coupon_code from customer_orders where order_id = 'ord_http_001'")
+            .query(String.class)
+            .single();
+        BigDecimal actualDiscountAmount = jdbcClient.sql("select discount_amount from customer_orders where order_id = 'ord_http_001'")
+            .query(BigDecimal.class)
+            .single();
+        BigDecimal actualPayableAmount = jdbcClient.sql("select payable_amount from customer_orders where order_id = 'ord_http_001'")
+            .query(BigDecimal.class)
+            .single();
+
+        org.junit.jupiter.api.Assertions.assertEquals(couponCode, actualCouponCode);
+        org.junit.jupiter.api.Assertions.assertEquals(new BigDecimal(discountAmount), actualDiscountAmount);
+        org.junit.jupiter.api.Assertions.assertEquals(new BigDecimal(payableAmount), actualPayableAmount);
     }
 }

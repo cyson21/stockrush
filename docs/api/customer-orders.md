@@ -21,6 +21,7 @@ Customer Order API는 고객 앱에서 상품과 SKU를 선택한 뒤 주문을 
 {
   "memberId": "member-demo",
   "paymentMethod": "CARD",
+  "couponCode": "WELCOME10",
   "items": [
     {
       "productCode": "DEMO-001",
@@ -38,6 +39,7 @@ Customer Order API는 고객 앱에서 상품과 SKU를 선택한 뒤 주문을 
 |---|---:|---|
 | `memberId` | yes | non-blank |
 | `paymentMethod` | no | defaults to `CARD`; blank value is invalid |
+| `couponCode` | no | when present, Order Service requests Promotion coupon quote and stores discounted pricing |
 | `items` | yes | non-empty |
 | `items[].productCode` | yes | non-blank |
 | `items[].skuId` | yes | non-blank |
@@ -51,6 +53,16 @@ Customer Order API는 고객 앱에서 상품과 SKU를 선택한 뒤 주문을 
 | `CARD` | successful authorization scenario |
 | `FAIL_CARD` | forced payment failure and stock release scenario |
 | `DELAY_CARD` | delayed authorization scenario; admin can later request cancellation |
+
+### Coupon Pricing
+
+When `couponCode` is present, Order Service calls Promotion Service `POST /api/coupons/quote` before saving the order.
+
+- `totalAmount` remains the original item subtotal.
+- `discountAmount` is the applied coupon discount snapshot.
+- `payableAmount` is the amount sent to Payment Service after inventory reservation.
+- If the coupon is not applicable, the order is rejected with `ORDER_COUPON_NOT_APPLICABLE`.
+- If the quote API is unavailable or returns an inconsistent amount, the order is rejected with `ORDER_COUPON_QUOTE_UNAVAILABLE`.
 
 ### Response
 
@@ -73,7 +85,10 @@ Body:
     "status": "CREATED",
     "sagaStatus": "STARTED",
     "paymentMethod": "CARD",
-    "totalAmount": 12000.00
+    "couponCode": "WELCOME10",
+    "totalAmount": 12000.00,
+    "discountAmount": 2000.00,
+    "payableAmount": 10000.00
   },
   "trace": {
     "correlationId": "customer-app-order-create"
@@ -106,7 +121,10 @@ The response means the order row and `OrderCreated` outbox row were stored. Inve
     "status": "CONFIRMED",
     "sagaStatus": "COMPLETED",
     "paymentMethod": "CARD",
+    "couponCode": "WELCOME10",
     "totalAmount": 12000.00,
+    "discountAmount": 2000.00,
+    "payableAmount": 10000.00,
     "items": [
       {
         "productCode": "DEMO-001",
@@ -151,7 +169,9 @@ The response means the order row and `OrderCreated` outbox row were stored. Inve
 |---:|---|---|
 | 400 | `COMMON_MISSING_IDEMPOTENCY_KEY` | command request is missing `Idempotency-Key` |
 | 400 | `ORDER_INVALID_REQUEST` | request body is invalid |
+| 400 | `ORDER_COUPON_NOT_APPLICABLE` | coupon code cannot be applied to this order |
 | 404 | `ORDER_NOT_FOUND` | target order does not exist |
+| 502 | `ORDER_COUPON_QUOTE_UNAVAILABLE` | coupon quote service failed or returned inconsistent pricing |
 | 500 | `ORDER_DATA_INTEGRITY_ERROR` | unexpected order data integrity failure |
 
 ## Client Polling Rule

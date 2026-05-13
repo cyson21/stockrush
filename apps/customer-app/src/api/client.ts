@@ -1,11 +1,12 @@
 import type { ApiError, ApiResponse } from '../types/api';
 
-type ServiceName = 'catalog' | 'inventory' | 'orders';
+type ServiceName = 'catalog' | 'inventory' | 'orders' | 'promotion';
 
 const defaultServicePrefixes: Record<ServiceName, string> = {
   catalog: '/catalog',
   inventory: '/inventory',
   orders: '/orders',
+  promotion: '/promotion',
 };
 
 function trimTrailingSlash(value: string): string {
@@ -23,6 +24,7 @@ function serviceBaseUrl(serviceName: ServiceName): string {
     catalog: env.VITE_CATALOG_API_BASE_URL,
     inventory: env.VITE_INVENTORY_API_BASE_URL,
     orders: env.VITE_ORDER_API_BASE_URL,
+    promotion: env.VITE_PROMOTION_API_BASE_URL,
   };
 
   if (serviceBaseUrls[serviceName]) {

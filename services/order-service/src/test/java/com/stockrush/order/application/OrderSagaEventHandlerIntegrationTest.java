@@ -41,11 +41,11 @@ class OrderSagaEventHandlerIntegrationTest {
         jdbcClient.sql("delete from customer_orders").update();
         jdbcClient.sql("""
                 insert into customer_orders (
-                  order_id, member_id, status, saga_status, total_amount, payment_method,
+                  order_id, member_id, status, saga_status, total_amount, discount_amount, payable_amount, coupon_code, payment_method,
                   idempotency_key, created_at, updated_at
                 )
                 values (
-                  'ord_saga_001', 'member-1', 'CREATED', 'STARTED', 24000.00, 'FAIL_CARD',
+                  'ord_saga_001', 'member-1', 'CREATED', 'STARTED', 24000.00, 5000.00, 19000.00, 'WELCOME10', 'FAIL_CARD',
                   'idem-saga-001', now(), now()
                 )
                 """)
@@ -53,7 +53,7 @@ class OrderSagaEventHandlerIntegrationTest {
     }
 
     @Test
-    void writes_payment_authorization_request_with_order_payment_method_when_inventory_reserved() {
+    void writes_payment_authorization_request_with_order_payable_amount_when_inventory_reserved() {
         handler.handleInventoryReserved(inventoryReserved());
 
         assertEquals("PAYMENT_REQUESTED", queryString("""
@@ -64,7 +64,7 @@ class OrderSagaEventHandlerIntegrationTest {
         assertEquals("stockrush.payment.commands.v1", queryString("select topic from outbox_events"));
         assertEquals("PENDING", queryString("select status from outbox_events"));
         assertEquals("ord_saga_001", queryString("select payload ->> 'orderId' from outbox_events"));
-        assertEquals("24000.00", queryString("select payload ->> 'amount' from outbox_events"));
+        assertEquals("19000.00", queryString("select payload ->> 'amount' from outbox_events"));
         assertEquals("FAIL_CARD", queryString("select payload ->> 'method' from outbox_events"));
         assertEquals(INVENTORY_EVENT_ID.toString(), queryString("select headers ->> 'causationId' from outbox_events"));
     }

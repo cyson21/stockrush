@@ -80,6 +80,93 @@ class CreateOrderServiceTest {
     }
 
     @Test
+    void applies_coupon_quote_to_payable_amount() {
+        RecordingCouponQuoteClient couponQuoteClient = new RecordingCouponQuoteClient(
+            new CouponQuoteResult("WELCOME10", true, new BigDecimal("5000.00"), new BigDecimal("24000.00"), null)
+        );
+        CreateOrderService service = new CreateOrderService(
+            Clock.fixed(NOW, ZoneOffset.UTC),
+            () -> EVENT_ID,
+            () -> "ord_20260512_000001",
+            couponQuoteClient
+        );
+        CreateOrderCommand command = new CreateOrderCommand(
+            "member-1",
+            "idem-001",
+            "corr-001",
+            "CARD",
+            "WELCOME10",
+            List.of(
+                new CreateOrderItemCommand("LIMITED-001", "SKU-001", 2, new BigDecimal("12000.00")),
+                new CreateOrderItemCommand("LIMITED-002", "SKU-002", 1, new BigDecimal("5000.00"))
+            )
+        );
+
+        CreateOrderResult result = service.create(command);
+
+        assertEquals("WELCOME10", couponQuoteClient.couponCode);
+        assertEquals(new BigDecimal("29000.00"), couponQuoteClient.orderAmount);
+        assertEquals("corr-001", couponQuoteClient.correlationId);
+        assertEquals("WELCOME10", result.order().couponCode());
+        assertEquals(new BigDecimal("5000.00"), result.order().discountAmount());
+        assertEquals(new BigDecimal("24000.00"), result.order().payableAmount());
+    }
+
+    @Test
+    void rejects_order_when_coupon_quote_is_not_applied() {
+        CreateOrderService service = new CreateOrderService(
+            Clock.fixed(NOW, ZoneOffset.UTC),
+            () -> EVENT_ID,
+            () -> "ord_20260512_000001",
+            new RecordingCouponQuoteClient(
+                new CouponQuoteResult("EXPIRED10", false, BigDecimal.ZERO, new BigDecimal("29000.00"), "COUPON_OUT_OF_PERIOD")
+            )
+        );
+        CreateOrderCommand command = new CreateOrderCommand(
+            "member-1",
+            "idem-001",
+            "corr-001",
+            "CARD",
+            "EXPIRED10",
+            List.of(
+                new CreateOrderItemCommand("LIMITED-001", "SKU-001", 2, new BigDecimal("12000.00")),
+                new CreateOrderItemCommand("LIMITED-002", "SKU-002", 1, new BigDecimal("5000.00"))
+            )
+        );
+
+        CouponNotApplicableException error = assertThrows(CouponNotApplicableException.class, () -> service.create(command));
+
+        assertEquals("Coupon could not be applied: COUPON_OUT_OF_PERIOD", error.getMessage());
+    }
+
+    @Test
+    void rejects_coupon_quote_when_amounts_are_not_consistent() {
+        CreateOrderService service = new CreateOrderService(
+            Clock.fixed(NOW, ZoneOffset.UTC),
+            () -> EVENT_ID,
+            () -> "ord_20260512_000001",
+            new RecordingCouponQuoteClient(
+                new CouponQuoteResult("BROKEN10", true, new BigDecimal("6000.00"), new BigDecimal("20000.00"), "APPLIED")
+            )
+        );
+        CreateOrderCommand command = new CreateOrderCommand(
+            "member-1",
+            "idem-001",
+            "corr-001",
+            "CARD",
+            "BROKEN10",
+            List.of(
+                new CreateOrderItemCommand("LIMITED-001", "SKU-001", 2, new BigDecimal("12000.00")),
+                new CreateOrderItemCommand("LIMITED-002", "SKU-002", 1, new BigDecimal("5000.00"))
+            )
+        );
+
+        CouponQuoteUnavailableException error = assertThrows(CouponQuoteUnavailableException.class, () -> service.create(command));
+
+        assertEquals("Coupon quote amount is inconsistent.", error.getMessage());
+    }
+
+    @Test
     void rejects_order_without_items() {
         CreateOrderService service = newService();
         CreateOrderCommand command = new CreateOrderCommand("member-1", "idem-001", "corr-001", "CARD", List.of());
@@ -155,5 +242,25 @@ class CreateOrderServiceTest {
 
     private CreateOrderService newService() {
         return new CreateOrderService(Clock.fixed(NOW, ZoneOffset.UTC), () -> EVENT_ID, () -> "ord_20260512_000001");
+    }
+
+    private static class RecordingCouponQuoteClient implements CouponQuoteClient {
+
+        private final CouponQuoteResult result;
+        private String couponCode;
+        private BigDecimal orderAmount;
+        private String correlationId;
+
+        private RecordingCouponQuoteClient(CouponQuoteResult result) {
+            this.result = result;
+        }
+
+        @Override
+        public CouponQuoteResult quote(String couponCode, BigDecimal orderAmount, String correlationId) {
+            this.couponCode = couponCode;
+            this.orderAmount = orderAmount;
+            this.correlationId = correlationId;
+            return result;
+        }
     }
 }

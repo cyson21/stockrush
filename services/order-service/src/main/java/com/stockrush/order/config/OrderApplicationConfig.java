@@ -1,5 +1,6 @@
 package com.stockrush.order.config;
 
+import com.stockrush.order.application.CouponQuoteClient;
 import com.stockrush.order.application.CreateOrderService;
 import com.stockrush.order.application.OrderIdGenerator;
 import java.time.Clock;
@@ -29,8 +30,12 @@ class OrderApplicationConfig {
     }
 
     @Bean
-    CreateOrderService createOrderService(Clock clock, Supplier<UUID> eventIdSupplier, OrderIdGenerator orderIdGenerator) {
-        return new CreateOrderService(clock, eventIdSupplier, orderIdGenerator);
+    CreateOrderService createOrderService(
+        Clock clock,
+        Supplier<UUID> eventIdSupplier,
+        OrderIdGenerator orderIdGenerator,
+        CouponQuoteClient couponQuoteClient
+    ) {
+        return new CreateOrderService(clock, eventIdSupplier, orderIdGenerator, couponQuoteClient);
     }
 }
-

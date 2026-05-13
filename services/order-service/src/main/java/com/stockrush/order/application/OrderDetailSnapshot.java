@@ -11,7 +11,10 @@ public record OrderDetailSnapshot(
     OrderStatus status,
     SagaStatus sagaStatus,
     String paymentMethod,
+    String couponCode,
     BigDecimal totalAmount,
+    BigDecimal discountAmount,
+    BigDecimal payableAmount,
     List<OrderDetailItemSnapshot> items
 ) {
     public OrderDetailSnapshot {

@@ -20,6 +20,11 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/orders/, ''),
       },
+      '/promotion': {
+        target: 'http://localhost:18085',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/promotion/, ''),
+      },
     },
   },
   test: {

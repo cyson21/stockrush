@@ -39,6 +39,7 @@ export type CreateOrderRequest = {
   memberId: string;
   paymentMethod: string;
   items: CreateOrderItemRequest[];
+  couponCode?: string;
 };
 
 export type CreateOrderResponse = {
@@ -46,7 +47,10 @@ export type CreateOrderResponse = {
   status: string;
   sagaStatus: string;
   paymentMethod: string;
+  couponCode?: string | null;
   totalAmount: number;
+  discountAmount: number;
+  payableAmount: number;
 };
 
 export type OrderDetailItem = CreateOrderItemRequest & {
@@ -59,6 +63,22 @@ export type OrderDetail = {
   status: string;
   sagaStatus: string;
   paymentMethod: string;
+  couponCode?: string | null;
   totalAmount: number;
+  discountAmount: number;
+  payableAmount: number;
   items: OrderDetailItem[];
+};
+
+export type PromotionQuoteRequest = {
+  couponCode: string;
+  orderAmount: number;
+};
+
+export type PromotionQuoteResponse = {
+  couponCode: string;
+  applied: boolean;
+  discountAmount: number;
+  payAmount: number;
+  reason: string;
 };

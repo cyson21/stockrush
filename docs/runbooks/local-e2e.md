@@ -4,8 +4,8 @@
 
 ## Scope
 
-- Customer App, Admin App, Catalog / Inventory / Order / Payment 서비스의 연동 확인
-- Promotion Service 쿠폰 API는 현재 주문 E2E와 분리해 직접 호출 smoke로 확인
+- Customer App, Admin App, Catalog / Inventory / Order / Payment / Promotion 서비스의 연동 확인
+- Promotion Service 쿠폰 API와 Customer App 쿠폰 견적 UI, Order Service 주문 할인 반영 확인
 - Kafka 이벤트 발행/소비와 서비스 로컬 Outbox 동작 확인
 - `CARD`(성공), `FAIL_CARD`(실패·재고 복구), `DELAY_CARD`(결제 지연) 시나리오 재현
 - 운영 화면(관리자) 점검 포인트와 Outbox retry/requeue 경로 정리
@@ -100,7 +100,7 @@ JAVA_HOME=/Users/chanyang.son/Library/Java/JavaVirtualMachines/ms-17.0.18/Conten
 
 로컬 기동 시 Gateway는 기본적으로 `ORDER_SERVICE_URL=http://localhost:18083`, `INVENTORY_SERVICE_URL=http://localhost:18082`, `PAYMENT_SERVICE_URL=http://localhost:18084`로 각 서비스를 호출한다. Outbox admin API는 `service` path 값으로 `order`, `inventory`, `payment`를 선택한다.
 
-Promotion Service는 현재 Gateway를 거치지 않는 직접 호출 API로 확인한다. 쿠폰 시나리오는 주문 Saga E2E와 분리된 서비스-local smoke로 다룬다.
+Promotion Service는 현재 Gateway를 거치지 않는 API로 확인한다. Customer App은 `/promotion` Vite proxy로 quote API를 호출하고, Order Service는 `PROMOTION_SERVICE_URL`로 quote API를 호출한다. 쿠폰 사용 기록과 실패 복구 이벤트는 후속 시나리오로 분리한다.
 
 ## 반복 실행용 Local E2E Runner
 

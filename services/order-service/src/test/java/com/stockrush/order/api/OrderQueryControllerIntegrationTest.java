@@ -56,7 +56,10 @@ class OrderQueryControllerIntegrationTest {
             .andExpect(jsonPath("$.data.status", is("CONFIRMED")))
             .andExpect(jsonPath("$.data.sagaStatus", is("COMPLETED")))
             .andExpect(jsonPath("$.data.paymentMethod", is("CARD")))
+            .andExpect(jsonPath("$.data.couponCode", is("WELCOME10")))
             .andExpect(jsonPath("$.data.totalAmount", is(29000.00)))
+            .andExpect(jsonPath("$.data.discountAmount", is(5000.00)))
+            .andExpect(jsonPath("$.data.payableAmount", is(24000.00)))
             .andExpect(jsonPath("$.data.items", hasSize(2)))
             .andExpect(jsonPath("$.data.items[0].skuId", is("SKU-001")))
             .andExpect(jsonPath("$.data.items[0].lineAmount", is(24000.00)))
@@ -79,11 +82,11 @@ class OrderQueryControllerIntegrationTest {
     void returns_data_integrity_error_for_invalid_persisted_status() throws Exception {
         jdbcClient.sql("""
                 insert into customer_orders (
-                  order_id, member_id, status, saga_status, total_amount, payment_method,
+                  order_id, member_id, status, saga_status, total_amount, discount_amount, payable_amount, payment_method,
                   idempotency_key, created_at, updated_at
                 )
                 values (
-                  'ord_invalid_status', 'member-query-1', 'BROKEN', 'COMPLETED', 1000.00, 'CARD',
+                  'ord_invalid_status', 'member-query-1', 'BROKEN', 'COMPLETED', 1000.00, 0.00, 1000.00, 'CARD',
                   'idem-invalid-status', now(), now()
                 )
                 """)
@@ -169,7 +172,19 @@ class OrderQueryControllerIntegrationTest {
     }
 
     private void insertOrder() {
-        insertOrder("ord_query_001", "member-query-1", "CONFIRMED", "COMPLETED", "CARD", "29000.00", "idem-query-001", "2026-05-13T02:00:00Z");
+        insertOrder(
+            "ord_query_001",
+            "member-query-1",
+            "CONFIRMED",
+            "COMPLETED",
+            "CARD",
+            "29000.00",
+            "WELCOME10",
+            "5000.00",
+            "24000.00",
+            "idem-query-001",
+            "2026-05-13T02:00:00Z"
+        );
         insertItem("ord_query_001", "LIMITED-001", "SKU-001", 2, "12000.00");
         insertItem("ord_query_001", "LIMITED-002", "SKU-002", 1, "5000.00");
     }
@@ -184,13 +199,29 @@ class OrderQueryControllerIntegrationTest {
         String idempotencyKey,
         String createdAt
     ) {
+        insertOrder(orderId, memberId, status, sagaStatus, paymentMethod, totalAmount, null, "0.00", totalAmount, idempotencyKey, createdAt);
+    }
+
+    private void insertOrder(
+        String orderId,
+        String memberId,
+        String status,
+        String sagaStatus,
+        String paymentMethod,
+        String totalAmount,
+        String couponCode,
+        String discountAmount,
+        String payableAmount,
+        String idempotencyKey,
+        String createdAt
+    ) {
         jdbcClient.sql("""
                 insert into customer_orders (
-                  order_id, member_id, status, saga_status, total_amount, payment_method,
+                  order_id, member_id, status, saga_status, total_amount, coupon_code, discount_amount, payable_amount, payment_method,
                   idempotency_key, created_at, updated_at
                 )
                 values (
-                  :orderId, :memberId, :status, :sagaStatus, :totalAmount, :paymentMethod,
+                  :orderId, :memberId, :status, :sagaStatus, :totalAmount, :couponCode, :discountAmount, :payableAmount, :paymentMethod,
                   :idempotencyKey, :createdAt::timestamptz, :createdAt::timestamptz
                 )
                 """)
@@ -199,6 +230,9 @@ class OrderQueryControllerIntegrationTest {
             .param("status", status)
             .param("sagaStatus", sagaStatus)
             .param("totalAmount", new BigDecimal(totalAmount))
+            .param("couponCode", couponCode)
+            .param("discountAmount", new BigDecimal(discountAmount))
+            .param("payableAmount", new BigDecimal(payableAmount))
             .param("paymentMethod", paymentMethod)
             .param("idempotencyKey", idempotencyKey)
             .param("createdAt", createdAt)

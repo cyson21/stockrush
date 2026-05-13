@@ -36,6 +36,6 @@ cd services/order-service && STOCKRUSH_KAFKA_LISTENERS_ENABLED=true mvn spring-b
 cd services/payment-service && STOCKRUSH_KAFKA_LISTENERS_ENABLED=true mvn spring-boot:run
 ```
 
-Promotion Service is currently service-local and is not proxied by Gateway.
+Promotion Service is currently service-local and is not proxied by Gateway. Order Service calls it through `PROMOTION_SERVICE_URL`, and Customer App local development reaches it through the `/promotion` Vite proxy.
 
 First run may download Maven dependencies.

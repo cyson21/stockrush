@@ -1,5 +1,7 @@
 package com.stockrush.order.api;
 
+import com.stockrush.order.application.CouponNotApplicableException;
+import com.stockrush.order.application.CouponQuoteUnavailableException;
 import com.stockrush.order.application.OrderDataIntegrityException;
 import com.stockrush.order.application.OrderNotFoundException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -61,6 +63,25 @@ class OrderApiExceptionHandler {
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
             .header(CorrelationIds.HEADER_NAME, correlationId)
             .body(ApiResponse.failure("ORDER_DATA_INTEGRITY_ERROR", exception.getMessage(), correlationId));
+    }
+
+    @ExceptionHandler(CouponNotApplicableException.class)
+    ResponseEntity<ApiResponse<Void>> handleCouponNotApplicable(
+        CouponNotApplicableException exception,
+        HttpServletRequest request
+    ) {
+        return badRequest("ORDER_COUPON_NOT_APPLICABLE", exception.getMessage(), request);
+    }
+
+    @ExceptionHandler(CouponQuoteUnavailableException.class)
+    ResponseEntity<ApiResponse<Void>> handleCouponQuoteUnavailable(
+        CouponQuoteUnavailableException exception,
+        HttpServletRequest request
+    ) {
+        String correlationId = CorrelationIds.resolve(request.getHeader(CorrelationIds.HEADER_NAME));
+        return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
+            .header(CorrelationIds.HEADER_NAME, correlationId)
+            .body(ApiResponse.failure("ORDER_COUPON_QUOTE_UNAVAILABLE", exception.getMessage(), correlationId));
     }
 
     private ResponseEntity<ApiResponse<Void>> badRequest(String code, String message, HttpServletRequest request) {

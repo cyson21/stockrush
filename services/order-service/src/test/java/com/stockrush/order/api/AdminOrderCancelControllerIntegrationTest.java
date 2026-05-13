@@ -125,11 +125,11 @@ class AdminOrderCancelControllerIntegrationTest {
     private void insertOrder(String orderId, String status, String sagaStatus, String paymentMethod, String idempotencyKey) {
         jdbcClient.sql("""
                 insert into customer_orders (
-                  order_id, member_id, status, saga_status, total_amount, payment_method,
+                  order_id, member_id, status, saga_status, total_amount, discount_amount, payable_amount, payment_method,
                   idempotency_key, created_at, updated_at
                 )
                 values (
-                  :orderId, 'member-cancel', :status, :sagaStatus, :totalAmount, :paymentMethod,
+                  :orderId, 'member-cancel', :status, :sagaStatus, :totalAmount, 0.00, :totalAmount, :paymentMethod,
                   :idempotencyKey, now(), now()
                 )
                 """)

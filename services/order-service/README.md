@@ -14,12 +14,13 @@ Owns orders, order items, order events, outbox rows, processed event records, an
 
 ### `POST /api/orders` request
 
-`paymentMethod` is optional. If omitted, Order Service stores `CARD`.
+`paymentMethod` and `couponCode` are optional. If `paymentMethod` is omitted, Order Service stores `CARD`.
 
 ```json
 {
   "memberId": "member-1",
   "paymentMethod": "CARD",
+  "couponCode": "WELCOME10",
   "items": [
     {
       "productCode": "LIMITED-001",
@@ -32,6 +33,7 @@ Owns orders, order items, order events, outbox rows, processed event records, an
 ```
 
 `FAIL_CARD` can be used in local scenarios to trigger `PaymentAuthorizationFailed` from Payment Service after inventory reservation succeeds.
+When `couponCode` is present, Order Service calls Promotion Service, stores `discountAmount` and `payableAmount`, and sends `payableAmount` to Payment Service after inventory reservation.
 
 ### `GET /api/orders/{orderId}` response
 
@@ -44,7 +46,10 @@ Owns orders, order items, order events, outbox rows, processed event records, an
     "status": "CONFIRMED",
     "sagaStatus": "COMPLETED",
     "paymentMethod": "CARD",
+    "couponCode": "WELCOME10",
     "totalAmount": 29000.00,
+    "discountAmount": 5000.00,
+    "payableAmount": 24000.00,
     "items": [
       {
         "productCode": "LIMITED-001",

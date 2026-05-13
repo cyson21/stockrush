@@ -11,7 +11,10 @@ public record OrderSummarySnapshot(
     OrderStatus status,
     SagaStatus sagaStatus,
     String paymentMethod,
+    String couponCode,
     BigDecimal totalAmount,
+    BigDecimal discountAmount,
+    BigDecimal payableAmount,
     int itemCount,
     Instant createdAt,
     Instant updatedAt

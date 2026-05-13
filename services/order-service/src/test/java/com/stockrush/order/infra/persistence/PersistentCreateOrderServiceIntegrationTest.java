@@ -2,6 +2,8 @@ package com.stockrush.order.infra.persistence;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+import com.stockrush.order.application.CouponQuoteClient;
+import com.stockrush.order.application.CouponQuoteResult;
 import com.stockrush.order.application.CreateOrderCommand;
 import com.stockrush.order.application.CreateOrderItemCommand;
 import com.stockrush.order.application.CreateOrderResult;
@@ -56,6 +58,8 @@ class PersistentCreateOrderServiceIntegrationTest {
 
         assertEquals(1, count("customer_orders"));
         assertEquals("FAIL_CARD", jdbcClient.sql("select payment_method from customer_orders").query(String.class).single());
+        assertEquals(new BigDecimal("0.00"), jdbcClient.sql("select discount_amount from customer_orders").query(BigDecimal.class).single());
+        assertEquals(new BigDecimal("24000.00"), jdbcClient.sql("select payable_amount from customer_orders").query(BigDecimal.class).single());
         assertEquals(1, count("order_items"));
         assertEquals(1, count("outbox_events"));
         assertEquals("ord_test_001", result.order().orderId());
@@ -67,6 +71,36 @@ class PersistentCreateOrderServiceIntegrationTest {
         assertEquals(
             "SKU-001",
             queryString("select payload #>> '{items,0,skuId}' from outbox_events where aggregate_id = :orderId", result.order().orderId())
+        );
+    }
+
+    @Test
+    void persists_coupon_pricing_snapshot() {
+        CreateOrderCommand command = new CreateOrderCommand(
+            "member-1",
+            "idem-coupon-001",
+            "corr-coupon-001",
+            "CARD",
+            "WELCOME10",
+            List.of(new CreateOrderItemCommand("LIMITED-001", "SKU-001", 2, new BigDecimal("12000.00")))
+        );
+
+        CreateOrderResult result = service.create(command);
+
+        assertEquals("WELCOME10", queryString("select coupon_code from customer_orders where order_id = :orderId", result.order().orderId()));
+        assertEquals(
+            new BigDecimal("3000.00"),
+            jdbcClient.sql("select discount_amount from customer_orders where order_id = :orderId")
+                .param("orderId", result.order().orderId())
+                .query(BigDecimal.class)
+                .single()
+        );
+        assertEquals(
+            new BigDecimal("21000.00"),
+            jdbcClient.sql("select payable_amount from customer_orders where order_id = :orderId")
+                .param("orderId", result.order().orderId())
+                .query(BigDecimal.class)
+                .single()
         );
     }
 
@@ -91,6 +125,18 @@ class PersistentCreateOrderServiceIntegrationTest {
         @Primary
         Supplier<UUID> fixedEventIdSupplier() {
             return () -> UUID.fromString("018f8d0b-8d32-7c42-9f1b-78328e0f7a11");
+        }
+
+        @Bean
+        @Primary
+        CouponQuoteClient fixedCouponQuoteClient() {
+            return (couponCode, orderAmount, correlationId) -> new CouponQuoteResult(
+                couponCode,
+                true,
+                new BigDecimal("3000.00"),
+                orderAmount.subtract(new BigDecimal("3000.00")),
+                "APPLIED"
+            );
         }
     }
 }

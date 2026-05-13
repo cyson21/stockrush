@@ -15,11 +15,29 @@ public class CreateOrderService {
     private final Clock clock;
     private final Supplier<UUID> eventIdSupplier;
     private final OrderIdGenerator orderIdGenerator;
+    private final CouponQuoteClient couponQuoteClient;
 
     public CreateOrderService(Clock clock, Supplier<UUID> eventIdSupplier, OrderIdGenerator orderIdGenerator) {
+        this(
+            clock,
+            eventIdSupplier,
+            orderIdGenerator,
+            (couponCode, orderAmount, correlationId) -> {
+                throw new CouponQuoteUnavailableException("Coupon quote client is not configured.");
+            }
+        );
+    }
+
+    public CreateOrderService(
+        Clock clock,
+        Supplier<UUID> eventIdSupplier,
+        OrderIdGenerator orderIdGenerator,
+        CouponQuoteClient couponQuoteClient
+    ) {
         this.clock = clock;
         this.eventIdSupplier = eventIdSupplier;
         this.orderIdGenerator = orderIdGenerator;
+        this.couponQuoteClient = couponQuoteClient;
     }
 
     public CreateOrderResult create(CreateOrderCommand command) {
@@ -34,6 +52,7 @@ public class CreateOrderService {
             .map(OrderLineSnapshot::lineAmount)
             .reduce(BigDecimal.ZERO, BigDecimal::add);
         String paymentMethod = paymentMethod(command.paymentMethod());
+        CouponPrice couponPrice = couponPrice(command.couponCode(), totalAmount, command.correlationId());
 
         OrderSnapshot order = new OrderSnapshot(
             orderId,
@@ -41,7 +60,10 @@ public class CreateOrderService {
             OrderStatus.CREATED,
             SagaStatus.STARTED,
             paymentMethod,
+            couponPrice.couponCode(),
             totalAmount,
+            couponPrice.discountAmount(),
+            couponPrice.payableAmount(),
             now,
             lines
         );
@@ -113,5 +135,41 @@ public class CreateOrderService {
             return "CARD";
         }
         return paymentMethod.trim();
+    }
+
+    private CouponPrice couponPrice(String rawCouponCode, BigDecimal totalAmount, String correlationId) {
+        String couponCode = normalizeCouponCode(rawCouponCode);
+        if (couponCode == null) {
+            return new CouponPrice(null, BigDecimal.ZERO, totalAmount);
+        }
+
+        CouponQuoteResult quote = couponQuoteClient.quote(couponCode, totalAmount, correlationId);
+        if (!quote.applied()) {
+            throw new CouponNotApplicableException(quote.reason());
+        }
+        if (quote.discountAmount() == null || quote.discountAmount().compareTo(BigDecimal.ZERO) < 0) {
+            throw new IllegalArgumentException("coupon discount amount must not be negative");
+        }
+        if (quote.payAmount() == null || quote.payAmount().compareTo(BigDecimal.ZERO) < 0) {
+            throw new IllegalArgumentException("coupon pay amount must not be negative");
+        }
+        if (quote.payAmount().compareTo(totalAmount) > 0) {
+            throw new IllegalArgumentException("coupon pay amount must not exceed order amount");
+        }
+        if (quote.payAmount().add(quote.discountAmount()).compareTo(totalAmount) != 0) {
+            throw new CouponQuoteUnavailableException("Coupon quote amount is inconsistent.");
+        }
+
+        return new CouponPrice(couponCode, quote.discountAmount(), quote.payAmount());
+    }
+
+    private String normalizeCouponCode(String couponCode) {
+        if (couponCode == null || couponCode.isBlank()) {
+            return null;
+        }
+        return couponCode.trim();
+    }
+
+    private record CouponPrice(String couponCode, BigDecimal discountAmount, BigDecimal payableAmount) {
     }
 }

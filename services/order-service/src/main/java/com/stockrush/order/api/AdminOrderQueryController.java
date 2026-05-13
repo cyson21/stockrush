@@ -78,7 +78,10 @@ record AdminOrderSummaryResponse(
     String status,
     String sagaStatus,
     String paymentMethod,
+    String couponCode,
     BigDecimal totalAmount,
+    BigDecimal discountAmount,
+    BigDecimal payableAmount,
     int itemCount,
     Instant createdAt,
     Instant updatedAt
@@ -91,7 +94,10 @@ record AdminOrderSummaryResponse(
             snapshot.status().name(),
             snapshot.sagaStatus().name(),
             snapshot.paymentMethod(),
+            snapshot.couponCode(),
             snapshot.totalAmount(),
+            snapshot.discountAmount(),
+            snapshot.payableAmount(),
             snapshot.itemCount(),
             snapshot.createdAt(),
             snapshot.updatedAt()

@@ -47,7 +47,7 @@ public class OrderSagaEventHandler {
             event,
             "PaymentAuthorizationRequested",
             PAYMENT_COMMAND_TOPIC,
-            new PaymentAuthorizationRequestedPayload(orderId, order.totalAmount(), order.paymentMethod())
+            new PaymentAuthorizationRequestedPayload(orderId, order.payableAmount(), order.paymentMethod())
         );
     }
 
@@ -144,13 +144,13 @@ public class OrderSagaEventHandler {
 
     private PaymentRequestOrder paymentRequestOrder(String orderId) {
         return jdbcClient.sql("""
-                select total_amount, payment_method
+                select payable_amount, payment_method
                 from customer_orders
                 where order_id = :orderId
                 """)
             .param("orderId", orderId)
             .query((rs, rowNum) -> new PaymentRequestOrder(
-                rs.getBigDecimal("total_amount"),
+                rs.getBigDecimal("payable_amount"),
                 rs.getString("payment_method")
             ))
             .single();
@@ -198,6 +198,6 @@ public class OrderSagaEventHandler {
         ));
     }
 
-    private record PaymentRequestOrder(BigDecimal totalAmount, String paymentMethod) {
+    private record PaymentRequestOrder(BigDecimal payableAmount, String paymentMethod) {
     }
 }

@@ -30,7 +30,8 @@ class JdbcOrderQueryRepository implements OrderQueryRepository {
     @Override
     public Optional<OrderDetailSnapshot> findByOrderId(String orderId) {
         return jdbcClient.sql("""
-                select order_id, member_id, status, saga_status, payment_method, total_amount
+                select order_id, member_id, status, saga_status, payment_method,
+                       coupon_code, total_amount, discount_amount, payable_amount
                 from customer_orders
                 where order_id = :orderId
                 """)
@@ -41,7 +42,10 @@ class JdbcOrderQueryRepository implements OrderQueryRepository {
                 parseOrderStatus(orderId, rs.getString("status")),
                 parseSagaStatus(orderId, rs.getString("saga_status")),
                 rs.getString("payment_method"),
-                rs.getBigDecimal("total_amount")
+                rs.getString("coupon_code"),
+                rs.getBigDecimal("total_amount"),
+                rs.getBigDecimal("discount_amount"),
+                rs.getBigDecimal("payable_amount")
             ))
             .optional()
             .map(header -> header.toSnapshot(findItems(orderId)));
@@ -55,7 +59,10 @@ class JdbcOrderQueryRepository implements OrderQueryRepository {
                        co.status,
                        co.saga_status,
                        co.payment_method,
+                       co.coupon_code,
                        co.total_amount,
+                       co.discount_amount,
+                       co.payable_amount,
                        count(oi.id)::integer as item_count,
                        co.created_at,
                        co.updated_at
@@ -64,7 +71,8 @@ class JdbcOrderQueryRepository implements OrderQueryRepository {
                 where (:statusFilter = false or co.status = :status)
                   and (:sagaStatusFilter = false or co.saga_status = :sagaStatus)
                 group by co.id, co.order_id, co.member_id, co.status, co.saga_status,
-                         co.payment_method, co.total_amount, co.created_at, co.updated_at
+                         co.payment_method, co.coupon_code, co.total_amount, co.discount_amount,
+                         co.payable_amount, co.created_at, co.updated_at
                 order by co.created_at desc, co.id desc
                 limit :limit
                 offset :offset
@@ -152,7 +160,10 @@ class JdbcOrderQueryRepository implements OrderQueryRepository {
             parseOrderStatus(orderId, rs.getString("status")),
             parseSagaStatus(orderId, rs.getString("saga_status")),
             rs.getString("payment_method"),
+            rs.getString("coupon_code"),
             rs.getBigDecimal("total_amount"),
+            rs.getBigDecimal("discount_amount"),
+            rs.getBigDecimal("payable_amount"),
             rs.getInt("item_count"),
             rs.getObject("created_at", OffsetDateTime.class).toInstant(),
             rs.getObject("updated_at", OffsetDateTime.class).toInstant()
@@ -190,7 +201,10 @@ class JdbcOrderQueryRepository implements OrderQueryRepository {
         OrderStatus status,
         SagaStatus sagaStatus,
         String paymentMethod,
-        BigDecimal totalAmount
+        String couponCode,
+        BigDecimal totalAmount,
+        BigDecimal discountAmount,
+        BigDecimal payableAmount
     ) {
 
         OrderDetailSnapshot toSnapshot(List<OrderDetailItemSnapshot> items) {
@@ -200,7 +214,10 @@ class JdbcOrderQueryRepository implements OrderQueryRepository {
                 status,
                 sagaStatus,
                 paymentMethod,
+                couponCode,
                 totalAmount,
+                discountAmount,
+                payableAmount,
                 items
             );
         }

@@ -21,11 +21,11 @@ class JdbcOrderCommandRepository implements OrderCommandRepository {
     public void save(OrderSnapshot order, String idempotencyKey) {
         jdbcClient.sql("""
                 insert into customer_orders (
-                  order_id, member_id, status, saga_status, total_amount, payment_method,
+                  order_id, member_id, status, saga_status, total_amount, discount_amount, payable_amount, coupon_code, payment_method,
                   idempotency_key, created_at, updated_at
                 )
                 values (
-                  :orderId, :memberId, :status, :sagaStatus, :totalAmount, :paymentMethod,
+                  :orderId, :memberId, :status, :sagaStatus, :totalAmount, :discountAmount, :payableAmount, :couponCode, :paymentMethod,
                   :idempotencyKey, :createdAt, :updatedAt
                 )
                 """)
@@ -34,6 +34,9 @@ class JdbcOrderCommandRepository implements OrderCommandRepository {
             .param("status", order.status().name())
             .param("sagaStatus", order.sagaStatus().name())
             .param("totalAmount", order.totalAmount())
+            .param("discountAmount", order.discountAmount())
+            .param("payableAmount", order.payableAmount())
+            .param("couponCode", order.couponCode())
             .param("paymentMethod", order.paymentMethod())
             .param("idempotencyKey", idempotencyKey)
             .param("createdAt", timestampWithTimeZone(order.createdAt()))

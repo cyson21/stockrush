@@ -35,10 +35,11 @@ class OrderEventConsumerIntegrationTest {
         jdbcClient.sql("delete from customer_orders").update();
         jdbcClient.sql("""
                 insert into customer_orders (
-                  order_id, member_id, status, saga_status, total_amount, idempotency_key, created_at, updated_at
+                  order_id, member_id, status, saga_status, total_amount, discount_amount, payable_amount,
+                  idempotency_key, created_at, updated_at
                 )
                 values (
-                  'ord_consumer_001', 'member-1', 'CREATED', 'STARTED', 24000.00,
+                  'ord_consumer_001', 'member-1', 'CREATED', 'STARTED', 24000.00, 0.00, 24000.00,
                   'idem-consumer-001', now(), now()
                 )
                 """)

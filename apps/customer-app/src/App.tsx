@@ -3,7 +3,8 @@ import { listOnSaleProducts } from './api/catalog';
 import { ApiClientError } from './api/client';
 import { listStocks } from './api/inventory';
 import { createOrder, getOrder } from './api/orders';
-import type { CreateOrderResponse, OrderDetail, Product, Stock } from './types/api';
+import { quoteCoupon } from './api/promotion';
+import type { CreateOrderResponse, OrderDetail, Product, PromotionQuoteResponse, Stock } from './types/api';
 
 type LoadState = 'idle' | 'loading' | 'ready' | 'error';
 
@@ -40,6 +41,10 @@ export default function App() {
   const [createdOrder, setCreatedOrder] = useState<CreateOrderResponse | null>(null);
   const [orderDetail, setOrderDetail] = useState<OrderDetail | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [couponCode, setCouponCode] = useState('');
+  const [couponQuote, setCouponQuote] = useState<PromotionQuoteResponse | null>(null);
+  const [couponQuoteError, setCouponQuoteError] = useState<string | null>(null);
+  const [applyingCoupon, setApplyingCoupon] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
   useEffect(() => {
@@ -83,6 +88,8 @@ export default function App() {
         }
         setStocks(nextStocks);
         setSelectedSkuId(nextStocks[0]?.skuId ?? '');
+        setCouponQuote(null);
+        setCouponQuoteError(null);
       })
       .catch((error) => {
         if (cancelled) {
@@ -156,16 +163,55 @@ export default function App() {
   const parsedQuantity = Number(quantityInput);
   const quantityIsValid = Number.isInteger(parsedQuantity) && parsedQuantity >= 1;
   const totalAmount = selectedProduct && quantityIsValid ? selectedProduct.listPrice * parsedQuantity : 0;
+  const hasBlockedCouponState = Boolean(couponQuoteError) || couponQuote?.applied === false;
   const canSubmitOrder =
     Boolean(selectedProduct) &&
     Boolean(selectedStock) &&
     quantityIsValid &&
     memberId.trim().length > 0 &&
-    !submitting;
+    !submitting &&
+    !applyingCoupon &&
+    !hasBlockedCouponState;
+  const discountAmount = couponQuote?.applied ? couponQuote.discountAmount : 0;
+  const payableAmount = couponQuote?.applied ? couponQuote.payAmount : totalAmount;
+  const couponStatusLabel = couponQuote ? (couponQuote.applied ? 'APPLIED' : couponQuote.reason) : '미적용';
+
+  useEffect(() => {
+    setCouponQuote(null);
+    setCouponQuoteError(null);
+  }, [quantityInput]);
+
+  const applyCouponQuote = async () => {
+    const trimmedCouponCode = couponCode.trim();
+    if (!selectedProduct || !quantityIsValid || trimmedCouponCode.length === 0 || totalAmount <= 0) {
+      setCouponQuoteError('주문 항목과 쿠폰 코드를 확인하세요.');
+      return;
+    }
+
+    setApplyingCoupon(true);
+    setCouponQuoteError(null);
+
+    try {
+      const nextQuote = await quoteCoupon({
+        couponCode: trimmedCouponCode,
+        orderAmount: totalAmount,
+      });
+      setCouponQuote(nextQuote);
+    } catch (error) {
+      setCouponQuoteError(`쿠폰 적용 실패: ${errorMessage(error)}`);
+      setCouponQuote(null);
+    } finally {
+      setApplyingCoupon(false);
+    }
+  };
 
   const submitOrder = async () => {
     if (!selectedProduct || !selectedStock || !quantityIsValid || memberId.trim().length === 0) {
       setMessage('상품, SKU, 수량, 회원 ID를 확인하세요.');
+      return;
+    }
+    if (hasBlockedCouponState) {
+      setMessage('쿠폰 적용 상태를 확인하세요.');
       return;
     }
 
@@ -173,7 +219,7 @@ export default function App() {
     setMessage(null);
 
     try {
-      const order = await createOrder({
+      const payload = {
         memberId: memberId.trim(),
         paymentMethod,
         items: [
@@ -184,7 +230,10 @@ export default function App() {
             unitPrice: selectedProduct.listPrice,
           },
         ],
-      });
+        couponCode: couponCode.trim() || undefined,
+      };
+
+      const order = await createOrder(payload);
       setCreatedOrder(order);
       setOrderDetail(null);
     } catch (error) {
@@ -283,6 +332,41 @@ export default function App() {
               </label>
 
               <label className="field">
+                <span>쿠폰 코드</span>
+                <input
+                  value={couponCode}
+                  onChange={(event) => {
+                    setCouponCode(event.target.value);
+                    setCouponQuote(null);
+                    setCouponQuoteError(null);
+                  }}
+                  placeholder="WELCOME10"
+                />
+              </label>
+
+              <button
+                className="primary-action"
+                disabled={applyingCoupon || couponCode.trim().length === 0 || !selectedProduct || totalAmount <= 0}
+                onClick={applyCouponQuote}
+                type="button"
+              >
+                {applyingCoupon ? '쿠폰 적용 중' : '쿠폰 적용'}
+              </button>
+
+              {couponQuote && (
+                <div className="summary-row">
+                  <span>쿠폰 적용</span>
+                  <strong>{`쿠폰 적용: ${couponStatusLabel}`}</strong>
+                </div>
+              )}
+
+              {couponQuoteError && (
+                <div className="error-banner" role="alert">
+                  {couponQuoteError}
+                </div>
+              )}
+
+              <label className="field">
                 <span>결제수단</span>
                 <select value={paymentMethod} onChange={(event) => setPaymentMethod(event.target.value)}>
                   <option value="CARD">CARD</option>
@@ -292,8 +376,16 @@ export default function App() {
               </label>
 
               <div className="summary-row total">
-                <span>예상 결제금액</span>
+                <span>주문 금액</span>
                 <strong>{formatCurrency(totalAmount)}</strong>
+              </div>
+              <div className="summary-row total">
+                <span>할인 금액</span>
+                <strong>{formatCurrency(discountAmount)}</strong>
+              </div>
+              <div className="summary-row total">
+                <span>결제 예정 금액</span>
+                <strong>{formatCurrency(payableAmount)}</strong>
               </div>
 
               <button className="primary-action" disabled={!canSubmitOrder} onClick={submitOrder} type="button">
