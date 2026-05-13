@@ -3,7 +3,7 @@
 Customer App은 한정 상품 조회, SKU 선택, 주문 생성, Saga 상태 추적을 하나의 흐름으로 보여주는 React 앱입니다.
 `CARD` 성공, `FAIL_CARD` 실패/재고 복구, `DELAY_CARD` 결제 지연 시나리오를 UI에서 직접 실행할 수 있습니다.
 
-주문 생성/조회 API 상세는 `docs/api/customer-orders.md`에 정리되어 있습니다.
+상품/재고 조회 API는 `docs/api/catalog-inventory.md`, 주문 생성/조회 API는 `docs/api/customer-orders.md`에 정리되어 있습니다.
 
 ## 실행
 
