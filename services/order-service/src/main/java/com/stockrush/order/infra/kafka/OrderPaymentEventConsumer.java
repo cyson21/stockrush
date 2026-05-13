@@ -5,6 +5,8 @@ import com.stockrush.order.application.PaymentAuthorizationDelayedPayload;
 import com.stockrush.order.application.PaymentAuthorizationFailedPayload;
 import com.stockrush.order.application.PaymentAuthorizedPayload;
 import com.stockrush.order.application.PaymentCanceledPayload;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 import tools.jackson.core.JacksonException;
@@ -13,6 +15,8 @@ import tools.jackson.databind.ObjectMapper;
 
 @Component
 class OrderPaymentEventConsumer {
+
+    private static final Logger log = LoggerFactory.getLogger(OrderPaymentEventConsumer.class);
 
     private final ObjectMapper objectMapper;
     private final OrderSagaEventHandler handler;
@@ -29,7 +33,8 @@ class OrderPaymentEventConsumer {
     )
     void consume(String message) {
         try {
-            switch (eventType(message)) {
+            String type = eventType(message);
+            switch (type) {
                 case "PaymentAuthorized" -> handler.handlePaymentAuthorized(
                     objectMapper.readValue(message, new TypeReference<KafkaEventEnvelope<PaymentAuthorizedPayload>>() {
                     })
@@ -46,7 +51,7 @@ class OrderPaymentEventConsumer {
                     objectMapper.readValue(message, new TypeReference<KafkaEventEnvelope<PaymentCanceledPayload>>() {
                     })
                 );
-                default -> throw new IllegalArgumentException("unsupported payment event");
+                default -> log.debug("Ignoring payment event type not handled by order saga: {}", type);
             }
         } catch (JacksonException e) {
             throw new IllegalArgumentException("failed to parse payment event", e);

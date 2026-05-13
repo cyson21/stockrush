@@ -1,6 +1,7 @@
 package com.stockrush.order.infra.kafka;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -177,6 +178,68 @@ class OrderEventConsumerIntegrationTest {
             """));
         assertEquals("OrderCancelled", queryString("select event_type from outbox_events"));
         assertEquals("PAYMENT_CANCELED", queryString("select payload ->> 'reason' from outbox_events"));
+    }
+
+    @Test
+    void ignores_inventory_events_that_are_not_order_saga_inputs() {
+        assertDoesNotThrow(() -> inventoryConsumer.consume("""
+            {
+              "eventId": "018f8d0b-8d32-7c42-9f1b-78328e0f7d06",
+              "eventType": "InventoryReservationConfirmed",
+              "eventVersion": 1,
+              "aggregateType": "inventory-reservation",
+              "aggregateId": "ord_consumer_001",
+              "correlationId": "corr-consumer-001",
+              "causationId": null,
+              "idempotencyKey": "idem-consumer-001",
+              "occurredAt": "2026-05-12T16:03:00Z",
+              "sourceService": "inventory-service",
+              "payload": {
+                "orderId": "ord_consumer_001",
+                "items": [
+                  {
+                    "productCode": "LIMITED-001",
+                    "skuId": "SKU-001",
+                    "quantity": 2
+                  }
+                ],
+                "confirmedAt": "2026-05-12T16:03:00Z"
+              }
+            }
+            """));
+
+        assertEquals("STARTED", queryString("""
+            select saga_status from customer_orders where order_id = 'ord_consumer_001'
+            """));
+        assertEquals(0, queryInt("select count(*) from outbox_events"));
+        assertEquals(0, queryInt("select count(*) from processed_events"));
+    }
+
+    @Test
+    void ignores_payment_events_that_are_not_order_saga_inputs() {
+        assertDoesNotThrow(() -> paymentConsumer.consume("""
+            {
+              "eventId": "018f8d0b-8d32-7c42-9f1b-78328e0f7d07",
+              "eventType": "PaymentAuditRecorded",
+              "eventVersion": 1,
+              "aggregateType": "payment",
+              "aggregateId": "ord_consumer_001",
+              "correlationId": "corr-consumer-001",
+              "causationId": null,
+              "idempotencyKey": "idem-consumer-001",
+              "occurredAt": "2026-05-12T16:04:00Z",
+              "sourceService": "payment-service",
+              "payload": {
+                "orderId": "ord_consumer_001"
+              }
+            }
+            """));
+
+        assertEquals("STARTED", queryString("""
+            select saga_status from customer_orders where order_id = 'ord_consumer_001'
+            """));
+        assertEquals(0, queryInt("select count(*) from outbox_events"));
+        assertEquals(0, queryInt("select count(*) from processed_events"));
     }
 
     private int queryInt(String sql) {
