@@ -23,6 +23,41 @@ flowchart LR
   Payment --> PaymentDb["payment schema"]
 ```
 
+## Service Boundaries
+
+| Service | Owns | Does Not Own |
+|---|---|---|
+| `gateway` | local entrypoint and healthcheck | business state |
+| `catalog-service` | product, category, price, sales status | stock quantity, order status, payment state |
+| `inventory-service` | SKU stock, reservation, stock finalization/release | product master, order lifecycle, payment state |
+| `order-service` | customer order, order item, order status, Saga status, payment command outbox | stock mutation, payment authorization result |
+| `payment-service` | payment authorization, payment delay/cancel simulation, payment event outbox | order lifecycle, inventory reservation |
+
+Each service uses only its own PostgreSQL schema. Cross-service workflow moves through Kafka events and commands, not direct schema access.
+
+## End-to-End Data Flow
+
+```text
+Customer App
+  -> order-service POST /api/orders
+  -> orders.customer_orders + orders.outbox_events
+  -> stockrush.order.events.v1
+  -> inventory-service processed_events + inventory reservation
+  -> inventory.outbox_events
+  -> stockrush.inventory.events.v1
+  -> order-service Saga handler
+  -> orders.outbox_events PaymentAuthorizationRequested
+  -> stockrush.payment.commands.v1
+  -> payment-service processed_events + payment row
+  -> payment.outbox_events
+  -> stockrush.payment.events.v1
+  -> order-service final Saga handler
+  -> stockrush.order.events.v1 OrderConfirmed or OrderCancelled
+  -> inventory-service reservation finalization or release
+```
+
+The customer app reads order status through `GET /api/orders/{orderId}`. The admin app reads order/Saga state and service-local outbox rows through admin APIs.
+
 ## First Demo Scenario
 
 1. Customer requests an order.
@@ -68,7 +103,7 @@ flowchart LR
 | inventory-service | `stockrush.inventory.events.v1` | pending claim, publish success, retry, failed, envelope JSON |
 | payment-service | `stockrush.payment.events.v1` | pending claim, publish success, retry, failed, envelope JSON |
 
-## Kafka Integration Smoke Coverage
+## Kafka Flow and Integration Smoke Coverage
 
 | Flow | Producer Input | Consumer | Relay Output | Verification |
 |---|---|---|---|---|
@@ -78,6 +113,19 @@ flowchart LR
 | Payment cancellation | `PaymentCancelRequested` on `stockrush.payment.commands.v1` | payment-service | `PaymentCanceled` on `stockrush.payment.events.v1` | delayed payment update, processed event, outbox row, Kafka event envelope |
 
 Smoke tests use the local Docker Kafka broker at `localhost:19092` and the local PostgreSQL schemas at `localhost:15432`.
+
+## Failure Recovery Flow
+
+| Failure Point | Recovery Behavior | Current Proof |
+|---|---|---|
+| Kafka publish fails from a relay | Outbox row stays retryable or moves to `FAILED` with error detail | service-local relay tests |
+| Consumer receives the same message twice | processed event storage prevents duplicate side effects | Saga handler and payment handler tests |
+| Inventory reservation fails | Order moves to `CANCELLED` / `FAILED` and emits `OrderCancelled` | order Saga tests |
+| Payment authorization fails | Order moves to `CANCELLED` / `FAILED`; inventory releases reservation | service tests and local `FAIL_CARD` runbook |
+| Payment authorization is delayed | Order remains `CREATED` / `PAYMENT_DELAYED` until admin action | payment/order tests and local `DELAY_CARD` runbook |
+| Admin cancels delayed payment | `PaymentCancelRequested` leads to `PaymentCanceled`, then `OrderCancelled` and stock release | admin cancel API/app tests |
+
+Manual `FAILED -> PENDING` mutation is intentionally outside this slice. Only due `PENDING` events are retried through the current outbox admin API.
 
 ## Design Constraints
 
