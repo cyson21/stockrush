@@ -4,7 +4,7 @@
 
 ## same-sku-concurrency
 
-동일 SKU에 대해 여러 주문을 동시에 생성한 뒤, 서비스별 outbox retry API를 호출해 최종 상태를 확인한다.
+동일 SKU에 대해 여러 주문을 동시에 생성한 뒤, Gateway Outbox route로 서비스별 retry API를 호출해 최종 상태를 확인한다.
 
 ```bash
 ./tools/local-e2e/local-e2e same-sku-concurrency \
@@ -14,17 +14,18 @@
   --max-attempts 12
 ```
 
-기본 포트는 아래 서비스를 사용한다. 주문 생성/조회는 Gateway를 경유하고, Order outbox 조회/재시도는 Order Service admin API를 직접 호출한다.
+기본 포트는 아래 서비스를 사용한다. 주문 생성/조회와 outbox 조회/재시도는 Gateway를 경유한다.
 
 | Role | URL |
 |---|---|
 | Catalog | `http://localhost:18081` |
 | Inventory | `http://localhost:18082` |
 | Order API through Gateway | `http://localhost:18080` |
-| Order admin/outbox | `http://localhost:18083` |
+| Outbox API through Gateway | `http://localhost:18080` |
+| Order health | `http://localhost:18083` |
 | Payment | `http://localhost:18084` |
 
-직접 Order Service 포트로 주문 생성/조회를 검증해야 하면 `--order-api-url http://localhost:18083`을 지정한다.
+직접 Order Service 포트로 주문 생성/조회를 검증해야 하면 `--order-api-url http://localhost:18083`을 지정한다. Outbox 검증은 Gateway route shape를 기준으로 한다.
 
 ## 검증 기준
 

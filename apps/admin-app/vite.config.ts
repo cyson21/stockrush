@@ -5,6 +5,10 @@ export default defineConfig({
   plugins: [react()],
   server: {
     proxy: {
+      '/api/admin/outbox-services': {
+        target: 'http://localhost:18080',
+        changeOrigin: true,
+      },
       '/inventory': {
         target: 'http://localhost:18082',
         changeOrigin: true,

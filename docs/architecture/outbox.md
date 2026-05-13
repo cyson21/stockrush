@@ -53,14 +53,14 @@ FAILED
 
 ## Admin Operations
 
-Each producing service exposes service-local outbox operations:
+Each producing service exposes service-local outbox operations. Gateway exposes the operator-facing route and forwards to the selected service.
 
-| API | Purpose |
-|---|---|
-| `GET /api/admin/outbox-events` | list outbox rows by status, newest first |
-| `POST /api/admin/outbox-events/retry` | invoke the existing relay for a bounded batch |
+| Operator API | Upstream API | Purpose |
+|---|---|---|
+| `GET /api/admin/outbox-services/{service}/events` | `GET /api/admin/outbox-events` | list outbox rows by status, newest first |
+| `POST /api/admin/outbox-services/{service}/events/retry` | `POST /api/admin/outbox-events/retry` | invoke the existing relay for a bounded batch |
 
-The API never reads another service schema. A future Admin App can call order, inventory, and payment services separately and merge the results in the UI.
+The API never reads another service schema. The `service` value selects `order`, `inventory`, or `payment`; each upstream only reads its own schema.
 
 Manual state mutation such as `FAILED -> PENDING` is intentionally excluded from the first slice. It needs a separate action policy and state transition guard.
 

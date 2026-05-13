@@ -19,7 +19,8 @@ npm run dev
 
 | 환경 변수 | 설명 |
 |---|---|
-| `VITE_API_BASE_URL` | 공통 기본 주소 |
+| `VITE_API_BASE_URL` | 서비스별 prefix 앞에 붙는 공통 기본 주소 |
+| `VITE_GATEWAY_API_BASE_URL` | Gateway 주소. Outbox 운영 API에 사용하며, 없으면 same-origin 경로를 사용 |
 | `VITE_CATALOG_API_BASE_URL` | 상품 서비스 주소 (기본: `${VITE_API_BASE_URL}/catalog`) |
 | `VITE_ORDER_API_BASE_URL` | 주문 서비스 주소 (기본: `${VITE_API_BASE_URL}/orders`) |
 | `VITE_INVENTORY_API_BASE_URL` | 재고 서비스 주소 (기본: `${VITE_API_BASE_URL}/inventory`) |
@@ -33,6 +34,7 @@ npm run dev
 - `/orders` -> `http://localhost:18083`
 - `/inventory` -> `http://localhost:18082`
 - `/payment` -> `http://localhost:18084`
+- `/api/admin/outbox-services` -> `http://localhost:18080`
 
 ## 검증
 

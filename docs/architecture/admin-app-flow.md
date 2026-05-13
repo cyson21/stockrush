@@ -47,8 +47,8 @@ Products
 | 상품 수정 | `PUT /api/admin/products/{productCode}` | 상품명, 판매 상태, 판매가 수정 |
 | 재고 목록 | `GET /api/stocks?productCode={productCode}` | 상품별 SKU 재고와 예약 수량 확인 |
 | 재고 설정 | `PUT /api/stocks/{skuId}` | SKU 기준 재고 수량 설정 또는 신규 SKU 초기화 |
-| Outbox 목록 | `GET /api/admin/outbox-events` | 각 서비스의 pending/failed 이벤트 |
-| Outbox retry | `POST /api/admin/outbox-events/retry` | 각 서비스 relay를 수동 실행 |
+| Outbox 목록 | `GET /api/admin/outbox-services/{service}/events` | 각 서비스의 pending/failed 이벤트 |
+| Outbox retry | `POST /api/admin/outbox-services/{service}/events/retry` | 각 서비스 relay를 수동 실행 |
 
 ## Service Routing
 
@@ -60,8 +60,9 @@ Vite 개발 서버는 서비스별 prefix를 backend service로 proxy한다.
 | `/orders` | `http://localhost:18083` |
 | `/inventory` | `http://localhost:18082` |
 | `/payment` | `http://localhost:18084` |
+| `/api/admin/outbox-services` | `http://localhost:18080` |
 
-배포 또는 gateway 환경에서는 `VITE_API_BASE_URL` 또는 서비스별 base URL 환경 변수로 주소를 바꾼다.
+배포 또는 gateway 환경에서는 서비스별 API는 `VITE_API_BASE_URL` 또는 서비스별 base URL 환경 변수로 주소를 바꾼다. Outbox 운영 API는 `VITE_GATEWAY_API_BASE_URL`이 있으면 그 주소를 사용하고, 없으면 same-origin Gateway path를 사용한다.
 
 ## Boundaries
 

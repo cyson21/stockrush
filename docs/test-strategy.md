@@ -20,7 +20,7 @@ StockRush 테스트 전략은 한정 판매 주문 흐름에서 서비스별 도
 | Outbox relay | `PENDING` claim, Kafka publish, retry, `PUBLISHED`/`FAILED` 전이를 확인 | `services/order-service/src/test/java/com/stockrush/order/infra/outbox/OutboxRelayServiceIntegrationTest.java`, `services/inventory-service/src/test/java/com/stockrush/inventory/infra/outbox/InventoryOutboxRelayServiceIntegrationTest.java`, `services/payment-service/src/test/java/com/stockrush/payment/infra/outbox/PaymentOutboxRelayServiceIntegrationTest.java` |
 | Kafka smoke | 실제 로컬 Kafka에 publish/consume이 되는지 확인 | `services/inventory-service/src/test/java/com/stockrush/inventory/infra/kafka/InventoryKafkaSmokeIntegrationTest.java`, `services/payment-service/src/test/java/com/stockrush/payment/infra/kafka/PaymentKafkaSmokeIntegrationTest.java` |
 | UI behavior | 고객/관리자 앱의 API 호출, 상태 렌더링, 재시도 키 재사용 확인 | `apps/customer-app/src/App.test.tsx`, `apps/admin-app/src/App.test.tsx` |
-| Gateway routing smoke | Gateway가 주문 생성/조회와 관리자 주문 조회/취소 요청을 Order Service로 전달하는지 확인 | `services/gateway/src/test/java/com/stockrush/gateway/api/OrderGatewayControllerIntegrationTest.java` |
+| Gateway routing smoke | Gateway가 주문 생성/조회, 관리자 주문 조회/취소, Outbox 조회/재시도 요청을 대상 서비스로 전달하는지 확인 | `services/gateway/src/test/java/com/stockrush/gateway/api/OrderGatewayControllerIntegrationTest.java` |
 | Architecture Guard | schema ownership, Controller 반환 타입, event envelope, outbox table shape 확인 | `tools/architecture-guard/tests/test_architecture_guard.py`, `tools/architecture-guard/architecture_guard.py` |
 | Manual E2E | 실제 서비스 기동 후 `CARD`, `FAIL_CARD`, `DELAY_CARD`, 관리자 취소, Gateway 경유 동일 SKU 최종 상태 확인 | `docs/runbooks/local-e2e.md`, `tools/local-e2e` |
 
@@ -66,8 +66,8 @@ Local end-to-end verification follows [Local E2E Runbook](runbooks/local-e2e.md)
 | `FAIL_CARD` cancellation and stock release | Payment failure, Order cancellation, Inventory release tests | `FAIL_CARD 실패 시나리오 + 재고 복구` |
 | `DELAY_CARD` delayed payment | Payment delay, Order `PAYMENT_DELAYED`, Customer App delayed state tests | 로컬 서비스 E2E 증거: `ord_20260513012031_8c06cd49` |
 | Admin delayed payment cancellation | Admin cancel API, `PaymentCancelRequested`, `PaymentCanceled`, Admin App retry key tests | 로컬 서비스 E2E 증거: `CANCELLED/FAILED`, 재고 복구 |
-| Concurrent same-SKU reservation | Inventory handler PostgreSQL integration race test | `tools/local-e2e/local-e2e same-sku-concurrency`로 Gateway 주문 생성/조회와 서비스 최종 상태 확인 |
-| Outbox retry and relay | Service-local outbox relay tests | Admin App outbox operation checklist |
+| Concurrent same-SKU reservation | Inventory handler PostgreSQL integration race test | `tools/local-e2e/local-e2e same-sku-concurrency`로 Gateway 주문 생성/조회, Gateway Outbox route, 서비스 최종 상태 확인 |
+| Outbox retry and relay | Service-local outbox relay tests, Gateway outbox routing smoke | Admin App outbox operation checklist |
 | Event duplicate handling | `processed_events` and replay tests in Order/Payment handlers | Outbox and Kafka UI checks |
 
 최근 로컬 E2E 증거:
@@ -89,7 +89,7 @@ Local end-to-end verification follows [Local E2E Runbook](runbooks/local-e2e.md)
 
 These are known gaps, not hidden assumptions.
 
-- Gateway has order create/query and admin order list/saga/cancel routing smoke coverage with a fake upstream. The same-SKU local E2E runner and order-facing runbook examples send order create/query/cancel through Gateway. Outbox admin APIs still call service ports directly.
+- Gateway has order create/query, admin order list/saga/cancel, and Outbox admin routing smoke coverage with fake upstreams. The same-SKU local E2E runner and runbook send order-facing calls and outbox retry/query calls through Gateway.
 - Inventory handler has a focused same-SKU concurrent reservation regression test and a local final-state E2E runner. Kafka consumer parallelism, external load benchmarking, and duplicate command race windows remain future scope.
 - Kafka broker outage and long-lived `PENDING`/`FAILED` recovery scenarios are documented but not fully automated.
 - Authentication and authorization tests are outside the current public slice.

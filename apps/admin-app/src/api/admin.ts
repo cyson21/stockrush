@@ -1,4 +1,4 @@
-import { apiUrl, request } from './client';
+import { apiUrl, gatewayApiUrl, request } from './client';
 import type {
   AdminOrderPage,
   AdminOrderCancelResult,
@@ -77,7 +77,7 @@ export function setStockQuantity(skuId: string, payload: StockSetPayload): Promi
 
 export function listOutbox(service: ServiceDomain): Promise<OutboxEventPage> {
   return request<OutboxEventPage>(
-    apiUrl(service, '/api/admin/outbox-events', {
+    gatewayApiUrl(`/api/admin/outbox-services/${service}/events`, {
       status: 'PENDING,FAILED',
       limit: '50',
       offset: '0',
@@ -87,7 +87,7 @@ export function listOutbox(service: ServiceDomain): Promise<OutboxEventPage> {
 
 export function retryOutbox(service: ServiceDomain, batchSize = 10): Promise<OutboxRetryResult> {
   return request<OutboxRetryResult>(
-    apiUrl(service, '/api/admin/outbox-events/retry', {
+    gatewayApiUrl(`/api/admin/outbox-services/${service}/events/retry`, {
       batchSize: String(batchSize),
     }),
     { method: 'POST' },

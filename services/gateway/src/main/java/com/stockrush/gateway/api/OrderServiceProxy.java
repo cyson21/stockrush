@@ -42,7 +42,17 @@ class OrderServiceProxy {
     }
 
     ResponseEntity<String> forward(String method, String path, HttpHeaders requestHeaders, String body) {
-        HttpRequest.Builder requestBuilder = HttpRequest.newBuilder(URI.create(routingProperties.orderServiceUrl() + path));
+        return forward(ServiceRoute.ORDER, method, path, requestHeaders, body);
+    }
+
+    ResponseEntity<String> forward(
+        ServiceRoute service,
+        String method,
+        String path,
+        HttpHeaders requestHeaders,
+        String body
+    ) {
+        HttpRequest.Builder requestBuilder = HttpRequest.newBuilder(URI.create(routingProperties.serviceUrl(service) + path));
         copyRequestHeaders(requestHeaders, requestBuilder);
 
         HttpRequest.BodyPublisher bodyPublisher = body == null
@@ -82,15 +92,50 @@ class OrderServiceProxy {
     }
 }
 
+enum ServiceRoute {
+    ORDER,
+    INVENTORY,
+    PAYMENT;
+
+    static ServiceRoute from(String value) {
+        return switch (value) {
+            case "order" -> ORDER;
+            case "inventory" -> INVENTORY;
+            case "payment" -> PAYMENT;
+            default -> throw new IllegalArgumentException("unsupported service route: " + value);
+        };
+    }
+}
+
 @ConfigurationProperties(prefix = "stockrush.routes")
-record OrderServiceRoutingProperties(String orderServiceUrl) {
+record OrderServiceRoutingProperties(
+    String orderServiceUrl,
+    String inventoryServiceUrl,
+    String paymentServiceUrl
+) {
 
     private static final String DEFAULT_ORDER_SERVICE_URL = "http://localhost:18083";
+    private static final String DEFAULT_INVENTORY_SERVICE_URL = "http://localhost:18082";
+    private static final String DEFAULT_PAYMENT_SERVICE_URL = "http://localhost:18084";
 
     OrderServiceRoutingProperties {
-        if (orderServiceUrl == null || orderServiceUrl.isBlank()) {
-            orderServiceUrl = DEFAULT_ORDER_SERVICE_URL;
+        orderServiceUrl = normalize(orderServiceUrl, DEFAULT_ORDER_SERVICE_URL);
+        inventoryServiceUrl = normalize(inventoryServiceUrl, DEFAULT_INVENTORY_SERVICE_URL);
+        paymentServiceUrl = normalize(paymentServiceUrl, DEFAULT_PAYMENT_SERVICE_URL);
+    }
+
+    String serviceUrl(ServiceRoute service) {
+        return switch (service) {
+            case ORDER -> orderServiceUrl;
+            case INVENTORY -> inventoryServiceUrl;
+            case PAYMENT -> paymentServiceUrl;
+        };
+    }
+
+    private static String normalize(String value, String defaultValue) {
+        if (value == null || value.isBlank()) {
+            return defaultValue;
         }
-        orderServiceUrl = orderServiceUrl.replaceAll("/+$", "");
+        return value.replaceAll("/+$", "");
     }
 }

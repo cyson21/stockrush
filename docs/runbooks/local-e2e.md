@@ -85,16 +85,16 @@ curl -sSf http://localhost:18084/actuator/health
 - Admin App: `http://localhost:5174`
 - Kafka UI: `http://localhost:19090`
 
-## Gateway 주문 라우팅 Smoke
+## Gateway 주문/운영 라우팅 Smoke
 
-Gateway는 주문 생성/조회와 관리자 주문 조회/취소 라우팅 smoke를 제공한다. 이 테스트는 Gateway가 Order Service로 method, path, query string, body, 핵심 헤더와 응답을 전달하는지를 fake upstream으로 고정한다.
+Gateway는 주문 생성/조회, 관리자 주문 조회/취소, Outbox 조회/재시도 라우팅 smoke를 제공한다. 이 테스트는 Gateway가 대상 서비스로 method, path, query string, body, 핵심 헤더와 응답을 전달하는지를 fake upstream으로 고정한다.
 
 ```bash
 cd services/gateway
 JAVA_HOME=/Users/chanyang.son/Library/Java/JavaVirtualMachines/ms-17.0.18/Contents/Home mvn test
 ```
 
-로컬 기동 시 Gateway는 기본적으로 `ORDER_SERVICE_URL=http://localhost:18083`으로 Order Service를 호출한다. Outbox admin API는 서비스별 운영 경로이므로 현재 runbook에서는 서비스 포트를 직접 호출한다.
+로컬 기동 시 Gateway는 기본적으로 `ORDER_SERVICE_URL=http://localhost:18083`, `INVENTORY_SERVICE_URL=http://localhost:18082`, `PAYMENT_SERVICE_URL=http://localhost:18084`로 각 서비스를 호출한다. Outbox admin API는 `service` path 값으로 `order`, `inventory`, `payment`를 선택한다.
 
 ## 반복 실행용 Local E2E Runner
 
@@ -108,7 +108,7 @@ JAVA_HOME=/Users/chanyang.son/Library/Java/JavaVirtualMachines/ms-17.0.18/Conten
   --max-attempts 12
 ```
 
-이 runner는 같은 SKU로 주문 생성 API를 병렬 호출한 뒤, 서비스별 outbox retry API를 순차 호출해 최종 주문/재고/outbox 상태를 확인한다. 기본값은 주문 생성/조회를 Gateway(`http://localhost:18080`)로 보내고, Order outbox 조회/재시도만 Order Service admin API(`http://localhost:18083`)를 직접 호출한다. 로컬 회귀 확인용이며 외부 부하 벤치마크나 Kafka consumer 병렬성 검증으로 해석하지 않는다.
+이 runner는 같은 SKU로 주문 생성 API를 병렬 호출한 뒤, Gateway Outbox route로 서비스별 retry API를 순차 호출해 최종 주문/재고/outbox 상태를 확인한다. 기본값은 주문 생성/조회와 outbox 조회/재시도를 Gateway(`http://localhost:18080`)로 보낸다. 로컬 회귀 확인용이며 외부 부하 벤치마크나 Kafka consumer 병렬성 검증으로 해석하지 않는다.
 
 기대 결과:
 
@@ -185,17 +185,17 @@ curl -sS http://localhost:18080/api/orders/"$CARD_ORDER_ID"
 4. 이벤트 흐름 확인:
 
 ```bash
-curl -sS http://localhost:18083/api/admin/outbox-events?status=PUBLISHED
-curl -sS http://localhost:18082/api/admin/outbox-events?status=PUBLISHED
-curl -sS http://localhost:18084/api/admin/outbox-events?status=PUBLISHED
+curl -sS 'http://localhost:18080/api/admin/outbox-services/order/events?status=PUBLISHED'
+curl -sS 'http://localhost:18080/api/admin/outbox-services/inventory/events?status=PUBLISHED'
+curl -sS 'http://localhost:18080/api/admin/outbox-services/payment/events?status=PUBLISHED'
 ```
 
 5. 장기 체류 이벤트 확인:
 
 ```bash
-curl -sS 'http://localhost:18083/api/admin/outbox-events?status=PENDING,FAILED'
-curl -sS 'http://localhost:18082/api/admin/outbox-events?status=PENDING,FAILED'
-curl -sS 'http://localhost:18084/api/admin/outbox-events?status=PENDING,FAILED'
+curl -sS 'http://localhost:18080/api/admin/outbox-services/order/events?status=PENDING,FAILED'
+curl -sS 'http://localhost:18080/api/admin/outbox-services/inventory/events?status=PENDING,FAILED'
+curl -sS 'http://localhost:18080/api/admin/outbox-services/payment/events?status=PENDING,FAILED'
 ```
 
 ## FAIL_CARD 실패 시나리오 + 재고 복구
@@ -326,4 +326,4 @@ Admin App에서 아래 화면을 순차적으로 확인한다.
 
 - 인증/권한은 공개 버전 범위 외로 처리되지 않았습니다.
 - 지연 후 재시도 같은 운영 극한 케이스는 확장 단계로 남아 있습니다.
-- 게이트웨이는 기본 진입점으로 유지되며, 현재 시나리오 검증은 서비스 포트 기준 호출을 중심으로 수행합니다.
+- 게이트웨이는 주문 생성/조회, 관리자 주문 조회/취소, Outbox 조회/재시도의 기본 진입점으로 유지됩니다.

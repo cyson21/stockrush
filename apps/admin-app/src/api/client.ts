@@ -36,6 +36,16 @@ function serviceBaseUrl(serviceName: ServiceName): string {
 
 export function apiUrl(service: ServiceName, path: string, params?: Record<string, string>): string {
   const baseUrl = serviceBaseUrl(service);
+  return buildUrl(baseUrl, path, params);
+}
+
+export function gatewayApiUrl(path: string, params?: Record<string, string>): string {
+  const env = import.meta.env;
+  const baseUrl = trimTrailingSlash(env.VITE_GATEWAY_API_BASE_URL ?? '');
+  return buildUrl(baseUrl, path, params);
+}
+
+function buildUrl(baseUrl: string, path: string, params?: Record<string, string>): string {
   const url = new URL(`${baseUrl}${withLeadingSlash(path)}`, window.location.origin);
 
   Object.entries(params ?? {}).forEach(([key, value]) => {

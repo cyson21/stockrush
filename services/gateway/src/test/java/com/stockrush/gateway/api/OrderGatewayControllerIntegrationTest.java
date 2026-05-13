@@ -27,7 +27,21 @@ import org.springframework.test.context.DynamicPropertySource;
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 class OrderGatewayControllerIntegrationTest {
 
-    private static final StubOrderService STUB_ORDER_SERVICE = new StubOrderService();
+    private static final StubService STUB_ORDER_SERVICE = new StubService(
+        "order",
+        "OrderCreated",
+        "stockrush.order.events.v1"
+    );
+    private static final StubService STUB_INVENTORY_SERVICE = new StubService(
+        "inventory",
+        "InventoryReserved",
+        "stockrush.inventory.events.v1"
+    );
+    private static final StubService STUB_PAYMENT_SERVICE = new StubService(
+        "payment",
+        "PaymentAuthorized",
+        "stockrush.payment.events.v1"
+    );
 
     private final HttpClient httpClient = HttpClient.newHttpClient();
 
@@ -37,17 +51,25 @@ class OrderGatewayControllerIntegrationTest {
     @DynamicPropertySource
     static void registerProperties(DynamicPropertyRegistry registry) {
         STUB_ORDER_SERVICE.start();
+        STUB_INVENTORY_SERVICE.start();
+        STUB_PAYMENT_SERVICE.start();
         registry.add("stockrush.routes.order-service-url", STUB_ORDER_SERVICE::baseUrl);
+        registry.add("stockrush.routes.inventory-service-url", STUB_INVENTORY_SERVICE::baseUrl);
+        registry.add("stockrush.routes.payment-service-url", STUB_PAYMENT_SERVICE::baseUrl);
     }
 
     @BeforeEach
     void setUp() {
         STUB_ORDER_SERVICE.reset();
+        STUB_INVENTORY_SERVICE.reset();
+        STUB_PAYMENT_SERVICE.reset();
     }
 
     @AfterAll
     static void tearDown() {
         STUB_ORDER_SERVICE.stop();
+        STUB_INVENTORY_SERVICE.stop();
+        STUB_PAYMENT_SERVICE.stop();
     }
 
     @Test
@@ -171,13 +193,113 @@ class OrderGatewayControllerIntegrationTest {
         assertThat(forwarded.firstHeader("X-Correlation-Id")).contains("corr-gateway-admin-cancel");
     }
 
+    @Test
+    void routes_order_outbox_list_query_to_order_service() throws Exception {
+        HttpRequest request = HttpRequest.newBuilder(
+                gatewayUri("/api/admin/outbox-services/order/events?status=PENDING,FAILED&limit=5&offset=0")
+            )
+            .header("X-Correlation-Id", "corr-gateway-order-outbox")
+            .GET()
+            .build();
+
+        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.headers().firstValue("X-Correlation-Id")).contains("corr-gateway-order-outbox");
+        assertThat(response.body()).contains("\"service\":\"order\"");
+        assertThat(response.body()).contains("\"eventType\":\"OrderCreated\"");
+
+        RecordedRequest forwarded = STUB_ORDER_SERVICE.singleRequest();
+        assertThat(forwarded.method()).isEqualTo("GET");
+        assertThat(forwarded.path()).isEqualTo("/api/admin/outbox-events");
+        assertThat(forwarded.query()).contains("status=PENDING,FAILED&limit=5&offset=0");
+        assertThat(forwarded.firstHeader("X-Correlation-Id")).contains("corr-gateway-order-outbox");
+        STUB_INVENTORY_SERVICE.assertNoRequests();
+        STUB_PAYMENT_SERVICE.assertNoRequests();
+    }
+
+    @Test
+    void routes_inventory_outbox_retry_command_to_inventory_service() throws Exception {
+        HttpRequest request = HttpRequest.newBuilder(
+                gatewayUri("/api/admin/outbox-services/inventory/events/retry?batchSize=7")
+            )
+            .header("X-Correlation-Id", "corr-gateway-inventory-retry")
+            .POST(HttpRequest.BodyPublishers.noBody())
+            .build();
+
+        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.headers().firstValue("X-Correlation-Id")).contains("corr-gateway-inventory-retry");
+        assertThat(response.body()).contains("\"claimed\":7");
+        assertThat(response.body()).contains("\"service\":\"inventory\"");
+
+        RecordedRequest forwarded = STUB_INVENTORY_SERVICE.singleRequest();
+        assertThat(forwarded.method()).isEqualTo("POST");
+        assertThat(forwarded.path()).isEqualTo("/api/admin/outbox-events/retry");
+        assertThat(forwarded.query()).contains("batchSize=7");
+        assertThat(forwarded.firstHeader("X-Correlation-Id")).contains("corr-gateway-inventory-retry");
+        STUB_ORDER_SERVICE.assertNoRequests();
+        STUB_PAYMENT_SERVICE.assertNoRequests();
+    }
+
+    @Test
+    void routes_payment_outbox_list_query_to_payment_service() throws Exception {
+        HttpRequest request = HttpRequest.newBuilder(
+                gatewayUri("/api/admin/outbox-services/payment/events?status=FAILED")
+            )
+            .header("X-Correlation-Id", "corr-gateway-payment-outbox")
+            .GET()
+            .build();
+
+        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.headers().firstValue("X-Correlation-Id")).contains("corr-gateway-payment-outbox");
+        assertThat(response.body()).contains("\"service\":\"payment\"");
+        assertThat(response.body()).contains("\"eventType\":\"PaymentAuthorized\"");
+
+        RecordedRequest forwarded = STUB_PAYMENT_SERVICE.singleRequest();
+        assertThat(forwarded.method()).isEqualTo("GET");
+        assertThat(forwarded.path()).isEqualTo("/api/admin/outbox-events");
+        assertThat(forwarded.query()).contains("status=FAILED");
+        assertThat(forwarded.firstHeader("X-Correlation-Id")).contains("corr-gateway-payment-outbox");
+        STUB_ORDER_SERVICE.assertNoRequests();
+        STUB_INVENTORY_SERVICE.assertNoRequests();
+    }
+
+    @Test
+    void rejects_unknown_outbox_service_without_calling_upstream() throws Exception {
+        HttpRequest request = HttpRequest.newBuilder(gatewayUri("/api/admin/outbox-services/finance/events"))
+            .header("X-Correlation-Id", "corr-gateway-unknown-outbox")
+            .GET()
+            .build();
+
+        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+
+        assertThat(response.statusCode()).isEqualTo(404);
+        assertThat(response.body()).contains("\"code\":\"SERVICE_ROUTE_NOT_FOUND\"");
+        STUB_ORDER_SERVICE.assertNoRequests();
+        STUB_INVENTORY_SERVICE.assertNoRequests();
+        STUB_PAYMENT_SERVICE.assertNoRequests();
+    }
+
     private URI gatewayUri(String path) {
         return URI.create("http://localhost:" + gatewayPort + path);
     }
 
-    private static final class StubOrderService {
+    private static final class StubService {
+        private final String serviceName;
+        private final String eventType;
+        private final String topic;
         private final Deque<RecordedRequest> requests = new ConcurrentLinkedDeque<>();
         private HttpServer server;
+
+        StubService(String serviceName, String eventType, String topic) {
+            this.serviceName = serviceName;
+            this.eventType = eventType;
+            this.topic = topic;
+        }
 
         void start() {
             if (server != null) {
@@ -190,6 +312,7 @@ class OrderGatewayControllerIntegrationTest {
             }
             server.createContext("/api/orders", this::handle);
             server.createContext("/api/admin/orders", this::handle);
+            server.createContext("/api/admin/outbox-events", this::handle);
             server.start();
         }
 
@@ -206,6 +329,10 @@ class OrderGatewayControllerIntegrationTest {
             return requests.peekFirst();
         }
 
+        void assertNoRequests() {
+            assertThat(requests).isEmpty();
+        }
+
         void stop() {
             if (server != null) {
                 server.stop(0);
@@ -218,6 +345,19 @@ class OrderGatewayControllerIntegrationTest {
             String query = exchange.getRequestURI().getRawQuery();
             requests.add(new RecordedRequest(exchange.getRequestMethod(), path, query, exchange.getRequestHeaders(), body));
 
+            if ("GET".equals(exchange.getRequestMethod()) && "/api/admin/outbox-events".equals(path)) {
+                writeJson(exchange, 200, currentCorrelationId(exchange), null, """
+                    {"success":true,"data":{"service":"%s","limit":50,"offset":0,"items":[{"eventId":"018f8d0b-8d32-7c42-9f1b-78328e0f7b02","aggregateType":"%s","aggregateId":"agg_gateway_outbox","eventType":"%s","topic":"%s","partitionKey":"agg_gateway_outbox","payload":"{}","status":"PENDING","retryCount":0,"maxRetryCount":5,"createdAt":"2026-05-13T02:00:00Z","nextRetryAt":null,"publishedAt":null,"errorMessage":null}]},"error":null,"trace":{"correlationId":"%s"}}
+                    """.formatted(serviceName, serviceName, eventType, topic, currentCorrelationId(exchange)));
+                return;
+            }
+            if ("POST".equals(exchange.getRequestMethod()) && "/api/admin/outbox-events/retry".equals(path)) {
+                int claimed = retryBatchSize(query);
+                writeJson(exchange, 200, currentCorrelationId(exchange), null, """
+                    {"success":true,"data":{"service":"%s","claimed":%d,"published":%d,"failed":0},"error":null,"trace":{"correlationId":"%s"}}
+                    """.formatted(serviceName, claimed, claimed, currentCorrelationId(exchange)));
+                return;
+            }
             if ("POST".equals(exchange.getRequestMethod()) && "/api/orders".equals(path)) {
                 writeJson(exchange, 201, "corr-gateway-create", "/api/orders/ord_gateway_001", """
                     {"success":true,"data":{"orderId":"ord_gateway_001","status":"CREATED","sagaStatus":"STARTED","paymentMethod":"CARD","totalAmount":12000.0},"error":null,"trace":{"correlationId":"corr-gateway-create"}}
@@ -252,6 +392,28 @@ class OrderGatewayControllerIntegrationTest {
             writeJson(exchange, 404, "corr-gateway-missing", null, """
                 {"success":false,"data":null,"error":{"code":"ORDER_NOT_FOUND","message":"not found"},"trace":{"correlationId":"corr-gateway-missing"}}
                 """);
+        }
+
+        private String currentCorrelationId(HttpExchange exchange) {
+            return exchange.getRequestHeaders()
+                .entrySet()
+                .stream()
+                .filter(entry -> entry.getKey().equalsIgnoreCase("X-Correlation-Id"))
+                .flatMap(entry -> entry.getValue().stream())
+                .findFirst()
+                .orElse("corr-gateway-outbox");
+        }
+
+        private int retryBatchSize(String query) {
+            if (query == null || query.isBlank()) {
+                return 10;
+            }
+            for (String part : query.split("&")) {
+                if (part.startsWith("batchSize=")) {
+                    return Integer.parseInt(part.substring("batchSize=".length()));
+                }
+            }
+            return 10;
         }
 
         private void writeJson(

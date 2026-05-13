@@ -130,11 +130,11 @@ describe('admin app operations', () => {
         );
       }
 
-      if (request.pathname === '/orders/api/admin/outbox-events' && method === 'GET') {
+      if (request.pathname === '/api/admin/outbox-services/order/events' && method === 'GET') {
         return toJsonResponse(buildResponse(true, { limit: 50, offset: 0, items: [] }), 200);
       }
 
-      if (request.pathname === '/inventory/api/admin/outbox-events' && method === 'GET') {
+      if (request.pathname === '/api/admin/outbox-services/inventory/events' && method === 'GET') {
         return toJsonResponse(
           buildResponse(true, {
             limit: 50,
@@ -159,7 +159,7 @@ describe('admin app operations', () => {
         );
       }
 
-      if (request.pathname === '/inventory/api/admin/outbox-events/retry' && method === 'POST') {
+      if (request.pathname === '/api/admin/outbox-services/inventory/events/retry' && method === 'POST') {
         return toJsonResponse(buildResponse(true, { claimed: 2, published: 1, failed: 0 }), 200);
       }
 

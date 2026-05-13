@@ -74,17 +74,16 @@
 | 해결 | Order Service inventory/payment consumer에서 valid but irrelevant eventType은 debug log 후 무시하고, JSON 파싱 실패는 기존처럼 예외로 유지 |
 | 재발 방지 | consumer integration test에서 비-Saga inventory/payment event가 주문 상태, processed event, outbox를 변경하지 않는지 검증 |
 
-## 검증 공백
-
-### 8. Gateway 경유 운영 API는 아직 부분적임
+### 8. Outbox admin API를 Gateway 경유로 전환함
 
 | 항목 | 내용 |
 |---|---|
-| 증상 | Gateway 주문 생성/조회와 관리자 주문 조회/취소 라우팅 smoke, 동일 SKU runner, runbook의 주문 생성/조회/취소 경로는 Gateway를 경유하지만 Outbox admin API는 서비스 포트 직접 호출 중심임 |
+| 증상 | Gateway 주문 생성/조회와 관리자 주문 조회/취소는 Gateway를 경유했지만, Outbox admin API는 초기 구현에서 서비스 포트 직접 호출 중심이었음 |
 | 원인 | Order Service의 주문 API는 단일 upstream으로 proxy하기 쉽지만, Outbox admin API는 Order/Inventory/Payment Service가 같은 path를 서비스별로 소유해 Gateway에 service 식별 설계가 추가로 필요함 |
-| 보강 방향 | Outbox admin API를 Gateway에서 다룰 service 식별 방식과 권한 기준을 정한 뒤 실제 서비스 조합으로 재검증 |
-| 재발 방지 | README 검증 요약에 Gateway 경유 주문 API와 서비스별 직접 Outbox admin API를 분리 표기 |
-| 근거 | [README](../../README.md), [Local E2E Runbook](../runbooks/local-e2e.md), [Gateway README](../../services/gateway/README.md), [Test Strategy](../test-strategy.md) |
+| 해결 | Gateway에 `GET /api/admin/outbox-services/{service}/events`, `POST /api/admin/outbox-services/{service}/events/retry`를 추가하고 `order`, `inventory`, `payment`만 허용 |
+| 재발 방지 | Gateway smoke test에서 서비스별 upstream 선택, query string, `X-Correlation-Id`, 미허용 service 404를 검증하고 Admin App과 Local E2E runner가 Gateway Outbox route를 사용하도록 전환 |
+
+## 검증 공백
 
 ### 9. 동시 주문 부하/consumer 병렬성 검증은 아직 부족함
 
@@ -127,7 +126,7 @@
 ## 면접에서 피해야 할 주장
 
 - “모든 API 경로를 Gateway 기준으로 검증했다.”
-  - 주문 생성/조회와 관리자 주문 조회/취소는 Gateway 기준으로 검증했지만, Outbox admin API는 아직 서비스 포트 직접 호출 기준이다.
+  - 주문 생성/조회, 관리자 주문 조회/취소, Outbox 운영 API는 Gateway smoke와 runbook 기준을 갖췄지만, 고객 상품/재고 및 관리자 상품/재고 일부 경로는 앱 proxy와 서비스 포트 검증도 함께 남아 있다.
 - “동시 주문 경합은 상용 부하까지 검증됐다.”
   - 서비스 단위 동일 SKU race test와 로컬 최종 상태 E2E runner는 있지만, 부하 벤치마크와 Kafka consumer 병렬성 검증은 아직 남아 있다.
 - “Kafka 장애가 나도 자동으로 항상 복구된다.”
@@ -139,8 +138,7 @@
 
 ## 다음 보강 순서
 
-1. Outbox admin API의 Gateway 경유 방식 설계
-2. 동일 SKU 부하 벤치마크와 Kafka consumer 병렬성 검증 추가
-3. Kafka 장애 주입과 outbox 장기 체류 복구 runbook 확장
-4. `FAILED -> PENDING` 운영 액션 설계와 권한/감사 로그 추가
-5. 관리자 API 인증/권한 테스트 추가
+1. 동일 SKU 부하 벤치마크와 Kafka consumer 병렬성 검증 추가
+2. Kafka 장애 주입과 outbox 장기 체류 복구 runbook 확장
+3. `FAILED -> PENDING` 운영 액션 설계와 권한/감사 로그 추가
+4. 관리자 API 인증/권한 테스트 추가

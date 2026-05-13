@@ -56,7 +56,7 @@ Customer App
   -> inventory-service reservation finalization or release
 ```
 
-The customer app reads order status through `GET /api/orders/{orderId}`. The admin app reads order/Saga state and service-local outbox rows through admin APIs.
+The customer app reads order status through `GET /api/orders/{orderId}`. The admin app reads order/Saga state and service-specific outbox rows through Gateway admin APIs.
 
 ## First Demo Scenario
 
@@ -93,7 +93,7 @@ The customer app reads order status through `GET /api/orders/{orderId}`. The adm
 | order-service | `GET /api/orders/{orderId}` | customer order status and Saga progress tracking |
 | order-service | `GET /api/admin/orders`, `GET /api/admin/orders/{orderId}/saga` | admin order monitoring and Saga failure inspection |
 | order-service | `POST /api/admin/orders/{orderId}/cancel` | admin cancellation request for delayed payment orders |
-| order/inventory/payment | `GET /api/admin/outbox-events`, `POST /api/admin/outbox-events/retry` | service-local outbox monitoring and manual relay trigger |
+| gateway | `GET /api/admin/outbox-services/{service}/events`, `POST /api/admin/outbox-services/{service}/events/retry` | service-specific outbox monitoring and manual relay trigger |
 
 ## Service Relay Coverage
 

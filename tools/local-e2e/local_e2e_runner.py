@@ -19,6 +19,7 @@ DEFAULT_CATALOG_URL = "http://localhost:18081"
 DEFAULT_INVENTORY_URL = "http://localhost:18082"
 DEFAULT_ORDER_URL = "http://localhost:18083"
 DEFAULT_ORDER_API_URL = "http://localhost:18080"
+DEFAULT_OUTBOX_API_URL = "http://localhost:18080"
 DEFAULT_PAYMENT_URL = "http://localhost:18084"
 SERVICE_BASES = ("order", "inventory", "payment")
 MAX_GENERATED_PREFIX_LENGTH = 48
@@ -39,6 +40,7 @@ class ScenarioConfig:
     inventory_url: str
     order_url: str
     order_api_url: str
+    outbox_api_url: str
     payment_url: str
     order_count: int
     initial_stock: int
@@ -192,16 +194,25 @@ def response_data(payload: Mapping[str, Any]) -> Any:
 
 
 def count_pending_outbox(client: ApiClient, config: ScenarioConfig) -> dict[str, int]:
-    urls = {
-        "order": config.order_url,
-        "inventory": config.inventory_url,
-        "payment": config.payment_url,
-    }
     counts: dict[str, int] = {}
-    for name, base_url in urls.items():
-        payload = response_data(client.get(f"{base_url}/api/admin/outbox-events?status=PENDING&limit={OUTBOX_QUERY_LIMIT}"))
+    for name in SERVICE_BASES:
+        payload = response_data(client.get(outbox_list_url(config, name)))
         counts[name] = len(payload.get("items", []))
     return counts
+
+
+def outbox_list_url(config: ScenarioConfig, service: str) -> str:
+    return (
+        f"{config.outbox_api_url}/api/admin/outbox-services/{service}/events"
+        f"?status=PENDING&limit={OUTBOX_QUERY_LIMIT}"
+    )
+
+
+def outbox_retry_url(config: ScenarioConfig, service: str) -> str:
+    return (
+        f"{config.outbox_api_url}/api/admin/outbox-services/{service}/events/retry"
+        f"?batchSize={config.relay_batch_size}"
+    )
 
 
 def pending_outbox_delta(before: Mapping[str, int], after: Mapping[str, int]) -> dict[str, int]:
@@ -218,7 +229,14 @@ def ensure_no_pending_outbox(client: ApiClient, config: ScenarioConfig) -> None:
 
 
 def healthcheck(client: ApiClient, config: ScenarioConfig) -> None:
-    for base_url in dict.fromkeys([config.catalog_url, config.inventory_url, config.order_url, config.order_api_url, config.payment_url]):
+    for base_url in dict.fromkeys([
+        config.catalog_url,
+        config.inventory_url,
+        config.order_url,
+        config.order_api_url,
+        config.outbox_api_url,
+        config.payment_url,
+    ]):
         payload = client.get(f"{base_url}/actuator/health")
         if payload.get("status") != "UP":
             raise RuntimeError(f"service is not healthy: {base_url} -> {payload}")
@@ -331,9 +349,9 @@ def create_orders_concurrently(
 
 
 def relay_wave(client: ApiClient, config: ScenarioConfig) -> None:
-    relay_order = [config.order_url, config.inventory_url, config.order_url, config.payment_url, config.order_url, config.inventory_url]
-    for base_url in relay_order:
-        client.post(f"{base_url}/api/admin/outbox-events/retry?batchSize={config.relay_batch_size}")
+    relay_order = ["order", "inventory", "order", "payment", "order", "inventory"]
+    for service in relay_order:
+        client.post(outbox_retry_url(config, service))
         time.sleep(config.wait_seconds)
 
 
@@ -356,11 +374,16 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
     )
     concurrent.add_argument("--catalog-url", default=DEFAULT_CATALOG_URL)
     concurrent.add_argument("--inventory-url", default=DEFAULT_INVENTORY_URL)
-    concurrent.add_argument("--order-url", default=DEFAULT_ORDER_URL, help="Order Service admin/outbox URL")
+    concurrent.add_argument("--order-url", default=DEFAULT_ORDER_URL, help="Order Service health URL")
     concurrent.add_argument(
         "--order-api-url",
         default=DEFAULT_ORDER_API_URL,
         help="Public order create/query URL. Defaults to Gateway at http://localhost:18080.",
+    )
+    concurrent.add_argument(
+        "--outbox-api-url",
+        default=DEFAULT_OUTBOX_API_URL,
+        help="Outbox admin routing URL. Defaults to Gateway at http://localhost:18080.",
     )
     concurrent.add_argument("--payment-url", default=DEFAULT_PAYMENT_URL)
     concurrent.add_argument("--orders", type=positive_int, default=6)
@@ -386,6 +409,7 @@ def config_from_args(args: argparse.Namespace) -> ScenarioConfig:
         inventory_url=args.inventory_url.rstrip("/"),
         order_url=order_url,
         order_api_url=args.order_api_url.rstrip("/"),
+        outbox_api_url=args.outbox_api_url.rstrip("/"),
         payment_url=args.payment_url.rstrip("/"),
         order_count=args.orders,
         initial_stock=args.initial_stock,
