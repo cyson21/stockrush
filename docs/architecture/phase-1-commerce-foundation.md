@@ -43,6 +43,7 @@ flowchart LR
 | `InventoryReservationFailed` | `CANCELLED` | `FAILED` | `OrderCancelled` on `stockrush.order.events.v1` |
 | `PaymentAuthorized` | `CONFIRMED` | `COMPLETED` | `OrderConfirmed` on `stockrush.order.events.v1` |
 | `PaymentAuthorizationFailed` | `CANCELLED` | `FAILED` | `OrderCancelled` on `stockrush.order.events.v1` |
+| `PaymentAuthorizationDelayed` | `CREATED` | `PAYMENT_DELAYED` | none |
 
 `causationId` is preserved in outbox headers and copied into the Kafka envelope by the relay publisher.
 

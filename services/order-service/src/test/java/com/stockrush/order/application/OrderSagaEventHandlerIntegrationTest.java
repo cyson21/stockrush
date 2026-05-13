@@ -24,6 +24,7 @@ class OrderSagaEventHandlerIntegrationTest {
 
     private static final UUID INVENTORY_EVENT_ID = UUID.fromString("018f8d0b-8d32-7c42-9f1b-78328e0f7c01");
     private static final UUID PAYMENT_EVENT_ID = UUID.fromString("018f8d0b-8d32-7c42-9f1b-78328e0f7c02");
+    private static final UUID PAYMENT_DELAYED_EVENT_ID = UUID.fromString("018f8d0b-8d32-7c42-9f1b-78328e0f7c06");
 
     @Autowired
     private OrderSagaEventHandler handler;
@@ -97,6 +98,16 @@ class OrderSagaEventHandlerIntegrationTest {
         assertEquals("FAILED", queryString("select saga_status from customer_orders where order_id = 'ord_saga_001'"));
         assertEquals("OrderCancelled", queryString("select event_type from outbox_events"));
         assertEquals("PAYMENT_DECLINED", queryString("select payload ->> 'reason' from outbox_events"));
+    }
+
+    @Test
+    void marks_saga_delayed_when_payment_authorization_delayed() {
+        handler.handlePaymentAuthorizationDelayed(paymentAuthorizationDelayed());
+
+        assertEquals("CREATED", queryString("select status from customer_orders where order_id = 'ord_saga_001'"));
+        assertEquals("PAYMENT_DELAYED", queryString("select saga_status from customer_orders where order_id = 'ord_saga_001'"));
+        assertEquals(1, queryInt("select count(*) from processed_events where event_id = '" + PAYMENT_DELAYED_EVENT_ID + "'"));
+        assertEquals(0, queryInt("select count(*) from outbox_events"));
     }
 
     @Test
@@ -189,6 +200,28 @@ class OrderSagaEventHandlerIntegrationTest {
                 new BigDecimal("24000.00"),
                 "CARD",
                 "PAYMENT_DECLINED",
+                Instant.parse("2026-05-12T16:01:00Z")
+            )
+        );
+    }
+
+    private KafkaEventEnvelope<PaymentAuthorizationDelayedPayload> paymentAuthorizationDelayed() {
+        return new KafkaEventEnvelope<>(
+            PAYMENT_DELAYED_EVENT_ID,
+            "PaymentAuthorizationDelayed",
+            1,
+            "payment",
+            "ord_saga_001",
+            "corr-saga-001",
+            INVENTORY_EVENT_ID,
+            "idem-saga-001",
+            Instant.parse("2026-05-12T16:01:00Z"),
+            "payment-service",
+            new PaymentAuthorizationDelayedPayload(
+                "ord_saga_001",
+                new BigDecimal("24000.00"),
+                "DELAY_CARD",
+                "PAYMENT_DELAYED",
                 Instant.parse("2026-05-12T16:01:00Z")
             )
         );

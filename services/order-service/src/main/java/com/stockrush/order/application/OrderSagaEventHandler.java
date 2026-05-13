@@ -99,6 +99,15 @@ public class OrderSagaEventHandler {
         );
     }
 
+    @Transactional
+    public void handlePaymentAuthorizationDelayed(KafkaEventEnvelope<PaymentAuthorizationDelayedPayload> event) {
+        if (!markProcessed(event)) {
+            return;
+        }
+
+        updateOrder(event.payload().orderId(), "CREATED", "PAYMENT_DELAYED");
+    }
+
     private boolean markProcessed(KafkaEventEnvelope<?> event) {
         int inserted = jdbcClient.sql("""
                 insert into processed_events (

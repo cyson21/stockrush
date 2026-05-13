@@ -1,6 +1,7 @@
 # StockRush Customer App
 
 Customer App은 한정 상품 조회, SKU 선택, 주문 생성, Saga 상태 추적을 하나의 흐름으로 보여주는 React 앱입니다.
+`CARD` 성공, `FAIL_CARD` 실패/재고 복구, `DELAY_CARD` 결제 지연 시나리오를 UI에서 직접 실행할 수 있습니다.
 
 ## 실행
 
@@ -38,6 +39,14 @@ Vite 개발 서버는 아래 프록시를 사용합니다.
 2. 상품 선택 시 `GET /api/stocks?productCode={productCode}`로 SKU별 재고를 조회한다.
 3. 회원 ID, 수량, 결제수단을 입력해 `POST /api/orders`를 호출한다.
 4. 생성된 주문 ID로 `GET /api/orders/{orderId}`를 polling해 주문 상태와 Saga 상태를 갱신한다.
+
+## 시나리오
+
+| 결제수단 | 확인 흐름 |
+|---|---|
+| `CARD` | 주문 완료와 Saga 완료 |
+| `FAIL_CARD` | 주문 취소와 재고 복구 |
+| `DELAY_CARD` | 주문 열린 상태와 Saga 지연 상태 |
 
 ## 검증
 

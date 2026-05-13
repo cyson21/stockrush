@@ -287,7 +287,8 @@ hr {
 .status-pill.in_progress,
 .status-pill.started,
 .status-pill.inventory_requested,
-.status-pill.payment_requested {
+.status-pill.payment_requested,
+.status-pill.payment_delayed {
   background: #ffedd5;
   color: #9a3412;
 }

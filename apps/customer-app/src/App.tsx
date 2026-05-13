@@ -287,6 +287,7 @@ export default function App() {
                 <select value={paymentMethod} onChange={(event) => setPaymentMethod(event.target.value)}>
                   <option value="CARD">CARD</option>
                   <option value="FAIL_CARD">FAIL_CARD</option>
+                  <option value="DELAY_CARD">DELAY_CARD</option>
                 </select>
               </label>
 

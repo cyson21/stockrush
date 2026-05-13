@@ -4,7 +4,7 @@ public enum SagaStatus {
     STARTED,
     INVENTORY_REQUESTED,
     PAYMENT_REQUESTED,
+    PAYMENT_DELAYED,
     COMPLETED,
     FAILED
 }
-

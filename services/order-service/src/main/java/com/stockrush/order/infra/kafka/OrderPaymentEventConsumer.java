@@ -1,6 +1,7 @@
 package com.stockrush.order.infra.kafka;
 
 import com.stockrush.order.application.OrderSagaEventHandler;
+import com.stockrush.order.application.PaymentAuthorizationDelayedPayload;
 import com.stockrush.order.application.PaymentAuthorizationFailedPayload;
 import com.stockrush.order.application.PaymentAuthorizedPayload;
 import org.springframework.kafka.annotation.KafkaListener;
@@ -34,6 +35,10 @@ class OrderPaymentEventConsumer {
                 );
                 case "PaymentAuthorizationFailed" -> handler.handlePaymentAuthorizationFailed(
                     objectMapper.readValue(message, new TypeReference<KafkaEventEnvelope<PaymentAuthorizationFailedPayload>>() {
+                    })
+                );
+                case "PaymentAuthorizationDelayed" -> handler.handlePaymentAuthorizationDelayed(
+                    objectMapper.readValue(message, new TypeReference<KafkaEventEnvelope<PaymentAuthorizationDelayedPayload>>() {
                     })
                 );
                 default -> throw new IllegalArgumentException("unsupported payment event");

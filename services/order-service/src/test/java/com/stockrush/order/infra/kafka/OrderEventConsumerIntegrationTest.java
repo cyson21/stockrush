@@ -109,6 +109,41 @@ class OrderEventConsumerIntegrationTest {
         assertEquals("OrderConfirmed", queryString("select event_type from outbox_events"));
     }
 
+    @Test
+    void routes_payment_authorization_delayed_event_to_saga_handler() {
+        paymentConsumer.consume("""
+            {
+              "eventId": "018f8d0b-8d32-7c42-9f1b-78328e0f7d04",
+              "eventType": "PaymentAuthorizationDelayed",
+              "eventVersion": 1,
+              "aggregateType": "payment",
+              "aggregateId": "ord_consumer_001",
+              "correlationId": "corr-consumer-001",
+              "causationId": null,
+              "idempotencyKey": "idem-consumer-001",
+              "occurredAt": "2026-05-12T16:01:00Z",
+              "sourceService": "payment-service",
+              "payload": {
+                "orderId": "ord_consumer_001",
+                "amount": 24000.00,
+                "method": "DELAY_CARD",
+                "reason": "PAYMENT_DELAYED",
+                "delayedAt": "2026-05-12T16:01:00Z"
+              }
+            }
+            """);
+
+        assertEquals("CREATED", queryString("select status from customer_orders where order_id = 'ord_consumer_001'"));
+        assertEquals("PAYMENT_DELAYED", queryString("""
+            select saga_status from customer_orders where order_id = 'ord_consumer_001'
+            """));
+        assertEquals(0, queryInt("select count(*) from outbox_events"));
+    }
+
+    private int queryInt(String sql) {
+        return jdbcClient.sql(sql).query(Integer.class).single();
+    }
+
     private String queryString(String sql) {
         return jdbcClient.sql(sql).query(String.class).single();
     }

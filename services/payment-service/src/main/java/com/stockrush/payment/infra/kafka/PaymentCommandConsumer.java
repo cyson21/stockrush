@@ -2,6 +2,7 @@ package com.stockrush.payment.infra.kafka;
 
 import com.stockrush.payment.application.PaymentAuthorizationHandler;
 import com.stockrush.payment.application.PaymentAuthorizationRequestedPayload;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 import tools.jackson.core.JacksonException;
@@ -9,6 +10,7 @@ import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.ObjectMapper;
 
 @Component
+@ConditionalOnProperty(name = "stockrush.kafka.listeners.enabled", havingValue = "true")
 class PaymentCommandConsumer {
 
     private final ObjectMapper objectMapper;

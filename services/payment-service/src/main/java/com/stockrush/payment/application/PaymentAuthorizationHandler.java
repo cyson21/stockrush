@@ -18,7 +18,9 @@ public class PaymentAuthorizationHandler {
     private static final String CONSUMER_GROUP = "payment-service";
     private static final String PAYMENT_TOPIC = "stockrush.payment.events.v1";
     private static final String FAIL_CARD_METHOD = "FAIL_CARD";
+    private static final String DELAY_CARD_METHOD = "DELAY_CARD";
     private static final String PAYMENT_DECLINED_REASON = "PAYMENT_DECLINED";
+    private static final String PAYMENT_DELAYED_REASON = "PAYMENT_DELAYED";
 
     private final JdbcClient jdbcClient;
     private final ObjectMapper objectMapper;
@@ -46,6 +48,7 @@ public class PaymentAuthorizationHandler {
         PaymentAuthorizationRequestedPayload payload = event.payload();
         UUID paymentId = idSupplier.get();
         boolean failedAuthorization = FAIL_CARD_METHOD.equals(payload.method());
+        boolean delayedAuthorization = DELAY_CARD_METHOD.equals(payload.method());
         jdbcClient.sql("""
                 insert into payments (
                   payment_id, order_id, amount, method, status, failure_reason,
@@ -60,8 +63,8 @@ public class PaymentAuthorizationHandler {
             .param("orderId", payload.orderId())
             .param("amount", payload.amount())
             .param("method", payload.method())
-            .param("status", failedAuthorization ? "FAILED" : "AUTHORIZED")
-            .param("failureReason", failedAuthorization ? PAYMENT_DECLINED_REASON : null)
+            .param("status", paymentStatus(failedAuthorization, delayedAuthorization))
+            .param("failureReason", paymentReason(failedAuthorization, delayedAuthorization))
             .param("idempotencyKey", event.idempotencyKey())
             .update();
 
@@ -80,11 +83,46 @@ public class PaymentAuthorizationHandler {
             return;
         }
 
+        if (delayedAuthorization) {
+            writeOutbox(
+                event,
+                "PaymentAuthorizationDelayed",
+                new PaymentAuthorizationDelayedPayload(
+                    payload.orderId(),
+                    payload.amount(),
+                    payload.method(),
+                    PAYMENT_DELAYED_REASON,
+                    clock.instant()
+                )
+            );
+            return;
+        }
+
         writeOutbox(
             event,
             "PaymentAuthorized",
             new PaymentAuthorizedPayload(paymentId, payload.orderId(), payload.amount(), payload.method(), clock.instant())
         );
+    }
+
+    private String paymentStatus(boolean failedAuthorization, boolean delayedAuthorization) {
+        if (failedAuthorization) {
+            return "FAILED";
+        }
+        if (delayedAuthorization) {
+            return "DELAYED";
+        }
+        return "AUTHORIZED";
+    }
+
+    private String paymentReason(boolean failedAuthorization, boolean delayedAuthorization) {
+        if (failedAuthorization) {
+            return PAYMENT_DECLINED_REASON;
+        }
+        if (delayedAuthorization) {
+            return PAYMENT_DELAYED_REASON;
+        }
+        return null;
     }
 
     private boolean markProcessed(KafkaEventEnvelope<PaymentAuthorizationRequestedPayload> event) {

@@ -6,7 +6,7 @@
 
 - Customer App, Admin App, Catalog / Inventory / Order / Payment 서비스의 연동 확인
 - Kafka 이벤트 발행/소비와 서비스 로컬 Outbox 동작 확인
-- `CARD`(성공)와 `FAIL_CARD`(실패·재고 복구) 시나리오 재현
+- `CARD`(성공), `FAIL_CARD`(실패·재고 복구), `DELAY_CARD`(결제 지연) 시나리오 재현
 - 운영 화면(관리자) 점검 포인트 정리
 
 ## Prerequisites
@@ -177,13 +177,39 @@ curl -sS http://localhost:18082/api/stocks/"$SKU_ID"
 - `FAIL_CARD` 실패 후 `availableQuantity`는 복구되고 `reservedQuantity`는 증가하지 않음
 - 주문 상세에서 실패 사유(`businessReason`)에 `PAYMENT_DECLINED`가 보임
 
+## DELAY_CARD 지연 시나리오
+
+결제 지연을 강제해 주문이 열린 상태로 남는지 확인한다.
+
+```bash
+DELAY_ORDER_ID=$(curl -sS -X POST http://localhost:18083/api/orders \
+  -H 'Content-Type: application/json' \
+  -H 'Idempotency-Key: delaycard-demo-001' \
+  -d "{\"memberId\":\"$MEMBER_ID\",\"paymentMethod\":\"DELAY_CARD\",\"items\":[{\"productCode\":\"$PRODUCT_CODE\",\"skuId\":\"$SKU_ID\",\"quantity\":1,\"unitPrice\":12000}]}" \
+  | jq -r '.data.orderId')
+
+echo "$DELAY_ORDER_ID"
+```
+
+상태 조회:
+
+```bash
+curl -sS http://localhost:18083/api/orders/"$DELAY_ORDER_ID"
+```
+
+예상 결과:
+
+- 결제 outbox에 `PaymentAuthorizationDelayed` 이벤트가 기록됨
+- Order Service가 이벤트를 소비하고 Saga 상태가 `PAYMENT_DELAYED`로 전환됨
+- 주문 상태는 `CREATED`로 유지되고 `OrderCancelled`/`OrderConfirmed`는 발행되지 않음
+
 ## Admin App 확인 항목
 
 Admin App에서 아래 화면을 순차적으로 확인한다.
 
 - 상품 조회/관리: 상품 등록/수정 화면에서 데모 상품 존재 확인
 - 재고 관리: `DEMO-001`의 SKU 재고 수량, 예약 수량 확인
-- 주문 운영: 주문 목록에서 `CARD`/`FAIL_CARD` 주문의 상태 표시
+- 주문 운영: 주문 목록에서 `CARD`/`FAIL_CARD`/`DELAY_CARD` 주문의 상태 표시
 - Saga 상세: 실패 주문 상세에서 실패 지점과 마지막 이벤트 확인
 - Outbox 운영:
   - 주문/재고/결제 서비스별 outbox 이벤트 목록 조회
@@ -198,6 +224,7 @@ Admin App에서 아래 화면을 순차적으로 확인한다.
 - [ ] `CARD` 주문에서 주문이 `CONFIRMED`/`COMPLETED` 전환
 - [ ] `FAIL_CARD` 주문에서 주문이 `CANCELLED`/`FAILED` 전환
 - [ ] `FAIL_CARD` 실행 후 SKU 재고가 결제 전 수량 기준으로 복구
+- [ ] `DELAY_CARD` 주문에서 주문이 `CREATED`/`PAYMENT_DELAYED`로 유지
 - [ ] outbox에서 PENDING 이벤트가 장기 체류하지 않고 처리됨
 - [ ] Kafka UI에서 관련 토픽 이벤트가 발행/소비되는지 확인
 
@@ -219,5 +246,5 @@ Admin App에서 아래 화면을 순차적으로 확인한다.
 ## Current Limits
 
 - 인증/권한은 공개 버전 범위 외로 처리되지 않았습니다.
-- 결제 지연/취소 시점 재시도 같은 운영 극한 케이스는 확장 단계로 남아 있습니다.
+- 결제 취소와 지연 후 재시도 같은 운영 극한 케이스는 확장 단계로 남아 있습니다.
 - 게이트웨이는 기본 진입점으로 유지되며, 현재 시나리오 검증은 서비스 포트 기준 호출을 중심으로 수행합니다.

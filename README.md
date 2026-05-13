@@ -10,7 +10,7 @@ StockRush는 한정 판매 주문 흐름에서 Kafka, Outbox, Saga를 묶은 엔
 - 관리자 앱(`apps/admin-app`) + 운영 화면(상품, 재고, 주문, Saga, Outbox)
 - Catalog / Inventory / Order / Payment API 체인
 - Kafka + 서비스 로컬 Outbox + Saga 상태 전이
-- `CARD` 성공 E2E와 `FAIL_CARD` 실패/재고 복구 E2E
+- `CARD` 성공, `FAIL_CARD` 실패/재고 복구, `DELAY_CARD` 지연 결제 흐름
 
 ## 실행 문서
 
@@ -38,5 +38,5 @@ StockRush는 한정 판매 주문 흐름에서 Kafka, Outbox, Saga를 묶은 엔
 
 - 주문 서비스(`order-service`)가 Saga Orchestrator 역할을 하며, Outbox를 통해 Kafka 이벤트를 발행합니다.
 - 재고 서비스는 `InventoryReserved / InventoryReservationFailed / InventoryReservationConfirmed / InventoryReservationReleased`로 결제와 연동해 예약 수량을 보정합니다.
-- 결제 서비스는 `CARD` 승인과 `FAIL_CARD` 실패를 통한 분기 검증이 가능하며, 주문 상태와 Saga 상태 변화가 연동되어 보입니다.
+- 결제 서비스는 `CARD` 승인, `FAIL_CARD` 실패, `DELAY_CARD` 지연 분기 검증이 가능하며, 주문 상태와 Saga 상태 변화가 연동되어 보입니다.
 - 관리자 앱에서 상품 등록/수정, SKU 재고 설정, 주문 Saga 추적, Outbox retry를 한 흐름으로 확인할 수 있습니다.
