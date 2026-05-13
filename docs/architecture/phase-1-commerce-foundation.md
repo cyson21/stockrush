@@ -44,6 +44,8 @@ flowchart LR
 | `PaymentAuthorized` | `CONFIRMED` | `COMPLETED` | `OrderConfirmed` on `stockrush.order.events.v1` |
 | `PaymentAuthorizationFailed` | `CANCELLED` | `FAILED` | `OrderCancelled` on `stockrush.order.events.v1` |
 | `PaymentAuthorizationDelayed` | `CREATED` | `PAYMENT_DELAYED` | none |
+| Admin cancel request | `CREATED` | `PAYMENT_CANCEL_REQUESTED` | `PaymentCancelRequested` on `stockrush.payment.commands.v1` |
+| `PaymentCanceled` | `CANCELLED` | `FAILED` | `OrderCancelled` on `stockrush.order.events.v1` |
 
 `causationId` is preserved in outbox headers and copied into the Kafka envelope by the relay publisher.
 
@@ -55,6 +57,7 @@ flowchart LR
 | inventory-service | `GET /api/stocks`, `GET /api/stocks/{skuId}` | customer stock visibility and admin stock check |
 | order-service | `GET /api/orders/{orderId}` | customer order status and Saga progress tracking |
 | order-service | `GET /api/admin/orders`, `GET /api/admin/orders/{orderId}/saga` | admin order monitoring and Saga failure inspection |
+| order-service | `POST /api/admin/orders/{orderId}/cancel` | admin cancellation request for delayed payment orders |
 | order/inventory/payment | `GET /api/admin/outbox-events`, `POST /api/admin/outbox-events/retry` | service-local outbox monitoring and manual relay trigger |
 
 ## Service Relay Coverage
@@ -72,6 +75,7 @@ flowchart LR
 | Inventory reservation | `OrderCreated` on `stockrush.order.events.v1` | inventory-service | `InventoryReserved` on `stockrush.inventory.events.v1` | stock update, processed event, outbox row, Kafka event envelope |
 | Inventory finalization | `OrderConfirmed` or `OrderCancelled` on `stockrush.order.events.v1` | inventory-service | `InventoryReservationConfirmed` or `InventoryReservationReleased` on `stockrush.inventory.events.v1` | reservation status, stock recovery/finalization, processed event, outbox row |
 | Payment authorization | `PaymentAuthorizationRequested` on `stockrush.payment.commands.v1` | payment-service | `PaymentAuthorized` on `stockrush.payment.events.v1` | payment row, processed event, outbox row, Kafka event envelope |
+| Payment cancellation | `PaymentCancelRequested` on `stockrush.payment.commands.v1` | payment-service | `PaymentCanceled` on `stockrush.payment.events.v1` | delayed payment update, processed event, outbox row, Kafka event envelope |
 
 Smoke tests use the local Docker Kafka broker at `localhost:19092` and the local PostgreSQL schemas at `localhost:15432`.
 

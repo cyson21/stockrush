@@ -108,6 +108,22 @@ public class OrderSagaEventHandler {
         updateOrder(event.payload().orderId(), "CREATED", "PAYMENT_DELAYED");
     }
 
+    @Transactional
+    public void handlePaymentCanceled(KafkaEventEnvelope<PaymentCanceledPayload> event) {
+        if (!markProcessed(event)) {
+            return;
+        }
+
+        String orderId = event.payload().orderId();
+        cancelOrder(orderId);
+        saveOutbox(
+            event,
+            "OrderCancelled",
+            ORDER_TOPIC,
+            new OrderCancelledPayload(orderId, event.payload().reason(), clock.instant())
+        );
+    }
+
     private boolean markProcessed(KafkaEventEnvelope<?> event) {
         int inserted = jdbcClient.sql("""
                 insert into processed_events (

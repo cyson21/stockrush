@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { ApiClientError } from './api/client';
 import {
+  cancelDelayedOrder,
   createCatalogProduct,
   getOrderSaga,
   listCatalogProducts,
@@ -111,6 +112,10 @@ function OrdersTab() {
   const [saga, setSaga] = useState<AdminOrderSaga | null>(null);
   const [sagaState, setSagaState] = useState<LoadState>('idle');
   const [sagaError, setSagaError] = useState<string | null>(null);
+  const [cancelState, setCancelState] = useState<SubmitState>('idle');
+  const [cancelMessage, setCancelMessage] = useState<string | null>(null);
+  const [cancelError, setCancelError] = useState<string | null>(null);
+  const cancelRequestKeyRef = useRef<{ orderId: string; key: string } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -143,6 +148,13 @@ function OrdersTab() {
       setSelectedOrderId(orders[0].orderId);
     }
   }, [orders, selectedOrderId]);
+
+  useEffect(() => {
+    cancelRequestKeyRef.current = null;
+    setCancelState('idle');
+    setCancelMessage(null);
+    setCancelError(null);
+  }, [selectedOrderId]);
 
   useEffect(() => {
     if (!selectedOrderId) {
@@ -179,6 +191,54 @@ function OrdersTab() {
     () => orders.find((order) => order.orderId === selectedOrderId) ?? null,
     [orders, selectedOrderId],
   );
+  const canRequestCancel = selectedOrder?.status === 'CREATED' && selectedOrder.sagaStatus === 'PAYMENT_DELAYED';
+
+  const onCancelDelayedOrder = () => {
+    if (!selectedOrder || !canRequestCancel) {
+      return;
+    }
+
+    const targetOrderId = selectedOrder.orderId;
+    const idempotencyKey =
+      cancelRequestKeyRef.current?.orderId === targetOrderId
+        ? cancelRequestKeyRef.current.key
+        : randomTextId('admin-order-cancel');
+    cancelRequestKeyRef.current = { orderId: targetOrderId, key: idempotencyKey };
+    setCancelState('loading');
+    setCancelMessage(null);
+    setCancelError(null);
+
+    cancelDelayedOrder(targetOrderId, idempotencyKey)
+      .then((result) => {
+        setOrders((previous) =>
+          previous.map((order) =>
+            order.orderId === result.orderId
+              ? {
+                  ...order,
+                  status: result.status,
+                  sagaStatus: result.sagaStatus,
+                }
+              : order,
+          ),
+        );
+        setSaga((previous) =>
+          previous && previous.orderId === result.orderId
+            ? {
+                ...previous,
+                orderStatus: result.status,
+                sagaStatus: result.sagaStatus,
+              }
+            : previous,
+        );
+        setCancelState('ready');
+        setCancelMessage(`${result.orderId} 결제 취소 요청이 접수되었습니다.`);
+        cancelRequestKeyRef.current = null;
+      })
+      .catch((error) => {
+        setCancelState('error');
+        setCancelError(errorMessage(error));
+      });
+  };
 
   return (
     <section className="panel-shell">
@@ -271,6 +331,23 @@ function OrdersTab() {
                 <strong>{formatTime(selectedOrder.updatedAt)}</strong>
               </div>
             </div>
+          )}
+
+          {canRequestCancel && (
+            <button
+              type="button"
+              className="action-btn"
+              onClick={onCancelDelayedOrder}
+              disabled={cancelState === 'loading'}
+            >
+              {cancelState === 'loading' ? '취소 요청 중' : '결제 취소 요청'}
+            </button>
+          )}
+          {cancelMessage && <p className="success-banner">{cancelMessage}</p>}
+          {cancelError && (
+            <p className="error-banner" role="alert">
+              {cancelError}
+            </p>
           )}
 
           <hr />

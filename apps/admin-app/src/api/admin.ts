@@ -1,6 +1,7 @@
 import { apiUrl, request } from './client';
 import type {
   AdminOrderPage,
+  AdminOrderCancelResult,
   AdminOrderSaga,
   CatalogProduct,
   OutboxEventPage,
@@ -19,6 +20,15 @@ export function listRecentOrders(): Promise<AdminOrderPage> {
 
 export function getOrderSaga(orderId: string): Promise<AdminOrderSaga> {
   return request<AdminOrderSaga>(apiUrl('order', `/api/admin/orders/${encodeURIComponent(orderId)}/saga`));
+}
+
+export function cancelDelayedOrder(orderId: string, idempotencyKey: string): Promise<AdminOrderCancelResult> {
+  return request<AdminOrderCancelResult>(apiUrl('order', `/api/admin/orders/${encodeURIComponent(orderId)}/cancel`), {
+    method: 'POST',
+    headers: {
+      'Idempotency-Key': idempotencyKey,
+    },
+  });
 }
 
 export function listCatalogProducts(status: string): Promise<CatalogProduct[]> {

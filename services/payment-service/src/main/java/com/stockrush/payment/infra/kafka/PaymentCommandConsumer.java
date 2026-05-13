@@ -2,6 +2,7 @@ package com.stockrush.payment.infra.kafka;
 
 import com.stockrush.payment.application.PaymentAuthorizationHandler;
 import com.stockrush.payment.application.PaymentAuthorizationRequestedPayload;
+import com.stockrush.payment.application.PaymentCancelRequestedPayload;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
@@ -28,10 +29,23 @@ class PaymentCommandConsumer {
     )
     void consume(String message) {
         try {
-            handler.handle(objectMapper.readValue(message, new TypeReference<KafkaEventEnvelope<PaymentAuthorizationRequestedPayload>>() {
-            }));
+            switch (eventType(message)) {
+                case "PaymentAuthorizationRequested" -> handler.handle(
+                    objectMapper.readValue(message, new TypeReference<KafkaEventEnvelope<PaymentAuthorizationRequestedPayload>>() {
+                    })
+                );
+                case "PaymentCancelRequested" -> handler.handleCancel(
+                    objectMapper.readValue(message, new TypeReference<KafkaEventEnvelope<PaymentCancelRequestedPayload>>() {
+                    })
+                );
+                default -> throw new IllegalArgumentException("unsupported payment command");
+            }
         } catch (JacksonException e) {
             throw new IllegalArgumentException("failed to parse payment command", e);
         }
+    }
+
+    private String eventType(String message) throws JacksonException {
+        return objectMapper.readTree(message).required("eventType").stringValue();
     }
 }

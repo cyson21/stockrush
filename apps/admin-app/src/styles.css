@@ -288,7 +288,8 @@ hr {
 .status-pill.started,
 .status-pill.inventory_requested,
 .status-pill.payment_requested,
-.status-pill.payment_delayed {
+.status-pill.payment_delayed,
+.status-pill.payment_cancel_requested {
   background: #ffedd5;
   color: #9a3412;
 }

@@ -25,6 +25,7 @@ class OrderSagaEventHandlerIntegrationTest {
     private static final UUID INVENTORY_EVENT_ID = UUID.fromString("018f8d0b-8d32-7c42-9f1b-78328e0f7c01");
     private static final UUID PAYMENT_EVENT_ID = UUID.fromString("018f8d0b-8d32-7c42-9f1b-78328e0f7c02");
     private static final UUID PAYMENT_DELAYED_EVENT_ID = UUID.fromString("018f8d0b-8d32-7c42-9f1b-78328e0f7c06");
+    private static final UUID PAYMENT_CANCELED_EVENT_ID = UUID.fromString("018f8d0b-8d32-7c42-9f1b-78328e0f7c07");
 
     @Autowired
     private OrderSagaEventHandler handler;
@@ -108,6 +109,24 @@ class OrderSagaEventHandlerIntegrationTest {
         assertEquals("PAYMENT_DELAYED", queryString("select saga_status from customer_orders where order_id = 'ord_saga_001'"));
         assertEquals(1, queryInt("select count(*) from processed_events where event_id = '" + PAYMENT_DELAYED_EVENT_ID + "'"));
         assertEquals(0, queryInt("select count(*) from outbox_events"));
+    }
+
+    @Test
+    void cancels_order_when_payment_canceled() {
+        jdbcClient.sql("""
+                update customer_orders
+                set saga_status = 'PAYMENT_CANCEL_REQUESTED'
+                where order_id = 'ord_saga_001'
+                """)
+            .update();
+
+        handler.handlePaymentCanceled(paymentCanceled());
+
+        assertEquals("CANCELLED", queryString("select status from customer_orders where order_id = 'ord_saga_001'"));
+        assertEquals("FAILED", queryString("select saga_status from customer_orders where order_id = 'ord_saga_001'"));
+        assertEquals(1, queryInt("select count(*) from processed_events where event_id = '" + PAYMENT_CANCELED_EVENT_ID + "'"));
+        assertEquals("OrderCancelled", queryString("select event_type from outbox_events"));
+        assertEquals("PAYMENT_CANCELED", queryString("select payload ->> 'reason' from outbox_events"));
     }
 
     @Test
@@ -223,6 +242,28 @@ class OrderSagaEventHandlerIntegrationTest {
                 "DELAY_CARD",
                 "PAYMENT_DELAYED",
                 Instant.parse("2026-05-12T16:01:00Z")
+            )
+        );
+    }
+
+    private KafkaEventEnvelope<PaymentCanceledPayload> paymentCanceled() {
+        return new KafkaEventEnvelope<>(
+            PAYMENT_CANCELED_EVENT_ID,
+            "PaymentCanceled",
+            1,
+            "payment",
+            "ord_saga_001",
+            "corr-saga-001",
+            PAYMENT_DELAYED_EVENT_ID,
+            "idem-saga-001",
+            Instant.parse("2026-05-12T16:02:00Z"),
+            "payment-service",
+            new PaymentCanceledPayload(
+                "ord_saga_001",
+                new BigDecimal("24000.00"),
+                "DELAY_CARD",
+                "PAYMENT_CANCELED",
+                Instant.parse("2026-05-12T16:02:00Z")
             )
         );
     }

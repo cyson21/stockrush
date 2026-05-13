@@ -100,6 +100,38 @@ class PaymentKafkaSmokeIntegrationTest {
         }
     }
 
+    @Test
+    void consumes_payment_cancel_requested_and_relay_publishes_payment_canceled() throws Exception {
+        waitForListenerAssignment();
+        String orderId = "ord_payment_cancel_smoke_" + UUID.randomUUID().toString().replace("-", "").substring(0, 8);
+        UUID commandEventId = UUID.randomUUID();
+        insertDelayedPayment(orderId);
+
+        try (KafkaConsumer<String, String> consumer = paymentEventsConsumer()) {
+            kafkaTemplate.send(PAYMENT_COMMANDS_TOPIC, orderId, paymentCancelRequestedJson(commandEventId, orderId))
+                .get(10, TimeUnit.SECONDS);
+
+            await(() -> countOutbox(orderId, "PaymentCanceled") == 1, "payment cancel outbox event was not created");
+
+            assertEquals("CANCELED", queryString("select status from payments where order_id = '" + orderId + "'"));
+            assertEquals("PAYMENT_CANCELED", queryString("select failure_reason from payments where order_id = '" + orderId + "'"));
+            assertEquals(1, countProcessedEvents(commandEventId));
+
+            OutboxRelayResult result = relayService.publishPending(10);
+
+            assertEquals(1, result.claimed());
+            assertEquals(1, result.published());
+            assertEquals(0, result.failed());
+
+            JsonNode paymentEvent = pollPaymentEvent(consumer, orderId);
+            assertEquals("PaymentCanceled", paymentEvent.path("eventType").stringValue());
+            assertEquals("payment", paymentEvent.path("aggregateType").stringValue());
+            assertEquals(orderId, paymentEvent.path("aggregateId").stringValue());
+            assertEquals(orderId, paymentEvent.path("payload").path("orderId").stringValue());
+            assertEquals("PAYMENT_CANCELED", paymentEvent.path("payload").path("reason").stringValue());
+        }
+    }
+
     private void waitForListenerAssignment() {
         int partitionCount = partitionCount(PAYMENT_COMMANDS_TOPIC);
         listenerEndpointRegistry.getListenerContainers()
@@ -171,6 +203,44 @@ class PaymentKafkaSmokeIntegrationTest {
               }
             }
             """.formatted(eventId, orderId, orderId, orderId);
+    }
+
+    private String paymentCancelRequestedJson(UUID eventId, String orderId) {
+        return """
+            {
+              "eventId": "%s",
+              "eventType": "PaymentCancelRequested",
+              "eventVersion": 1,
+              "aggregateType": "order",
+              "aggregateId": "%s",
+              "correlationId": "corr-payment-cancel-smoke-001",
+              "causationId": null,
+              "idempotencyKey": "idem-payment-cancel-smoke-%s",
+              "occurredAt": "2026-05-12T16:02:00Z",
+              "sourceService": "order-service",
+              "payload": {
+                "orderId": "%s",
+                "reason": "ADMIN_CANCEL_REQUESTED",
+                "requestedAt": "2026-05-12T16:02:00Z"
+              }
+            }
+            """.formatted(eventId, orderId, orderId, orderId);
+    }
+
+    private void insertDelayedPayment(String orderId) {
+        jdbcClient.sql("""
+                insert into payments (
+                  payment_id, order_id, amount, method, status, failure_reason,
+                  idempotency_key, created_at, updated_at
+                )
+                values (
+                  gen_random_uuid(), :orderId, 24000.00, 'DELAY_CARD', 'DELAYED', 'PAYMENT_DELAYED',
+                  :idempotencyKey, now(), now()
+                )
+                """)
+            .param("orderId", orderId)
+            .param("idempotencyKey", "idem-payment-delay-before-cancel-" + orderId)
+            .update();
     }
 
     private int countOutbox(String orderId, String eventType) {

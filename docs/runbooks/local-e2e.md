@@ -203,13 +203,37 @@ curl -sS http://localhost:18083/api/orders/"$DELAY_ORDER_ID"
 - Order Service가 이벤트를 소비하고 Saga 상태가 `PAYMENT_DELAYED`로 전환됨
 - 주문 상태는 `CREATED`로 유지되고 `OrderCancelled`/`OrderConfirmed`는 발행되지 않음
 
+## 지연 결제 관리자 취소 시나리오
+
+`DELAY_CARD` 주문에 대해 운영자가 결제 취소를 요청하고 재고가 복구되는지 확인한다.
+
+```bash
+curl -sS -X POST http://localhost:18083/api/admin/orders/"$DELAY_ORDER_ID"/cancel \
+  -H 'Idempotency-Key: admin-cancel-delaycard-demo-001'
+```
+
+상태 조회:
+
+```bash
+curl -sS http://localhost:18083/api/orders/"$DELAY_ORDER_ID"
+curl -sS http://localhost:18082/api/stocks/"$SKU_ID"
+```
+
+예상 결과:
+
+- Order outbox에 `PaymentCancelRequested` command가 기록됨
+- Payment Service가 `PaymentCanceled` 이벤트를 발행함
+- Order Service가 `PaymentCanceled`를 소비하고 `OrderCancelled`를 발행함
+- Inventory Service가 `OrderCancelled`를 소비해 예약 재고를 복구함
+- 주문 상태는 `CANCELLED`, Saga 상태는 `FAILED`가 됨
+
 ## Admin App 확인 항목
 
 Admin App에서 아래 화면을 순차적으로 확인한다.
 
 - 상품 조회/관리: 상품 등록/수정 화면에서 데모 상품 존재 확인
 - 재고 관리: `DEMO-001`의 SKU 재고 수량, 예약 수량 확인
-- 주문 운영: 주문 목록에서 `CARD`/`FAIL_CARD`/`DELAY_CARD` 주문의 상태 표시
+- 주문 운영: 주문 목록에서 `CARD`/`FAIL_CARD`/`DELAY_CARD` 주문의 상태 표시와 지연 결제 취소 버튼 확인
 - Saga 상세: 실패 주문 상세에서 실패 지점과 마지막 이벤트 확인
 - Outbox 운영:
   - 주문/재고/결제 서비스별 outbox 이벤트 목록 조회
@@ -225,6 +249,7 @@ Admin App에서 아래 화면을 순차적으로 확인한다.
 - [ ] `FAIL_CARD` 주문에서 주문이 `CANCELLED`/`FAILED` 전환
 - [ ] `FAIL_CARD` 실행 후 SKU 재고가 결제 전 수량 기준으로 복구
 - [ ] `DELAY_CARD` 주문에서 주문이 `CREATED`/`PAYMENT_DELAYED`로 유지
+- [ ] 지연 결제 취소 요청 후 주문이 `CANCELLED`/`FAILED`로 전환되고 SKU 재고가 복구
 - [ ] outbox에서 PENDING 이벤트가 장기 체류하지 않고 처리됨
 - [ ] Kafka UI에서 관련 토픽 이벤트가 발행/소비되는지 확인
 
@@ -246,5 +271,5 @@ Admin App에서 아래 화면을 순차적으로 확인한다.
 ## Current Limits
 
 - 인증/권한은 공개 버전 범위 외로 처리되지 않았습니다.
-- 결제 취소와 지연 후 재시도 같은 운영 극한 케이스는 확장 단계로 남아 있습니다.
+- 지연 후 재시도 같은 운영 극한 케이스는 확장 단계로 남아 있습니다.
 - 게이트웨이는 기본 진입점으로 유지되며, 현재 시나리오 검증은 서비스 포트 기준 호출을 중심으로 수행합니다.

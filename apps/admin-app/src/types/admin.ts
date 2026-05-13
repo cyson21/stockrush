@@ -42,6 +42,12 @@ export type AdminOrderSaga = {
   outboxAttempts: number;
 };
 
+export type AdminOrderCancelResult = {
+  orderId: string;
+  status: string;
+  sagaStatus: string;
+};
+
 export type OutboxEvent = {
   eventId: string;
   aggregateType: string;

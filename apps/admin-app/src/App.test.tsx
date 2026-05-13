@@ -282,6 +282,169 @@ describe('admin app operations', () => {
     expect(screen.getByText('OrderCancelled')).toBeInTheDocument();
   });
 
+  it('requests cancel for a payment delayed order', async () => {
+    const user = userEvent.setup();
+    fetchMock.mockImplementation((input, init) => {
+      const request = new URL(String(input), 'http://localhost:5173');
+      const method = init?.method ?? 'GET';
+
+      if (request.pathname === '/orders/api/admin/orders' && method === 'GET') {
+        return toJsonResponse(
+          buildResponse(true, {
+            page: 0,
+            size: 20,
+            items: [
+              {
+                orderId: 'ord_admin_delay_001',
+                memberId: 'member-delay',
+                status: 'CREATED',
+                sagaStatus: 'PAYMENT_DELAYED',
+                paymentMethod: 'DELAY_CARD',
+                totalAmount: 24000,
+                itemCount: 1,
+                createdAt: '2026-05-13T00:10:00Z',
+                updatedAt: '2026-05-13T00:11:00Z',
+              },
+            ],
+          }),
+          200,
+        );
+      }
+
+      if (request.pathname === '/orders/api/admin/orders/ord_admin_delay_001/saga' && method === 'GET') {
+        return toJsonResponse(
+          buildResponse(true, {
+            orderId: 'ord_admin_delay_001',
+            orderStatus: 'CREATED',
+            sagaStatus: 'PAYMENT_DELAYED',
+            failedAt: null,
+            businessReason: 'PAYMENT_DELAYED',
+            technicalErrorMessage: null,
+            lastEventType: 'PaymentAuthorizationDelayed',
+            outboxAttempts: 0,
+          }),
+          200,
+        );
+      }
+
+      if (request.pathname === '/orders/api/admin/orders/ord_admin_delay_001/cancel' && method === 'POST') {
+        expect(headerValue(init?.headers, 'Idempotency-Key')).toMatch(/^admin-order-cancel-/);
+        return toJsonResponse(
+          buildResponse(true, {
+            orderId: 'ord_admin_delay_001',
+            status: 'CREATED',
+            sagaStatus: 'PAYMENT_CANCEL_REQUESTED',
+          }),
+          202,
+        );
+      }
+
+      return defaultRequestHandler(input, init);
+    });
+
+    render(<App />);
+
+    expect(await screen.findByText('ord_admin_delay_001')).toBeInTheDocument();
+    await user.click(await screen.findByRole('button', { name: '결제 취소 요청' }));
+
+    await waitFor(() => {
+      expect(screen.getByText('ord_admin_delay_001 결제 취소 요청이 접수되었습니다.')).toBeInTheDocument();
+    });
+
+    expect(screen.getAllByText('PAYMENT_CANCEL_REQUESTED').length).toBeGreaterThanOrEqual(1);
+    const cancelCalls = fetchMock.mock.calls.filter(
+      ([url, init]) =>
+        String(url).includes('/orders/api/admin/orders/ord_admin_delay_001/cancel') &&
+        (init?.method ?? 'GET') === 'POST',
+    );
+    expect(cancelCalls.length).toBe(1);
+  });
+
+  it('reuses cancel idempotency key when delayed order cancel is retried', async () => {
+    const user = userEvent.setup();
+    let attempt = 0;
+    const idempotencyKeys: string[] = [];
+    fetchMock.mockImplementation((input, init) => {
+      const request = new URL(String(input), 'http://localhost:5173');
+      const method = init?.method ?? 'GET';
+
+      if (request.pathname === '/orders/api/admin/orders' && method === 'GET') {
+        return toJsonResponse(
+          buildResponse(true, {
+            page: 0,
+            size: 20,
+            items: [
+              {
+                orderId: 'ord_admin_delay_retry_001',
+                memberId: 'member-delay',
+                status: 'CREATED',
+                sagaStatus: 'PAYMENT_DELAYED',
+                paymentMethod: 'DELAY_CARD',
+                totalAmount: 24000,
+                itemCount: 1,
+                createdAt: '2026-05-13T00:10:00Z',
+                updatedAt: '2026-05-13T00:11:00Z',
+              },
+            ],
+          }),
+          200,
+        );
+      }
+
+      if (request.pathname === '/orders/api/admin/orders/ord_admin_delay_retry_001/saga' && method === 'GET') {
+        return toJsonResponse(
+          buildResponse(true, {
+            orderId: 'ord_admin_delay_retry_001',
+            orderStatus: 'CREATED',
+            sagaStatus: 'PAYMENT_DELAYED',
+            failedAt: null,
+            businessReason: 'PAYMENT_DELAYED',
+            technicalErrorMessage: null,
+            lastEventType: 'PaymentAuthorizationDelayed',
+            outboxAttempts: 0,
+          }),
+          200,
+        );
+      }
+
+      if (request.pathname === '/orders/api/admin/orders/ord_admin_delay_retry_001/cancel' && method === 'POST') {
+        attempt += 1;
+        idempotencyKeys.push(headerValue(init?.headers, 'Idempotency-Key'));
+        if (attempt === 1) {
+          return buildErrorResponse('NETWORK', '잠시 후 다시 시도하세요');
+        }
+
+        return toJsonResponse(
+          buildResponse(true, {
+            orderId: 'ord_admin_delay_retry_001',
+            status: 'CREATED',
+            sagaStatus: 'PAYMENT_CANCEL_REQUESTED',
+          }),
+          202,
+        );
+      }
+
+      return defaultRequestHandler(input, init);
+    });
+
+    render(<App />);
+
+    expect(await screen.findByText('ord_admin_delay_retry_001')).toBeInTheDocument();
+    await user.click(await screen.findByRole('button', { name: '결제 취소 요청' }));
+    await waitFor(() => {
+      expect(screen.getByText(/잠시 후 다시 시도하세요/)).toBeInTheDocument();
+    });
+
+    await user.click(await screen.findByRole('button', { name: '결제 취소 요청' }));
+    await waitFor(() => {
+      expect(screen.getByText('ord_admin_delay_retry_001 결제 취소 요청이 접수되었습니다.')).toBeInTheDocument();
+    });
+
+    expect(idempotencyKeys).toHaveLength(2);
+    expect(idempotencyKeys[0]).toHaveLength(idempotencyKeys[1].length);
+    expect(idempotencyKeys[0]).toBe(idempotencyKeys[1]);
+  });
+
   it('lists outbox events for inventory and shows retry result', async () => {
     const user = userEvent.setup();
     render(<App />);

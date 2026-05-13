@@ -21,6 +21,7 @@ public class PaymentAuthorizationHandler {
     private static final String DELAY_CARD_METHOD = "DELAY_CARD";
     private static final String PAYMENT_DECLINED_REASON = "PAYMENT_DECLINED";
     private static final String PAYMENT_DELAYED_REASON = "PAYMENT_DELAYED";
+    private static final String PAYMENT_CANCELED_REASON = "PAYMENT_CANCELED";
 
     private final JdbcClient jdbcClient;
     private final ObjectMapper objectMapper;
@@ -105,6 +106,44 @@ public class PaymentAuthorizationHandler {
         );
     }
 
+    @Transactional
+    public void handleCancel(KafkaEventEnvelope<PaymentCancelRequestedPayload> event) {
+        if (!markProcessed(event)) {
+            return;
+        }
+
+        PaymentToCancel payment = findPaymentToCancel(event.payload().orderId());
+        if ("CANCELED".equals(payment.status())) {
+            return;
+        }
+        if (!"DELAYED".equals(payment.status())) {
+            throw new IllegalArgumentException("Only delayed payments can be canceled.");
+        }
+
+        jdbcClient.sql("""
+                update payments
+                set status = 'CANCELED',
+                    failure_reason = :reason,
+                    updated_at = now()
+                where order_id = :orderId
+                """)
+            .param("reason", PAYMENT_CANCELED_REASON)
+            .param("orderId", event.payload().orderId())
+            .update();
+
+        writeOutbox(
+            event,
+            "PaymentCanceled",
+            new PaymentCanceledPayload(
+                event.payload().orderId(),
+                payment.amount(),
+                payment.method(),
+                PAYMENT_CANCELED_REASON,
+                clock.instant()
+            )
+        );
+    }
+
     private String paymentStatus(boolean failedAuthorization, boolean delayedAuthorization) {
         if (failedAuthorization) {
             return "FAILED";
@@ -125,7 +164,7 @@ public class PaymentAuthorizationHandler {
         return null;
     }
 
-    private boolean markProcessed(KafkaEventEnvelope<PaymentAuthorizationRequestedPayload> event) {
+    private boolean markProcessed(KafkaEventEnvelope<?> event) {
         int inserted = jdbcClient.sql("""
                 insert into processed_events (
                   event_id, consumer_group, event_type, aggregate_id, idempotency_key, processed_at
@@ -143,8 +182,25 @@ public class PaymentAuthorizationHandler {
         return inserted == 1;
     }
 
+    private PaymentToCancel findPaymentToCancel(String orderId) {
+        return jdbcClient.sql("""
+                select amount, method, status
+                from payments
+                where order_id = :orderId
+                for update
+                """)
+            .param("orderId", orderId)
+            .query((rs, rowNum) -> new PaymentToCancel(
+                rs.getBigDecimal("amount"),
+                rs.getString("method"),
+                rs.getString("status")
+            ))
+            .optional()
+            .orElseThrow(() -> new IllegalArgumentException("payment not found: " + orderId));
+    }
+
     private void writeOutbox(
-        KafkaEventEnvelope<PaymentAuthorizationRequestedPayload> source,
+        KafkaEventEnvelope<?> source,
         String eventType,
         Object payload
     ) {
@@ -181,5 +237,8 @@ public class PaymentAuthorizationHandler {
 
     private SqlParameterValue jsonb(String json) {
         return new SqlParameterValue(Types.OTHER, json);
+    }
+
+    private record PaymentToCancel(java.math.BigDecimal amount, String method, String status) {
     }
 }

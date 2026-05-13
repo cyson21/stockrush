@@ -49,9 +49,11 @@ Kafka events use a common envelope with event-specific payloads.
 | `InventoryReserved` | `stockrush.inventory.events.v1` | inventory-service | order-service |
 | `InventoryReservationFailed` | `stockrush.inventory.events.v1` | inventory-service | order-service |
 | `PaymentAuthorizationRequested` | `stockrush.payment.commands.v1` | order-service | payment-service |
+| `PaymentCancelRequested` | `stockrush.payment.commands.v1` | order-service | payment-service |
 | `PaymentAuthorized` | `stockrush.payment.events.v1` | payment-service | order-service |
 | `PaymentAuthorizationFailed` | `stockrush.payment.events.v1` | payment-service | order-service |
 | `PaymentAuthorizationDelayed` | `stockrush.payment.events.v1` | payment-service | order-service |
+| `PaymentCanceled` | `stockrush.payment.events.v1` | payment-service | order-service |
 | `OrderConfirmed` | `stockrush.order.events.v1` | order-service | inventory-service, read models |
 | `OrderCancelled` | `stockrush.order.events.v1` | order-service | inventory-service, read models |
 | `InventoryReservationConfirmed` | `stockrush.inventory.events.v1` | inventory-service | operations/read models |
@@ -69,12 +71,15 @@ Kafka events use a common envelope with event-specific payloads.
 | Event | Required payload fields |
 |---|---|
 | `PaymentAuthorizationRequested` | `orderId`, `amount`, `method` |
+| `PaymentCancelRequested` | `orderId`, `reason`, `requestedAt` |
 | `PaymentAuthorized` | `paymentId`, `orderId`, `amount`, `method`, `authorizedAt` |
 | `PaymentAuthorizationFailed` | `orderId`, `amount`, `method`, `reason`, `failedAt` |
 | `PaymentAuthorizationDelayed` | `orderId`, `amount`, `method`, `reason`, `delayedAt` |
+| `PaymentCanceled` | `orderId`, `amount`, `method`, `reason`, `canceledAt` |
 
 `PaymentAuthorizationRequested.method` is stored from the order request. If omitted, Order Service uses `CARD`. The `FAIL_CARD` method is reserved for deterministic local failure simulation and produces `PaymentAuthorizationFailed` with reason `PAYMENT_DECLINED`.
 The `DELAY_CARD` method is reserved for deterministic local delay simulation and produces `PaymentAuthorizationDelayed` with reason `PAYMENT_DELAYED`.
+Admin cancellation for delayed orders produces `PaymentCancelRequested`, then Payment Service updates the delayed payment to `CANCELED` and emits `PaymentCanceled` with reason `PAYMENT_CANCELED`.
 
 ## Phase 1 Inventory Finalization Notes
 
