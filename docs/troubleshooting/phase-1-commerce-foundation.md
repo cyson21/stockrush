@@ -67,14 +67,14 @@
 | 재발 방지 | README 검증 요약에 Gateway 기준 검증 여부를 별도 표기하고, gateway routing이 추가되면 runbook 예시를 gateway URL로 전환 |
 | 근거 | [README](../../README.md), [Local E2E Runbook](../runbooks/local-e2e.md), [Gateway README](../../services/gateway/README.md), [Test Strategy](../test-strategy.md) |
 
-### 7. 동시 주문 경합 자동 테스트가 아직 없음
+### 7. 동시 주문 경합 E2E/부하 검증은 아직 부족함
 
 | 항목 | 내용 |
 |---|---|
-| 증상 | 실제 트래픽이 몰리는 상황에서 과다 선점, 음수 재고, 중복 command window를 자동 테스트로 반복 재현하지 못함 |
-| 원인 | 구현은 SKU별 수량 합산, row lock, 조건부 차감까지 적용했지만 명시적 race test는 후속 범위로 남김 |
-| 보강 방향 | 동일 SKU에 대해 동시 주문을 여러 개 던지고 `availableQuantity`, `reservedQuantity`, 주문 결과 수를 함께 검증하는 회귀 테스트 추가 |
-| 재발 방지 | 재고 선점 로직을 수정할 때마다 단일 주문 테스트와 동시 경합 테스트를 같이 실행 |
+| 증상 | 서비스 단위 동일 SKU 경합은 회귀 테스트로 고정했지만, 실제 서비스 전체를 기동한 E2E/부하 수준의 경합 검증은 아직 부족함 |
+| 원인 | 먼저 Inventory handler의 row lock과 조건부 차감 동작을 PostgreSQL 통합 테스트로 고정했고, API/Kafka까지 포함한 부하 검증은 후속 범위로 남김 |
+| 보강 방향 | 동일 SKU에 대해 주문 API를 여러 개 병렬 호출하고 주문 결과, 재고 수량, outbox 상태를 함께 검증하는 E2E/부하 테스트 추가 |
+| 재발 방지 | 재고 선점 로직을 수정할 때마다 단일 주문 테스트, 동일 SKU 동시 주문 회귀 테스트, E2E 경합 체크리스트를 같이 실행 |
 
 ### 8. Kafka 장애와 장기 체류 Outbox 복구 자동화가 아직 부족함
 
@@ -110,7 +110,7 @@
 - “모든 API 경로를 Gateway 기준으로 검증했다.”
   - 현재 증거는 서비스 포트 직접 호출과 Vite proxy 검증 중심이다.
 - “동시 주문 경합은 완전히 증명됐다.”
-  - row lock과 조건부 차감 구현은 있지만, 명시적 race test는 아직 남아 있다.
+  - 서비스 단위 동일 SKU race test는 있지만, API/Kafka를 포함한 E2E/부하 검증은 아직 남아 있다.
 - “Kafka 장애가 나도 자동으로 항상 복구된다.”
   - Outbox retry/failed 전이는 검증했지만 broker 장애 주입 자동화는 아직 부족하다.
 - “운영자가 실패 Outbox를 즉시 재처리 상태로 바꿀 수 있다.”
@@ -121,7 +121,7 @@
 ## 다음 보강 순서
 
 1. Gateway 기준 주문 생성/조회 smoke test 추가
-2. 동일 SKU 동시 주문 경합 테스트 추가
+2. 동일 SKU 동시 주문 E2E/부하 테스트 추가
 3. Kafka 장애 주입과 outbox 장기 체류 복구 runbook 확장
 4. `FAILED -> PENDING` 운영 액션 설계와 권한/감사 로그 추가
 5. 관리자 API 인증/권한 테스트 추가

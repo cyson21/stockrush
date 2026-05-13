@@ -1,12 +1,18 @@
 package com.stockrush.inventory.application;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.stockrush.inventory.infra.kafka.KafkaEventEnvelope;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -28,6 +34,8 @@ class InventoryReservationHandlerIntegrationTest {
     private static final UUID ORDER_CONFIRMED_EVENT_ID = UUID.fromString("018f8d0b-8d32-7c42-9f1b-78328e0f7b02");
     private static final UUID ORDER_CANCELLED_EVENT_ID = UUID.fromString("018f8d0b-8d32-7c42-9f1b-78328e0f7b03");
     private static final UUID ORDER_OVER_REQUESTED_EVENT_ID = UUID.fromString("018f8d0b-8d32-7c42-9f1b-78328e0f7b04");
+    private static final UUID ORDER_CONCURRENT_FIRST_EVENT_ID = UUID.fromString("018f8d0b-8d32-7c42-9f1b-78328e0f7b05");
+    private static final UUID ORDER_CONCURRENT_SECOND_EVENT_ID = UUID.fromString("018f8d0b-8d32-7c42-9f1b-78328e0f7b06");
 
     @Autowired
     private InventoryReservationHandler handler;
@@ -79,6 +87,44 @@ class InventoryReservationHandlerIntegrationTest {
         assertEquals(1, queryInt("select count(*) from processed_events where event_id = '" + ORDER_OVER_REQUESTED_EVENT_ID + "'"));
         assertEquals("InventoryReservationFailed", queryString("select event_type from outbox_events"));
         assertEquals("INSUFFICIENT_STOCK", queryString("select payload ->> 'reason' from outbox_events"));
+    }
+
+    @Test
+    void reserves_only_available_quantity_when_same_sku_orders_arrive_concurrently() throws Exception {
+        KafkaEventEnvelope<OrderCreatedPayload> firstOrder = orderCreatedWithItems(
+            "ord_inventory_concurrent_001",
+            ORDER_CONCURRENT_FIRST_EVENT_ID,
+            List.of(new OrderCreatedItemPayload("LIMITED-001", "SKU-001", 4, new BigDecimal("12000.00"))),
+            new BigDecimal("48000.00")
+        );
+        KafkaEventEnvelope<OrderCreatedPayload> secondOrder = orderCreatedWithItems(
+            "ord_inventory_concurrent_002",
+            ORDER_CONCURRENT_SECOND_EVENT_ID,
+            List.of(new OrderCreatedItemPayload("LIMITED-001", "SKU-001", 4, new BigDecimal("12000.00"))),
+            new BigDecimal("48000.00")
+        );
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        try {
+            Future<?> first = executor.submit(() -> handleAfterStart(firstOrder, ready, start));
+            Future<?> second = executor.submit(() -> handleAfterStart(secondOrder, ready, start));
+
+            assertTrue(ready.await(5, TimeUnit.SECONDS));
+            start.countDown();
+            first.get(10, TimeUnit.SECONDS);
+            second.get(10, TimeUnit.SECONDS);
+        } finally {
+            executor.shutdownNow();
+        }
+
+        assertEquals(1, queryInt("select available_quantity from stock_items where sku_id = 'SKU-001'"));
+        assertEquals(4, queryInt("select reserved_quantity from stock_items where sku_id = 'SKU-001'"));
+        assertEquals(1, queryInt("select count(*) from stock_reservations where sku_id = 'SKU-001' and status = 'RESERVED'"));
+        assertEquals(2, queryInt("select count(*) from processed_events where event_type = 'OrderCreated'"));
+        assertEquals(1, queryInt("select count(*) from outbox_events where event_type = 'InventoryReserved'"));
+        assertEquals(1, queryInt("select count(*) from outbox_events where event_type = 'InventoryReservationFailed'"));
+        assertEquals(0, queryInt("select count(*) from stock_items where available_quantity < 0 or reserved_quantity < 0"));
     }
 
     @Test
@@ -198,6 +244,21 @@ class InventoryReservationHandlerIntegrationTest {
                 Instant.parse("2026-05-12T16:00:00Z")
             )
         );
+    }
+
+    private void handleAfterStart(
+        KafkaEventEnvelope<OrderCreatedPayload> event,
+        CountDownLatch ready,
+        CountDownLatch start
+    ) {
+        ready.countDown();
+        try {
+            assertTrue(start.await(5, TimeUnit.SECONDS));
+            handler.handle(event);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("interrupted while waiting for concurrent reservation start", e);
+        }
     }
 
     private void insertReservedStock(String orderId, int availableQuantity, int reservedQuantity) {

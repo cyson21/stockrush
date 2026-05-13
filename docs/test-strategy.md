@@ -59,6 +59,7 @@ Local end-to-end verification follows [Local E2E Runbook](runbooks/local-e2e.md)
 | `FAIL_CARD` cancellation and stock release | Payment failure, Order cancellation, Inventory release tests | `FAIL_CARD 실패 시나리오 + 재고 복구` |
 | `DELAY_CARD` delayed payment | Payment delay, Order `PAYMENT_DELAYED`, Customer App delayed state tests | `DELAY_CARD 지연 시나리오` |
 | Admin delayed payment cancellation | Admin cancel API, `PaymentCancelRequested`, `PaymentCanceled`, Admin App retry key tests | `지연 결제 관리자 취소 시나리오` |
+| Concurrent same-SKU reservation | Inventory handler PostgreSQL integration race test | E2E/load scenario remains future scope |
 | Outbox retry and relay | Service-local outbox relay tests | Admin App outbox operation checklist |
 | Event duplicate handling | `processed_events` and replay tests in Order/Payment handlers | Outbox and Kafka UI checks |
 
@@ -76,7 +77,7 @@ Local end-to-end verification follows [Local E2E Runbook](runbooks/local-e2e.md)
 These are known gaps, not hidden assumptions.
 
 - Gateway has no routing test yet; current E2E calls service ports directly.
-- Explicit concurrent race tests are still missing for high-contention stock reservation and duplicate command windows.
+- Inventory handler has a focused same-SKU concurrent reservation regression test; full E2E/load concurrency testing and duplicate command race windows remain future scope.
 - Kafka broker outage and long-lived `PENDING`/`FAILED` recovery scenarios are documented but not fully automated.
 - Authentication and authorization tests are outside the current public slice.
 - Customer API documentation is now separated from runbook examples, but inventory customer query docs can still be expanded later.
