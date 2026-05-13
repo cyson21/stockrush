@@ -55,9 +55,9 @@ docker compose ps
 ```bash
 cd services/gateway && mvn spring-boot:run
 cd services/catalog-service && mvn spring-boot:run
-cd services/inventory-service && mvn spring-boot:run
-cd services/order-service && mvn spring-boot:run
-cd services/payment-service && mvn spring-boot:run
+cd services/inventory-service && STOCKRUSH_KAFKA_LISTENERS_ENABLED=true mvn spring-boot:run
+cd services/order-service && STOCKRUSH_KAFKA_LISTENERS_ENABLED=true mvn spring-boot:run
+cd services/payment-service && STOCKRUSH_KAFKA_LISTENERS_ENABLED=true mvn spring-boot:run
 ```
 
 2. Start frontend apps.

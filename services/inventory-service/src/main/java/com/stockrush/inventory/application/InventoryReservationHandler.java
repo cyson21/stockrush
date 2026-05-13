@@ -5,6 +5,8 @@ import java.sql.Types;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
+import java.util.TreeMap;
 import java.util.UUID;
 import java.util.function.Supplier;
 import org.springframework.jdbc.core.SqlParameterValue;
@@ -44,7 +46,7 @@ public class InventoryReservationHandler {
         }
 
         OrderCreatedPayload payload = event.payload();
-        if (!hasEnoughStock(payload.items())) {
+        if (!lockStockAndHasEnoughQuantity(payload.items())) {
             writeReservationFailed(event, "INSUFFICIENT_STOCK");
             return;
         }
@@ -176,37 +178,49 @@ public class InventoryReservationHandler {
             .update();
     }
 
-    private boolean hasEnoughStock(List<OrderCreatedItemPayload> items) {
-        for (OrderCreatedItemPayload item : items) {
-            int availableRows = jdbcClient.sql("""
-                    select count(*)
+    private boolean lockStockAndHasEnoughQuantity(List<OrderCreatedItemPayload> items) {
+        for (Map.Entry<String, Integer> requested : requestedQuantityBySku(items).entrySet()) {
+            int availableQuantity = jdbcClient.sql("""
+                    select available_quantity
                     from stock_items
                     where sku_id = :skuId
-                      and available_quantity >= :quantity
+                    for update
                     """)
-                .param("skuId", item.skuId())
-                .param("quantity", item.quantity())
+                .param("skuId", requested.getKey())
                 .query(Integer.class)
-                .single();
-            if (availableRows == 0) {
+                .optional()
+                .orElse(-1);
+            if (availableQuantity < requested.getValue()) {
                 return false;
             }
         }
         return true;
     }
 
+    private Map<String, Integer> requestedQuantityBySku(List<OrderCreatedItemPayload> items) {
+        Map<String, Integer> quantityBySku = new TreeMap<>();
+        for (OrderCreatedItemPayload item : items) {
+            quantityBySku.merge(item.skuId(), item.quantity(), Integer::sum);
+        }
+        return quantityBySku;
+    }
+
     private void reserve(String orderId, OrderCreatedItemPayload item) {
-        jdbcClient.sql("""
+        int updatedRows = jdbcClient.sql("""
                 update stock_items
                 set available_quantity = available_quantity - :quantity,
                     reserved_quantity = reserved_quantity + :quantity,
                     version = version + 1,
                     updated_at = now()
                 where sku_id = :skuId
+                  and available_quantity >= :quantity
                 """)
             .param("quantity", item.quantity())
             .param("skuId", item.skuId())
             .update();
+        if (updatedRows != 1) {
+            throw new IllegalStateException("stock reservation failed after quantity check");
+        }
 
         jdbcClient.sql("""
                 insert into stock_reservations (

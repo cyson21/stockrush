@@ -4,6 +4,7 @@ import com.stockrush.inventory.application.InventoryReservationHandler;
 import com.stockrush.inventory.application.OrderCancelledPayload;
 import com.stockrush.inventory.application.OrderConfirmedPayload;
 import com.stockrush.inventory.application.OrderCreatedPayload;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 import tools.jackson.core.JacksonException;
@@ -11,6 +12,7 @@ import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.ObjectMapper;
 
 @Component
+@ConditionalOnProperty(name = "stockrush.kafka.listeners.enabled", havingValue = "true")
 class InventoryOrderEventConsumer {
 
     private final ObjectMapper objectMapper;

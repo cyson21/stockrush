@@ -18,13 +18,16 @@ import org.springframework.test.context.TestPropertySource;
 @TestPropertySource(properties = {
     "spring.datasource.url=jdbc:postgresql://localhost:15432/stockrush?currentSchema=inventory",
     "spring.datasource.username=stockrush",
-    "spring.datasource.password=stockrush"
+    "spring.datasource.password=stockrush",
+    "stockrush.kafka.listeners.enabled=false",
+    "spring.kafka.listener.auto-startup=false"
 })
 class InventoryReservationHandlerIntegrationTest {
 
     private static final UUID ORDER_EVENT_ID = UUID.fromString("018f8d0b-8d32-7c42-9f1b-78328e0f7b01");
     private static final UUID ORDER_CONFIRMED_EVENT_ID = UUID.fromString("018f8d0b-8d32-7c42-9f1b-78328e0f7b02");
     private static final UUID ORDER_CANCELLED_EVENT_ID = UUID.fromString("018f8d0b-8d32-7c42-9f1b-78328e0f7b03");
+    private static final UUID ORDER_OVER_REQUESTED_EVENT_ID = UUID.fromString("018f8d0b-8d32-7c42-9f1b-78328e0f7b04");
 
     @Autowired
     private InventoryReservationHandler handler;
@@ -56,6 +59,26 @@ class InventoryReservationHandlerIntegrationTest {
         assertEquals(1, queryInt("select count(*) from processed_events where event_id = '" + ORDER_EVENT_ID + "'"));
         assertEquals("InventoryReserved", queryString("select event_type from outbox_events"));
         assertEquals("PENDING", queryString("select status from outbox_events"));
+    }
+
+    @Test
+    void fails_reservation_when_same_sku_items_exceed_available_stock_in_total() {
+        handler.handle(orderCreatedWithItems(
+            "ord_inventory_over_requested_001",
+            ORDER_OVER_REQUESTED_EVENT_ID,
+            List.of(
+                new OrderCreatedItemPayload("LIMITED-001", "SKU-001", 4, new BigDecimal("12000.00")),
+                new OrderCreatedItemPayload("LIMITED-001", "SKU-001", 4, new BigDecimal("12000.00"))
+            ),
+            new BigDecimal("96000.00")
+        ));
+
+        assertEquals(5, queryInt("select available_quantity from stock_items where sku_id = 'SKU-001'"));
+        assertEquals(0, queryInt("select reserved_quantity from stock_items where sku_id = 'SKU-001'"));
+        assertEquals(0, queryInt("select count(*) from stock_reservations where order_id = 'ord_inventory_over_requested_001'"));
+        assertEquals(1, queryInt("select count(*) from processed_events where event_id = '" + ORDER_OVER_REQUESTED_EVENT_ID + "'"));
+        assertEquals("InventoryReservationFailed", queryString("select event_type from outbox_events"));
+        assertEquals("INSUFFICIENT_STOCK", queryString("select payload ->> 'reason' from outbox_events"));
     }
 
     @Test
@@ -103,22 +126,36 @@ class InventoryReservationHandlerIntegrationTest {
     }
 
     private KafkaEventEnvelope<OrderCreatedPayload> orderCreated() {
-        return new KafkaEventEnvelope<>(
+        return orderCreatedWithItems(
+            "ord_inventory_001",
             ORDER_EVENT_ID,
+            List.of(new OrderCreatedItemPayload("LIMITED-001", "SKU-001", 2, new BigDecimal("12000.00"))),
+            new BigDecimal("24000.00")
+        );
+    }
+
+    private KafkaEventEnvelope<OrderCreatedPayload> orderCreatedWithItems(
+        String orderId,
+        UUID eventId,
+        List<OrderCreatedItemPayload> items,
+        BigDecimal totalAmount
+    ) {
+        return new KafkaEventEnvelope<>(
+            eventId,
             "OrderCreated",
             1,
             "order",
-            "ord_inventory_001",
-            "corr-inventory-001",
+            orderId,
+            "corr-" + orderId,
             null,
-            "idem-inventory-001",
+            "idem-" + orderId,
             Instant.parse("2026-05-12T15:00:00Z"),
             "order-service",
             new OrderCreatedPayload(
-                "ord_inventory_001",
+                orderId,
                 "member-1",
-                List.of(new OrderCreatedItemPayload("LIMITED-001", "SKU-001", 2, new BigDecimal("12000.00"))),
-                new BigDecimal("24000.00"),
+                items,
+                totalAmount,
                 Instant.parse("2026-05-12T15:00:00Z")
             )
         );

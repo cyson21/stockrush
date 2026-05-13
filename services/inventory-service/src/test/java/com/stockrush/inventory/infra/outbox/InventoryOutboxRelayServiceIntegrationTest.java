@@ -29,7 +29,9 @@ import tools.jackson.databind.ObjectMapper;
 @TestPropertySource(properties = {
     "spring.datasource.url=jdbc:postgresql://localhost:15432/stockrush?currentSchema=inventory",
     "spring.datasource.username=stockrush",
-    "spring.datasource.password=stockrush"
+    "spring.datasource.password=stockrush",
+    "stockrush.kafka.listeners.enabled=false",
+    "spring.kafka.listener.auto-startup=false"
 })
 class InventoryOutboxRelayServiceIntegrationTest {
 

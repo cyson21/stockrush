@@ -2,6 +2,7 @@ package com.stockrush.inventory.infra.kafka;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+import com.stockrush.inventory.application.InventoryReservationHandler;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -9,12 +10,15 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.context.TestPropertySource;
+import tools.jackson.databind.ObjectMapper;
 
 @SpringBootTest
 @TestPropertySource(properties = {
     "spring.datasource.url=jdbc:postgresql://localhost:15432/stockrush?currentSchema=inventory",
     "spring.datasource.username=stockrush",
-    "spring.datasource.password=stockrush"
+    "spring.datasource.password=stockrush",
+    "stockrush.kafka.listeners.enabled=false",
+    "spring.kafka.listener.auto-startup=false"
 })
 class InventoryOrderEventConsumerIntegrationTest {
 
@@ -23,14 +27,20 @@ class InventoryOrderEventConsumerIntegrationTest {
     private static final String ORDER_ID = "ord_inventory_consumer_001";
     private static final String SKU_ID = "SKU-CONSUMER-001";
 
-    @Autowired
     private InventoryOrderEventConsumer consumer;
 
     @Autowired
     private JdbcClient jdbcClient;
 
+    @Autowired
+    private ObjectMapper objectMapper;
+
+    @Autowired
+    private InventoryReservationHandler handler;
+
     @BeforeEach
     void setUp() {
+        consumer = new InventoryOrderEventConsumer(objectMapper, handler);
         jdbcClient.sql("delete from outbox_events").update();
         jdbcClient.sql("delete from processed_events").update();
         jdbcClient.sql("delete from stock_reservations").update();

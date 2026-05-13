@@ -23,9 +23,16 @@ export JAVA_HOME=$(/usr/libexec/java_home -v 17)
 ## Service Run Shape
 
 ```bash
-cd services/order-service
+cd services/<service-name>
 mvn spring-boot:run
 ```
 
-First run may download Maven dependencies.
+Event-consuming services need Kafka listeners enabled for local E2E flows.
 
+```bash
+cd services/inventory-service && STOCKRUSH_KAFKA_LISTENERS_ENABLED=true mvn spring-boot:run
+cd services/order-service && STOCKRUSH_KAFKA_LISTENERS_ENABLED=true mvn spring-boot:run
+cd services/payment-service && STOCKRUSH_KAFKA_LISTENERS_ENABLED=true mvn spring-boot:run
+```
+
+First run may download Maven dependencies.
