@@ -87,7 +87,7 @@ curl -sSf http://localhost:18084/actuator/health
 
 ## Gateway 주문 라우팅 Smoke
 
-Gateway는 주문 생성/조회 라우팅 smoke를 제공한다. 실제 주문 Saga E2E는 아직 서비스 포트 직접 호출 기준이지만, Gateway가 Order Service로 method, path, body, 핵심 헤더와 응답을 전달하는지는 테스트로 고정했다.
+Gateway는 주문 생성/조회 라우팅 smoke를 제공한다. 이 테스트는 Gateway가 Order Service로 method, path, body, 핵심 헤더와 응답을 전달하는지를 fake upstream으로 고정한다.
 
 ```bash
 cd services/gateway
@@ -108,7 +108,7 @@ JAVA_HOME=/Users/chanyang.son/Library/Java/JavaVirtualMachines/ms-17.0.18/Conten
   --max-attempts 12
 ```
 
-이 runner는 같은 SKU로 주문 생성 API를 병렬 호출한 뒤, 서비스별 outbox retry API를 순차 호출해 최종 주문/재고/outbox 상태를 확인한다. 로컬 회귀 확인용이며 외부 부하 벤치마크나 Kafka consumer 병렬성 검증으로 해석하지 않는다.
+이 runner는 같은 SKU로 주문 생성 API를 병렬 호출한 뒤, 서비스별 outbox retry API를 순차 호출해 최종 주문/재고/outbox 상태를 확인한다. 기본값은 주문 생성/조회를 Gateway(`http://localhost:18080`)로 보내고, Order outbox 조회/재시도만 Order Service admin API(`http://localhost:18083`)를 직접 호출한다. 로컬 회귀 확인용이며 외부 부하 벤치마크나 Kafka consumer 병렬성 검증으로 해석하지 않는다.
 
 기대 결과:
 
@@ -117,11 +117,11 @@ JAVA_HOME=/Users/chanyang.son/Library/Java/JavaVirtualMachines/ms-17.0.18/Conten
 - 최종 재고 `availableQuantity=0`, `reservedQuantity=0`
 - Order/Inventory/Payment `pendingOutboxDelta=0`
 
-최근 검증 증거:
+최근 Gateway 경유 검증 증거:
 
-- 실행 시각: 2026-05-13 10:42 KST
-- productCode: `CONC-E2E-20260513104212-e3025d67`
-- skuId: `CONC-E2E-20260513104212-e3025d67-S`
+- 실행 시각: 2026-05-13 11:02 KST
+- productCode: `CONC-E2E-20260513110249-07e052f0`
+- skuId: `CONC-E2E-20260513110249-07e052f0-S`
 - 주문 6건 중 3건 `CONFIRMED/COMPLETED`, 3건 `CANCELLED/FAILED`
 - 최종 재고: `availableQuantity=0`, `reservedQuantity=0`
 - `pendingOutboxBaseline`, `pendingOutboxCounts`, `pendingOutboxDelta`: Order/Inventory/Payment 모두 `0`

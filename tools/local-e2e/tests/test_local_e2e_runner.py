@@ -89,6 +89,22 @@ class LocalE2ERunnerTest(unittest.TestCase):
         args = local_e2e_runner.parse_args(["same-sku-concurrency"])
 
         self.assertEqual(args.command, "same-sku-concurrency")
+        self.assertEqual(args.order_url, "http://localhost:18083")
+        self.assertEqual(args.order_api_url, "http://localhost:18080")
+
+    def test_config_from_args_separates_order_admin_and_public_api_urls(self) -> None:
+        args = local_e2e_runner.parse_args([
+            "same-sku-concurrency",
+            "--order-url",
+            "http://order-admin.local/",
+            "--order-api-url",
+            "http://gateway.local/",
+        ])
+
+        config = local_e2e_runner.config_from_args(args)
+
+        self.assertEqual(config.order_url, "http://order-admin.local")
+        self.assertEqual(config.order_api_url, "http://gateway.local")
 
     def test_cli_rejects_invalid_numeric_arguments(self) -> None:
         invalid_args = [

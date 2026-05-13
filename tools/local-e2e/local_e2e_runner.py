@@ -18,6 +18,7 @@ from uuid import uuid4
 DEFAULT_CATALOG_URL = "http://localhost:18081"
 DEFAULT_INVENTORY_URL = "http://localhost:18082"
 DEFAULT_ORDER_URL = "http://localhost:18083"
+DEFAULT_ORDER_API_URL = "http://localhost:18080"
 DEFAULT_PAYMENT_URL = "http://localhost:18084"
 SERVICE_BASES = ("order", "inventory", "payment")
 MAX_GENERATED_PREFIX_LENGTH = 48
@@ -37,6 +38,7 @@ class ScenarioConfig:
     catalog_url: str
     inventory_url: str
     order_url: str
+    order_api_url: str
     payment_url: str
     order_count: int
     initial_stock: int
@@ -216,7 +218,7 @@ def ensure_no_pending_outbox(client: ApiClient, config: ScenarioConfig) -> None:
 
 
 def healthcheck(client: ApiClient, config: ScenarioConfig) -> None:
-    for base_url in [config.catalog_url, config.inventory_url, config.order_url, config.payment_url]:
+    for base_url in dict.fromkeys([config.catalog_url, config.inventory_url, config.order_url, config.order_api_url, config.payment_url]):
         payload = client.get(f"{base_url}/actuator/health")
         if payload.get("status") != "UP":
             raise RuntimeError(f"service is not healthy: {base_url} -> {payload}")
@@ -302,7 +304,7 @@ def create_orders_concurrently(
     def create_order(index: int) -> Mapping[str, Any]:
         payload = response_data(
             client.post(
-                f"{config.order_url}/api/orders",
+                f"{config.order_api_url}/api/orders",
                 {
                     "memberId": f"member-concurrent-{index:02d}",
                     "paymentMethod": "CARD",
@@ -336,7 +338,7 @@ def relay_wave(client: ApiClient, config: ScenarioConfig) -> None:
 
 
 def get_order(client: ApiClient, config: ScenarioConfig, order_id: str) -> Mapping[str, Any]:
-    return response_data(client.get(f"{config.order_url}/api/orders/{order_id}"))
+    return response_data(client.get(f"{config.order_api_url}/api/orders/{order_id}"))
 
 
 def get_stock(client: ApiClient, config: ScenarioConfig, sku_id: str) -> Mapping[str, Any]:
@@ -354,7 +356,12 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
     )
     concurrent.add_argument("--catalog-url", default=DEFAULT_CATALOG_URL)
     concurrent.add_argument("--inventory-url", default=DEFAULT_INVENTORY_URL)
-    concurrent.add_argument("--order-url", default=DEFAULT_ORDER_URL)
+    concurrent.add_argument("--order-url", default=DEFAULT_ORDER_URL, help="Order Service admin/outbox URL")
+    concurrent.add_argument(
+        "--order-api-url",
+        default=DEFAULT_ORDER_API_URL,
+        help="Public order create/query URL. Defaults to Gateway at http://localhost:18080.",
+    )
     concurrent.add_argument("--payment-url", default=DEFAULT_PAYMENT_URL)
     concurrent.add_argument("--orders", type=positive_int, default=6)
     concurrent.add_argument("--initial-stock", type=non_negative_int, default=3)
@@ -373,10 +380,12 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
 
 
 def config_from_args(args: argparse.Namespace) -> ScenarioConfig:
+    order_url = args.order_url.rstrip("/")
     return ScenarioConfig(
         catalog_url=args.catalog_url.rstrip("/"),
         inventory_url=args.inventory_url.rstrip("/"),
-        order_url=args.order_url.rstrip("/"),
+        order_url=order_url,
+        order_api_url=args.order_api_url.rstrip("/"),
         payment_url=args.payment_url.rstrip("/"),
         order_count=args.orders,
         initial_stock=args.initial_stock,

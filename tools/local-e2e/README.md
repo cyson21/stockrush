@@ -14,14 +14,17 @@
   --max-attempts 12
 ```
 
-기본 포트는 아래 서비스를 사용한다.
+기본 포트는 아래 서비스를 사용한다. 주문 생성/조회는 Gateway를 경유하고, Order outbox 조회/재시도는 Order Service admin API를 직접 호출한다.
 
-| Service | URL |
+| Role | URL |
 |---|---|
 | Catalog | `http://localhost:18081` |
 | Inventory | `http://localhost:18082` |
-| Order | `http://localhost:18083` |
+| Order API through Gateway | `http://localhost:18080` |
+| Order admin/outbox | `http://localhost:18083` |
 | Payment | `http://localhost:18084` |
+
+직접 Order Service 포트로 주문 생성/조회를 검증해야 하면 `--order-api-url http://localhost:18083`을 지정한다.
 
 ## 검증 기준
 
