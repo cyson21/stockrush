@@ -81,7 +81,7 @@ docker compose up -d
 - 주문 서비스(`order-service`)가 Saga Orchestrator 역할을 하며, Outbox를 통해 Kafka 이벤트를 발행합니다.
 - 재고 서비스는 `InventoryReserved / InventoryReservationFailed / InventoryReservationConfirmed / InventoryReservationReleased`로 결제와 연동해 예약 수량을 보정합니다.
 - 결제 서비스는 `CARD` 승인, `FAIL_CARD` 실패, `DELAY_CARD` 지연, 지연 결제 취소 분기 검증이 가능하며, 주문 상태와 Saga 상태 변화가 연동되어 보입니다.
-- 관리자 앱에서 상품 등록/수정, SKU 재고 설정, 지연 결제 취소, 주문 Saga 추적, Outbox retry를 한 흐름으로 확인할 수 있습니다.
+- 관리자 앱에서 상품 등록/수정, SKU 재고 설정, 지연 결제 취소, 주문 Saga 추적, Outbox retry와 failed requeue를 한 흐름으로 확인할 수 있습니다.
 
 ## 대표 시나리오
 
@@ -91,7 +91,7 @@ docker compose up -d
 | `FAIL_CARD` 주문 | 주문 `CANCELLED`, Saga `FAILED`, 예약 재고 복구 |
 | `DELAY_CARD` 주문 | 주문 `CREATED`, Saga `PAYMENT_DELAYED`, 관리자 취소 가능 |
 | 지연 결제 취소 | `PaymentCancelRequested`와 `PaymentCanceled` 이후 주문 취소 및 재고 복구 |
-| Outbox 운영 | 서비스별 outbox 조회와 due `PENDING` 이벤트 retry |
+| Outbox 운영 | 서비스별 outbox 조회, due `PENDING` 이벤트 retry, `FAILED` 이벤트 requeue |
 
 ## 검증 요약
 
@@ -101,10 +101,10 @@ docker compose up -d
 - 실제 로컬 E2E는 [Local E2E Runbook](docs/runbooks/local-e2e.md)의 `CARD`, `FAIL_CARD`, `DELAY_CARD`, 지연 결제 취소 시나리오를 기준으로 재현합니다.
 - 최근 지연 결제 취소 E2E 증거: `ord_20260513012031_8c06cd49` 주문이 `CREATED/PAYMENT_DELAYED` 도달 후 관리자 취소로 `CANCELLED/FAILED`가 됐고, SKU `DELAY-E2E-102029-S` 재고는 `available=20`, `reserved=0`으로 복구됐습니다.
 - 동일 SKU 최종 상태 E2E 증거: `tools/local-e2e/local-e2e same-sku-concurrency` 실행에서 주문 생성/조회는 Gateway를 경유했고, 주문 6건, 초기 재고 3개 기준 3건 완료/3건 취소, 재고 `available=0`, `reserved=0`, 서비스별 `pendingOutboxDelta=0`을 확인했습니다.
-- Gateway 주문/운영 라우팅 smoke 증거: fake upstream 기준 주문 생성/조회, 관리자 주문 조회/취소, Outbox 조회/재시도가 method, path, query, body, 핵심 헤더, status, body를 전달하는지 `services/gateway` Maven 테스트로 확인했습니다.
+- Gateway 주문/운영 라우팅 smoke 증거: fake upstream 기준 주문 생성/조회, 관리자 주문 조회/취소, Outbox 조회/재시도/requeue가 method, path, query, body, 핵심 헤더, status, body를 전달하는지 `services/gateway` Maven 테스트로 확인했습니다.
 - Gateway 주문 시나리오 E2E 증거: `GW-E2E-20260513111940-332ba0dc` 기준 `CARD`, `FAIL_CARD`, `DELAY_CARD`, 지연 결제 취소가 Gateway 주문 경로에서 처리됐고, 최종 재고 `available=19`, `reserved=0`, 서비스별 `pendingOutboxDelta=0`을 확인했습니다.
 
 ## 현재 한계
 
-- Gateway는 주문 생성/조회, 관리자 주문 조회/취소, Outbox 조회/재시도 라우팅 smoke와 동일 SKU runner/runbook의 Gateway 경유 경로까지 검증 범위를 넓혔습니다.
-- 인증/권한, 부하 벤치마크, Kafka consumer 병렬성 검증, Kafka 장애 복구 자동화, `FAILED -> PENDING` 수동 전환은 후속 확장 범위입니다.
+- Gateway는 주문 생성/조회, 관리자 주문 조회/취소, Outbox 조회/재시도/requeue 라우팅 smoke와 동일 SKU runner/runbook의 Gateway 경유 경로까지 검증 범위를 넓혔습니다.
+- 인증/권한, 부하 벤치마크, Kafka consumer 병렬성 검증, Kafka 장애 복구 자동화, 운영 감사 로그는 후속 확장 범위입니다.

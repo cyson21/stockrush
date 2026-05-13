@@ -244,6 +244,31 @@ class OrderGatewayControllerIntegrationTest {
     }
 
     @Test
+    void routes_payment_outbox_failed_requeue_command_to_payment_service() throws Exception {
+        HttpRequest request = HttpRequest.newBuilder(
+                gatewayUri("/api/admin/outbox-services/payment/events/failed/requeue?batchSize=3")
+            )
+            .header("X-Correlation-Id", "corr-gateway-payment-requeue")
+            .POST(HttpRequest.BodyPublishers.noBody())
+            .build();
+
+        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.headers().firstValue("X-Correlation-Id")).contains("corr-gateway-payment-requeue");
+        assertThat(response.body()).contains("\"updated\":3");
+        assertThat(response.body()).contains("\"service\":\"payment\"");
+
+        RecordedRequest forwarded = STUB_PAYMENT_SERVICE.singleRequest();
+        assertThat(forwarded.method()).isEqualTo("POST");
+        assertThat(forwarded.path()).isEqualTo("/api/admin/outbox-events/failed/requeue");
+        assertThat(forwarded.query()).contains("batchSize=3");
+        assertThat(forwarded.firstHeader("X-Correlation-Id")).contains("corr-gateway-payment-requeue");
+        STUB_ORDER_SERVICE.assertNoRequests();
+        STUB_INVENTORY_SERVICE.assertNoRequests();
+    }
+
+    @Test
     void routes_payment_outbox_list_query_to_payment_service() throws Exception {
         HttpRequest request = HttpRequest.newBuilder(
                 gatewayUri("/api/admin/outbox-services/payment/events?status=FAILED")
@@ -356,6 +381,13 @@ class OrderGatewayControllerIntegrationTest {
                 writeJson(exchange, 200, currentCorrelationId(exchange), null, """
                     {"success":true,"data":{"service":"%s","claimed":%d,"published":%d,"failed":0},"error":null,"trace":{"correlationId":"%s"}}
                     """.formatted(serviceName, claimed, claimed, currentCorrelationId(exchange)));
+                return;
+            }
+            if ("POST".equals(exchange.getRequestMethod()) && "/api/admin/outbox-events/failed/requeue".equals(path)) {
+                int updated = retryBatchSize(query);
+                writeJson(exchange, 200, currentCorrelationId(exchange), null, """
+                    {"success":true,"data":{"service":"%s","updated":%d},"error":null,"trace":{"correlationId":"%s"}}
+                    """.formatted(serviceName, updated, currentCorrelationId(exchange)));
                 return;
             }
             if ("POST".equals(exchange.getRequestMethod()) && "/api/orders".equals(path)) {

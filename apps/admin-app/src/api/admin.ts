@@ -5,6 +5,7 @@ import type {
   AdminOrderSaga,
   CatalogProduct,
   OutboxEventPage,
+  OutboxRequeueResult,
   OutboxRetryResult,
   ProductCreatePayload,
   ProductUpdatePayload,
@@ -88,6 +89,15 @@ export function listOutbox(service: ServiceDomain): Promise<OutboxEventPage> {
 export function retryOutbox(service: ServiceDomain, batchSize = 10): Promise<OutboxRetryResult> {
   return request<OutboxRetryResult>(
     gatewayApiUrl(`/api/admin/outbox-services/${service}/events/retry`, {
+      batchSize: String(batchSize),
+    }),
+    { method: 'POST' },
+  );
+}
+
+export function requeueFailedOutbox(service: ServiceDomain, batchSize = 10): Promise<OutboxRequeueResult> {
+  return request<OutboxRequeueResult>(
+    gatewayApiUrl(`/api/admin/outbox-services/${service}/events/failed/requeue`, {
       batchSize: String(batchSize),
     }),
     { method: 'POST' },

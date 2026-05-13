@@ -2,6 +2,7 @@ package com.stockrush.inventory.api;
 
 import com.stockrush.inventory.application.OutboxAdminService;
 import com.stockrush.inventory.application.OutboxEventSnapshot;
+import com.stockrush.inventory.infra.outbox.OutboxRequeueResult;
 import com.stockrush.inventory.infra.outbox.OutboxRelayResult;
 import java.time.Instant;
 import java.util.List;
@@ -48,6 +49,19 @@ class AdminOutboxController {
     ) {
         String resolvedCorrelationId = CorrelationIds.resolve(correlationId);
         OutboxRelayResult response = outboxAdminService.retryOutboxEvents(batchSize);
+
+        return ResponseEntity.ok()
+            .header(CorrelationIds.HEADER_NAME, resolvedCorrelationId)
+            .body(ApiResponse.success(response, resolvedCorrelationId));
+    }
+
+    @PostMapping("/failed/requeue")
+    ResponseEntity<ApiResponse<OutboxRequeueResult>> requeueFailedOutboxEvents(
+        @RequestParam(defaultValue = "10") int batchSize,
+        @RequestHeader(value = CorrelationIds.HEADER_NAME, required = false) String correlationId
+    ) {
+        String resolvedCorrelationId = CorrelationIds.resolve(correlationId);
+        OutboxRequeueResult response = outboxAdminService.requeueFailedOutboxEvents(batchSize);
 
         return ResponseEntity.ok()
             .header(CorrelationIds.HEADER_NAME, resolvedCorrelationId)

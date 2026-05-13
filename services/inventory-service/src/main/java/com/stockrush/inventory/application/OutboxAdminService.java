@@ -1,6 +1,7 @@
 package com.stockrush.inventory.application;
 
 import com.stockrush.inventory.infra.outbox.OutboxRelayService;
+import com.stockrush.inventory.infra.outbox.OutboxRequeueResult;
 import com.stockrush.inventory.infra.outbox.OutboxRelayResult;
 import java.util.Arrays;
 import java.util.LinkedHashSet;
@@ -38,6 +39,11 @@ public class OutboxAdminService {
     public OutboxRelayResult retryOutboxEvents(int batchSize) {
         validateBatchSize(batchSize);
         return outboxRelayService.publishPending(batchSize);
+    }
+
+    public OutboxRequeueResult requeueFailedOutboxEvents(int batchSize) {
+        validateBatchSize(batchSize);
+        return outboxRelayService.requeueFailed(batchSize);
     }
 
     private void validatePagination(int limit, int offset) {

@@ -3,6 +3,7 @@ package com.stockrush.order.api;
 import com.stockrush.order.infra.outbox.OutboxEventPage;
 import com.stockrush.order.infra.outbox.OutboxEventQueryService;
 import com.stockrush.order.infra.outbox.OutboxEventView;
+import com.stockrush.order.infra.outbox.OutboxRequeueResult;
 import com.stockrush.order.infra.outbox.OutboxRelayResult;
 import com.stockrush.order.infra.outbox.OutboxRelayService;
 import java.time.Instant;
@@ -54,6 +55,23 @@ class OutboxAdminController {
 
         String resolvedCorrelationId = CorrelationIds.resolve(correlationId);
         OutboxRetryResponse response = OutboxRetryResponse.from(relayService.publishPending(batchSize));
+
+        return ResponseEntity.ok()
+            .header(CorrelationIds.HEADER_NAME, resolvedCorrelationId)
+            .body(ApiResponse.success(response, resolvedCorrelationId));
+    }
+
+    @PostMapping("/failed/requeue")
+    ResponseEntity<ApiResponse<OutboxRequeueResponse>> requeueFailed(
+        @RequestParam(defaultValue = "10") int batchSize,
+        @RequestHeader(value = CorrelationIds.HEADER_NAME, required = false) String correlationId
+    ) {
+        if (batchSize < 1 || batchSize > 100) {
+            throw new IllegalArgumentException("batchSize must be between 1 and 100");
+        }
+
+        String resolvedCorrelationId = CorrelationIds.resolve(correlationId);
+        OutboxRequeueResponse response = OutboxRequeueResponse.from(relayService.requeueFailed(batchSize));
 
         return ResponseEntity.ok()
             .header(CorrelationIds.HEADER_NAME, resolvedCorrelationId)
@@ -121,5 +139,12 @@ record OutboxRetryResponse(
 
     static OutboxRetryResponse from(OutboxRelayResult result) {
         return new OutboxRetryResponse(result.claimed(), result.published(), result.failed());
+    }
+}
+
+record OutboxRequeueResponse(int updated) {
+
+    static OutboxRequeueResponse from(OutboxRequeueResult result) {
+        return new OutboxRequeueResponse(result.updated());
     }
 }

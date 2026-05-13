@@ -98,6 +98,34 @@ class AdminOutboxEventsControllerIntegrationTest {
     }
 
     @Test
+    void requeue_failed_outbox_events_for_manual_retry() throws Exception {
+        insertOutboxEvent("018f8d0b-8d32-7c42-9f1b-78328e0f9103", "FAILED", "2026-05-13T06:02:00Z", "PAYMENT-C");
+        jdbcClient.sql("""
+                update outbox_events
+                set retry_count = 5,
+                    next_retry_at = now(),
+                    error_message = 'kafka unavailable'
+                where event_id = cast(:eventId as uuid)
+                """)
+            .param("eventId", "018f8d0b-8d32-7c42-9f1b-78328e0f9103")
+            .update();
+
+        mockMvc.perform(post("/api/admin/outbox-events/failed/requeue")
+                .param("batchSize", "10")
+                .header("X-Correlation-Id", "corr-outbox-requeue"))
+            .andExpect(status().isOk())
+            .andExpect(header().string("X-Correlation-Id", "corr-outbox-requeue"))
+            .andExpect(jsonPath("$.success", is(true)))
+            .andExpect(jsonPath("$.data.updated", is(1)))
+            .andExpect(jsonPath("$.trace.correlationId", is("corr-outbox-requeue")));
+
+        assertEquals("PENDING", queryString("select status from outbox_events"));
+        assertEquals(0, queryInt("select retry_count from outbox_events"));
+        assertEquals(1, queryInt("select count(*) from outbox_events where next_retry_at is null"));
+        assertEquals(1, queryInt("select count(*) from outbox_events where error_message is null"));
+    }
+
+    @Test
     void reject_invalid_status_filter_as_bad_request() throws Exception {
         mockMvc.perform(get("/api/admin/outbox-events")
                 .param("status", "INVALID_STATUS")
@@ -127,6 +155,14 @@ class AdminOutboxEventsControllerIntegrationTest {
             .param("status", status)
             .param("createdAt", createdAt)
             .update();
+    }
+
+    private String queryString(String sql) {
+        return jdbcClient.sql(sql).query(String.class).single();
+    }
+
+    private int queryInt(String sql) {
+        return jdbcClient.sql(sql).query(Integer.class).single();
     }
 
     @TestConfiguration

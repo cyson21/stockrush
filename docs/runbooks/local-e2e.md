@@ -7,7 +7,7 @@
 - Customer App, Admin App, Catalog / Inventory / Order / Payment 서비스의 연동 확인
 - Kafka 이벤트 발행/소비와 서비스 로컬 Outbox 동작 확인
 - `CARD`(성공), `FAIL_CARD`(실패·재고 복구), `DELAY_CARD`(결제 지연) 시나리오 재현
-- 운영 화면(관리자) 점검 포인트 정리
+- 운영 화면(관리자) 점검 포인트와 Outbox retry/requeue 경로 정리
 
 ## Prerequisites
 
@@ -87,7 +87,7 @@ curl -sSf http://localhost:18084/actuator/health
 
 ## Gateway 주문/운영 라우팅 Smoke
 
-Gateway는 주문 생성/조회, 관리자 주문 조회/취소, Outbox 조회/재시도 라우팅 smoke를 제공한다. 이 테스트는 Gateway가 대상 서비스로 method, path, query string, body, 핵심 헤더와 응답을 전달하는지를 fake upstream으로 고정한다.
+Gateway는 주문 생성/조회, 관리자 주문 조회/취소, Outbox 조회/재시도/requeue 라우팅 smoke를 제공한다. 이 테스트는 Gateway가 대상 서비스로 method, path, query string, body, 핵심 헤더와 응답을 전달하는지를 fake upstream으로 고정한다.
 
 ```bash
 cd services/gateway
@@ -293,6 +293,7 @@ Admin App에서 아래 화면을 순차적으로 확인한다.
   - 주문/재고/결제 서비스별 outbox 이벤트 목록 조회
   - `PENDING`/`FAILED` 이벤트 노출
   - retry가 필요한 경우 수동 재시도 버튼 동작
+  - failed 이벤트를 pending 재처리 대상으로 되돌리는 버튼 동작
 
 ## Verification Checklist
 
@@ -326,4 +327,4 @@ Admin App에서 아래 화면을 순차적으로 확인한다.
 
 - 인증/권한은 공개 버전 범위 외로 처리되지 않았습니다.
 - 지연 후 재시도 같은 운영 극한 케이스는 확장 단계로 남아 있습니다.
-- 게이트웨이는 주문 생성/조회, 관리자 주문 조회/취소, Outbox 조회/재시도의 기본 진입점으로 유지됩니다.
+- 게이트웨이는 주문 생성/조회, 관리자 주문 조회/취소, Outbox 조회/재시도/requeue의 기본 진입점으로 유지됩니다.

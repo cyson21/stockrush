@@ -2,6 +2,7 @@ package com.stockrush.payment.api;
 
 import com.stockrush.payment.application.OutboxQueryService;
 import com.stockrush.payment.application.OutboxQueryService.OutboxQueryResult;
+import com.stockrush.payment.infra.outbox.OutboxRequeueResult;
 import com.stockrush.payment.infra.outbox.OutboxRelayResult;
 import com.stockrush.payment.infra.outbox.OutboxRelayService;
 import java.time.Instant;
@@ -57,6 +58,23 @@ class AdminOutboxEventsController {
 
         String resolvedCorrelationId = CorrelationIds.resolve(correlationId);
         OutboxRelayResult result = outboxRelayService.publishPending(batchSize);
+
+        return ResponseEntity.ok()
+            .header(CorrelationIds.HEADER_NAME, resolvedCorrelationId)
+            .body(ApiResponse.success(result, resolvedCorrelationId));
+    }
+
+    @PostMapping("/failed/requeue")
+    ResponseEntity<ApiResponse<OutboxRequeueResult>> requeueFailedOutboxEvents(
+        @RequestParam(defaultValue = "10") int batchSize,
+        @RequestHeader(value = CorrelationIds.HEADER_NAME, required = false) String correlationId
+    ) {
+        if (batchSize < 1 || batchSize > 100) {
+            throw new IllegalArgumentException("batchSize must be between 1 and 100");
+        }
+
+        String resolvedCorrelationId = CorrelationIds.resolve(correlationId);
+        OutboxRequeueResult result = outboxRelayService.requeueFailed(batchSize);
 
         return ResponseEntity.ok()
             .header(CorrelationIds.HEADER_NAME, resolvedCorrelationId)

@@ -74,6 +74,10 @@ export type OutboxRetryResult = {
   failed: number;
 };
 
+export type OutboxRequeueResult = {
+  updated: number;
+};
+
 export type SalesStatus = 'ON_SALE' | 'STOPPED';
 
 export type CatalogProduct = {

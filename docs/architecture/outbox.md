@@ -59,10 +59,11 @@ Each producing service exposes service-local outbox operations. Gateway exposes 
 |---|---|---|
 | `GET /api/admin/outbox-services/{service}/events` | `GET /api/admin/outbox-events` | list outbox rows by status, newest first |
 | `POST /api/admin/outbox-services/{service}/events/retry` | `POST /api/admin/outbox-events/retry` | invoke the existing relay for a bounded batch |
+| `POST /api/admin/outbox-services/{service}/events/failed/requeue` | `POST /api/admin/outbox-events/failed/requeue` | reset failed rows so the relay can publish them again |
 
 The API never reads another service schema. The `service` value selects `order`, `inventory`, or `payment`; each upstream only reads its own schema.
 
-Manual state mutation such as `FAILED -> PENDING` is intentionally excluded from the first slice. It needs a separate action policy and state transition guard.
+The failed requeue action selects only `FAILED` rows, moves them to `PENDING`, resets `retry_count` to `0`, clears `next_retry_at` and `error_message`, and keeps `max_retry_count` and `published_at` unchanged. Publishing still happens through the existing relay or retry operation.
 
 ## Consumer Idempotency Table
 

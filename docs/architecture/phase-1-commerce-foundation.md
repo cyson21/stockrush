@@ -93,7 +93,7 @@ The customer app reads order status through `GET /api/orders/{orderId}`. The adm
 | order-service | `GET /api/orders/{orderId}` | customer order status and Saga progress tracking |
 | order-service | `GET /api/admin/orders`, `GET /api/admin/orders/{orderId}/saga` | admin order monitoring and Saga failure inspection |
 | order-service | `POST /api/admin/orders/{orderId}/cancel` | admin cancellation request for delayed payment orders |
-| gateway | `GET /api/admin/outbox-services/{service}/events`, `POST /api/admin/outbox-services/{service}/events/retry` | service-specific outbox monitoring and manual relay trigger |
+| gateway | `GET /api/admin/outbox-services/{service}/events`, `POST /api/admin/outbox-services/{service}/events/retry`, `POST /api/admin/outbox-services/{service}/events/failed/requeue` | service-specific outbox monitoring, manual relay trigger, and failed event requeue |
 
 ## Service Relay Coverage
 
@@ -124,8 +124,9 @@ Smoke tests use the local Docker Kafka broker at `localhost:19092` and the local
 | Payment authorization fails | Order moves to `CANCELLED` / `FAILED`; inventory releases reservation | service tests and local `FAIL_CARD` runbook |
 | Payment authorization is delayed | Order remains `CREATED` / `PAYMENT_DELAYED` until admin action | payment/order tests and local `DELAY_CARD` runbook |
 | Admin cancels delayed payment | `PaymentCancelRequested` leads to `PaymentCanceled`, then `OrderCancelled` and stock release | admin cancel API/app tests |
+| Outbox row exhausts retry attempts | Admin can requeue `FAILED` rows to `PENDING`; existing relay publishes them later | service-local admin tests, Gateway smoke, Admin App test |
 
-Manual `FAILED -> PENDING` mutation is intentionally outside this slice. Only due `PENDING` events are retried through the current outbox admin API.
+Failed outbox requeue resets only retry state and error detail. It does not publish directly.
 
 ## Design Constraints
 

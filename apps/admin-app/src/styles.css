@@ -241,6 +241,16 @@ hr {
   cursor: not-allowed;
 }
 
+.action-btn.secondary {
+  background: #334155;
+}
+
+.action-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .events-table {
   border: 1px solid #cbd5e1;
   border-radius: 8px;

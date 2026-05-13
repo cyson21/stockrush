@@ -39,6 +39,15 @@ class AdminOutboxGatewayController {
         return forward(service, "POST", withQueryString("/api/admin/outbox-events/retry", request), headers, null);
     }
 
+    @PostMapping("/failed/requeue")
+    ResponseEntity<String> requeueFailed(
+        @PathVariable String service,
+        @RequestHeader HttpHeaders headers,
+        HttpServletRequest request
+    ) {
+        return forward(service, "POST", withQueryString("/api/admin/outbox-events/failed/requeue", request), headers, null);
+    }
+
     private ResponseEntity<String> forward(
         String service,
         String method,

@@ -123,6 +123,33 @@ class OutboxAdminControllerIntegrationTest {
         org.junit.jupiter.api.Assertions.assertEquals("PUBLISHED", queryString("select status from outbox_events"));
     }
 
+    @Test
+    void requeues_failed_outbox_events_for_manual_retry() throws Exception {
+        insertOutboxEvent(
+            "018f8d0b-8d32-7c42-9f1b-78328e0f7b05",
+            "FAILED",
+            "OrderCancelled",
+            5,
+            "kafka unavailable",
+            "2026-05-13T03:00:00Z"
+        );
+        jdbcClient.sql("update outbox_events set next_retry_at = now() where event_type = 'OrderCancelled'").update();
+
+        mockMvc.perform(post("/api/admin/outbox-events/failed/requeue")
+                .param("batchSize", "10")
+                .header("X-Correlation-Id", "corr-outbox-requeue"))
+            .andExpect(status().isOk())
+            .andExpect(header().string("X-Correlation-Id", "corr-outbox-requeue"))
+            .andExpect(jsonPath("$.success", is(true)))
+            .andExpect(jsonPath("$.data.updated", is(1)))
+            .andExpect(jsonPath("$.trace.correlationId", is("corr-outbox-requeue")));
+
+        org.junit.jupiter.api.Assertions.assertEquals("PENDING", queryString("select status from outbox_events"));
+        org.junit.jupiter.api.Assertions.assertEquals(0, queryInt("select retry_count from outbox_events"));
+        org.junit.jupiter.api.Assertions.assertEquals(1, queryInt("select count(*) from outbox_events where next_retry_at is null"));
+        org.junit.jupiter.api.Assertions.assertEquals(1, queryInt("select count(*) from outbox_events where error_message is null"));
+    }
+
     private void insertOutboxEvent(
         String eventId,
         String status,
@@ -155,6 +182,10 @@ class OutboxAdminControllerIntegrationTest {
 
     private String queryString(String sql) {
         return jdbcClient.sql(sql).query(String.class).single();
+    }
+
+    private int queryInt(String sql) {
+        return jdbcClient.sql(sql).query(Integer.class).single();
     }
 
     @TestConfiguration

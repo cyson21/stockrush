@@ -1,15 +1,16 @@
 # Outbox Admin API
 
-Outbox Admin API는 각 서비스가 자기 schema 안의 `outbox_events`를 조회하고, due 상태의 `PENDING` 이벤트 발행을 수동으로 트리거하는 운영 API이다.
+Outbox Admin API는 각 서비스가 자기 schema 안의 `outbox_events`를 조회하고, due 상태의 `PENDING` 이벤트 발행과 `FAILED` 이벤트 재처리 준비를 수동으로 트리거하는 운영 API이다.
 
 ## Service Endpoints
 
 Gateway exposes one admin route family and maps the `service` path segment to the selected service-local endpoint.
 
 | Operation | Gateway path | Upstream path |
-|---|---|
+|---|---|---|
 | List | `GET /api/admin/outbox-services/{service}/events` | `GET /api/admin/outbox-events` |
 | Retry | `POST /api/admin/outbox-services/{service}/events/retry` | `POST /api/admin/outbox-events/retry` |
+| Requeue failed | `POST /api/admin/outbox-services/{service}/events/failed/requeue` | `POST /api/admin/outbox-events/failed/requeue` |
 
 Allowed `service` values: `order`, `inventory`, `payment`.
 
@@ -74,10 +75,37 @@ Allowed `service` values: `order`, `inventory`, `payment`.
 }
 ```
 
+## Requeue Failed Events
+
+`POST /api/admin/outbox-services/{service}/events/failed/requeue`
+
+### Query Parameters
+
+| Name | Required | Default | Description |
+|---|---:|---|---|
+| `batchSize` | no | `10` | max failed rows to move back to pending |
+
+### Response Data
+
+```json
+{
+  "updated": 1
+}
+```
+
+### Behavior
+
+- Selects only `FAILED` rows.
+- Moves selected rows to `PENDING`.
+- Resets `retryCount` to `0`.
+- Clears `nextRetryAt` and `errorMessage`.
+- Keeps `maxRetryCount` and `publishedAt` unchanged.
+- Existing retry API or relay loop publishes the requeued rows.
+
 ## Rules
 
 - Retry only claims `PENDING` events whose `next_retry_at` is null or due.
+- Requeue only changes `FAILED` events back to `PENDING`; it does not publish directly.
 - Each service publishes through its existing relay service.
 - Gateway rejects unknown service values before calling an upstream service.
-- Manual `FAILED -> PENDING` state change is not part of this slice.
 - Authentication is still out of scope and must be added before public deployment.

@@ -83,9 +83,18 @@
 | 해결 | Gateway에 `GET /api/admin/outbox-services/{service}/events`, `POST /api/admin/outbox-services/{service}/events/retry`를 추가하고 `order`, `inventory`, `payment`만 허용 |
 | 재발 방지 | Gateway smoke test에서 서비스별 upstream 선택, query string, `X-Correlation-Id`, 미허용 service 404를 검증하고 Admin App과 Local E2E runner가 Gateway Outbox route를 사용하도록 전환 |
 
+### 9. `FAILED` Outbox 수동 재처리 준비 액션을 추가함
+
+| 항목 | 내용 |
+|---|---|
+| 증상 | max retry를 모두 소진한 outbox row를 운영자가 즉시 재시도 가능 상태로 되돌리는 API와 화면 동작이 없었음 |
+| 원인 | 기존 API는 due `PENDING` relay 실행에만 집중했고, `FAILED` row의 retry 상태 초기화 경로가 분리되지 않았음 |
+| 해결 | Order/Inventory/Payment Service에 `POST /api/admin/outbox-events/failed/requeue`를 추가하고 Gateway의 service별 route와 Admin App 버튼까지 연결 |
+| 재발 방지 | requeue는 `FAILED` row만 대상으로 삼고, `status`, `retry_count`, `next_retry_at`, `error_message`만 변경하도록 서비스별 통합 테스트로 고정 |
+
 ## 검증 공백
 
-### 9. 동시 주문 부하/consumer 병렬성 검증은 아직 부족함
+### 10. 동시 주문 부하/consumer 병렬성 검증은 아직 부족함
 
 | 항목 | 내용 |
 |---|---|
@@ -94,24 +103,15 @@
 | 보강 방향 | inventory listener concurrency 설정, SKU key 기반 파티셔닝 전략, 반복 부하 도구, consumer lag/처리량 지표를 묶은 별도 부하 검증 추가 |
 | 재발 방지 | 문서에서 `same-sku-concurrency`를 로컬 최종 상태 E2E로만 설명하고, 부하/병렬성 검증은 별도 TODO로 추적 |
 
-### 10. Kafka 장애와 장기 체류 Outbox 복구 자동화가 아직 부족함
+### 11. Kafka 장애와 장기 체류 Outbox 복구 자동화가 아직 부족함
 
 | 항목 | 내용 |
 |---|---|
-| 증상 | Kafka broker 중단, relay 실패, 장기 `PENDING` 또는 `FAILED` outbox가 자동 회귀에서 충분히 검증되지 않음 |
-| 원인 | Outbox relay의 retry/failed 전이는 테스트했지만 broker 장애 주입과 장애 후 복구를 정규 자동화까지 끌어올리지는 않음 |
+| 증상 | Kafka broker 중단, relay 실패, 장기 `PENDING` outbox가 자동 회귀에서 충분히 검증되지 않음 |
+| 원인 | Outbox relay의 retry/failed 전이와 `FAILED` requeue API는 테스트했지만 broker 장애 주입과 장애 후 복구를 정규 자동화까지 끌어올리지는 않음 |
 | 보강 방향 | Kafka 중단 후 주문 생성, outbox 상태 확인, Kafka 재기동 후 relay 재실행, 최종 `PUBLISHED` 전환까지 검증하는 장애 주입 테스트 추가 |
 | 재발 방지 | 운영 runbook에 broker 장애 시 확인 순서와 outbox admin API 사용 기준을 추가 |
 | 근거 | [Outbox and Consumer Idempotency](../architecture/outbox.md), [Outbox Admin API](../api/outbox-admin.md), [Test Strategy](../test-strategy.md) |
-
-### 11. `FAILED -> PENDING` 수동 복구 액션은 아직 제외됨
-
-| 항목 | 내용 |
-|---|---|
-| 증상 | max retry를 모두 소진한 outbox row를 운영자가 즉시 재시도 가능 상태로 되돌리는 API가 없음 |
-| 원인 | 첫 slice에서는 상태 직접 변경을 열지 않고, 기존 relay를 호출하는 bounded retry만 제공함 |
-| 보강 방향 | 별도 운영 권한, 확인 절차, 감사 로그, 상태 전이 검사를 둔 뒤 `FAILED -> PENDING` 액션을 추가 |
-| 재발 방지 | 수동 상태 변경 API는 일반 retry와 분리하고, 실패 원인과 재시도 횟수를 화면에서 같이 노출 |
 
 ### 12. 인증/권한은 현재 slice 밖에 있음
 
@@ -131,8 +131,8 @@
   - 서비스 단위 동일 SKU race test와 로컬 최종 상태 E2E runner는 있지만, 부하 벤치마크와 Kafka consumer 병렬성 검증은 아직 남아 있다.
 - “Kafka 장애가 나도 자동으로 항상 복구된다.”
   - Outbox retry/failed 전이는 검증했지만 broker 장애 주입 자동화는 아직 부족하다.
-- “운영자가 실패 Outbox를 즉시 재처리 상태로 바꿀 수 있다.”
-  - 현재는 due `PENDING` relay 재실행만 제공하고, `FAILED -> PENDING` 액션은 제외했다.
+- “Outbox 운영 복구가 상용 운영 수준으로 완성됐다.”
+  - `FAILED` requeue 경로는 있지만 인증/권한, 감사 로그, broker 장애 주입 자동화는 아직 후속 범위다.
 - “운영 배포 수준의 인증/권한이 포함돼 있다.”
   - 인증/권한은 현재 공개 slice 밖으로 명시했다.
 
@@ -140,5 +140,5 @@
 
 1. 동일 SKU 부하 벤치마크와 Kafka consumer 병렬성 검증 추가
 2. Kafka 장애 주입과 outbox 장기 체류 복구 runbook 확장
-3. `FAILED -> PENDING` 운영 액션 설계와 권한/감사 로그 추가
-4. 관리자 API 인증/권한 테스트 추가
+3. 관리자 API 인증/권한과 감사 로그 추가
+4. OpenTelemetry, 지표, 알림 기준 추가

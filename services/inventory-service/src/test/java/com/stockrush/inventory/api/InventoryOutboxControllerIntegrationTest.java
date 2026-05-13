@@ -2,6 +2,7 @@ package com.stockrush.inventory.api;
 
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.is;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
@@ -106,6 +107,38 @@ class InventoryOutboxControllerIntegrationTest {
     }
 
     @Test
+    void requeues_failed_outbox_events_for_manual_retry() throws Exception {
+        insertOutboxEvent(
+            "018f8d0b-8d32-7c42-9f1b-78328e0f8b05",
+            "FAILED",
+            OffsetDateTime.parse("2026-05-13T11:00:00Z")
+        );
+        jdbcClient.sql("""
+                update outbox_events
+                set retry_count = 5,
+                    next_retry_at = now(),
+                    error_message = 'kafka unavailable'
+                where event_id = cast(:eventId as uuid)
+                """)
+            .param("eventId", "018f8d0b-8d32-7c42-9f1b-78328e0f8b05")
+            .update();
+
+        mockMvc.perform(post("/api/admin/outbox-events/failed/requeue")
+                .param("batchSize", "10")
+                .header("X-Correlation-Id", CORRELATION_ID))
+            .andExpect(status().isOk())
+            .andExpect(header().string("X-Correlation-Id", CORRELATION_ID))
+            .andExpect(jsonPath("$.success", is(true)))
+            .andExpect(jsonPath("$.data.updated", is(1)))
+            .andExpect(jsonPath("$.trace.correlationId", is(CORRELATION_ID)));
+
+        assertEquals("PENDING", queryString("select status from outbox_events"));
+        assertEquals(0, queryInt("select retry_count from outbox_events"));
+        assertEquals(1, queryInt("select count(*) from outbox_events where next_retry_at is null"));
+        assertEquals(1, queryInt("select count(*) from outbox_events where error_message is null"));
+    }
+
+    @Test
     void rejects_invalid_status_filter_values() throws Exception {
         mockMvc.perform(get("/api/admin/outbox-events")
                 .param("status", "PENDING,UNKNOWN")
@@ -135,6 +168,14 @@ class InventoryOutboxControllerIntegrationTest {
             .param("status", status)
             .param("createdAt", createdAt)
             .update();
+    }
+
+    private String queryString(String sql) {
+        return jdbcClient.sql(sql).query(String.class).single();
+    }
+
+    private int queryInt(String sql) {
+        return jdbcClient.sql(sql).query(Integer.class).single();
     }
 
     @TestConfiguration

@@ -8,6 +8,7 @@ import {
   listOutbox,
   listRecentOrders,
   listStocksByProductCode,
+  requeueFailedOutbox,
   retryOutbox,
   setStockQuantity,
   updateCatalogProduct,
@@ -18,6 +19,7 @@ import type {
   AdminOrderSummary,
   CatalogProduct,
   OutboxEvent,
+  OutboxRequeueResult,
   OutboxRetryResult,
   ProductCreatePayload,
   ProductUpdatePayload,
@@ -398,6 +400,9 @@ function OutboxTab() {
   const [retryState, setRetryState] = useState<'idle' | 'loading' | 'ready'>('idle');
   const [retryResult, setRetryResult] = useState<OutboxRetryResult | null>(null);
   const [retryError, setRetryError] = useState<string | null>(null);
+  const [requeueState, setRequeueState] = useState<'idle' | 'loading' | 'ready'>('idle');
+  const [requeueResult, setRequeueResult] = useState<OutboxRequeueResult | null>(null);
+  const [requeueError, setRequeueError] = useState<string | null>(null);
 
   const loadOutbox = () => {
     setOutboxState('loading');
@@ -418,6 +423,9 @@ function OutboxTab() {
     setRetryResult(null);
     setRetryError(null);
     setRetryState('idle');
+    setRequeueResult(null);
+    setRequeueError(null);
+    setRequeueState('idle');
     loadOutbox();
   }, [service]);
 
@@ -425,6 +433,8 @@ function OutboxTab() {
     setRetryState('loading');
     setRetryResult(null);
     setRetryError(null);
+    setRequeueResult(null);
+    setRequeueError(null);
 
     retryOutbox(service, 10)
       .then((result) => {
@@ -435,6 +445,25 @@ function OutboxTab() {
       .catch((error) => {
         setRetryState('idle');
         setRetryError(errorMessage(error));
+      });
+  };
+
+  const onRequeueFailed = async () => {
+    setRequeueState('loading');
+    setRequeueResult(null);
+    setRequeueError(null);
+    setRetryResult(null);
+    setRetryError(null);
+
+    requeueFailedOutbox(service, 10)
+      .then((result) => {
+        setRequeueResult(result);
+        setRequeueState('ready');
+        return loadOutbox();
+      })
+      .catch((error) => {
+        setRequeueState('idle');
+        setRequeueError(errorMessage(error));
       });
   };
 
@@ -461,9 +490,9 @@ function OutboxTab() {
               : '대기 중'}
         </p>
 
-        {(outboxError || retryError) && (
+        {(outboxError || retryError || requeueError) && (
           <p className="error-banner" role="alert">
-            {outboxError ?? retryError}
+            {outboxError ?? retryError ?? requeueError}
           </p>
         )}
         {retryResult && (
@@ -471,10 +500,25 @@ function OutboxTab() {
             {retryResult.claimed}건 claim, {retryResult.published}건 publish, {retryResult.failed}건 fail
           </p>
         )}
+        {requeueResult && (
+          <p className="success-banner" aria-live="polite">
+            {requeueResult.updated}건 requeue
+          </p>
+        )}
 
-        <button type="button" className="action-btn" onClick={() => onRetry()} disabled={retryState === 'loading'}>
-          {retryState === 'loading' ? '재시도 진행 중' : '선택한 서비스 재시도'}
-        </button>
+        <div className="action-row">
+          <button type="button" className="action-btn" onClick={() => onRetry()} disabled={retryState === 'loading'}>
+            {retryState === 'loading' ? '재시도 진행 중' : '선택한 서비스 재시도'}
+          </button>
+          <button
+            type="button"
+            className="action-btn secondary"
+            onClick={() => onRequeueFailed()}
+            disabled={requeueState === 'loading'}
+          >
+            {requeueState === 'loading' ? '재처리 준비 중' : '실패 이벤트 재처리 준비'}
+          </button>
+        </div>
 
         {outboxState === 'error' ? (
           <p className="empty-message">Outbox 목록을 불러오지 못했습니다.</p>

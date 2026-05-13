@@ -163,6 +163,10 @@ describe('admin app operations', () => {
         return toJsonResponse(buildResponse(true, { claimed: 2, published: 1, failed: 0 }), 200);
       }
 
+      if (request.pathname === '/api/admin/outbox-services/inventory/events/failed/requeue' && method === 'POST') {
+        return toJsonResponse(buildResponse(true, { updated: 1 }), 200);
+      }
+
       if (request.pathname === '/catalog/api/products' && method === 'GET') {
         return toJsonResponse(
           buildResponse(true, catalogProducts.filter((product) => request.searchParams.get('status') === product.status)),
@@ -459,6 +463,12 @@ describe('admin app operations', () => {
 
     await waitFor(() => {
       expect(screen.getByText(/2건 claim, 1건 publish, 0건 fail/)).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole('button', { name: '실패 이벤트 재처리 준비' }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/1건 requeue/)).toBeInTheDocument();
     });
   });
 

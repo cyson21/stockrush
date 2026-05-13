@@ -44,6 +44,30 @@ public class OutboxRelayService {
         return new OutboxRelayResult(events.size(), published, failed);
     }
 
+    public OutboxRequeueResult requeueFailed(int batchSize) {
+        int updated = jdbcClient.sql("""
+                with selected as (
+                  select id
+                  from outbox_events
+                  where status = 'FAILED'
+                  order by created_at, id
+                  limit :batchSize
+                  for update skip locked
+                )
+                update outbox_events outbox
+                set status = 'PENDING',
+                    retry_count = 0,
+                    next_retry_at = null,
+                    error_message = null,
+                    updated_at = now()
+                from selected
+                where outbox.id = selected.id
+                """)
+            .param("batchSize", batchSize)
+            .update();
+        return new OutboxRequeueResult(updated);
+    }
+
     private List<OutboxRelayEvent> claimPending(int batchSize) {
         return jdbcClient.sql("""
                 with claimed as (
