@@ -54,7 +54,7 @@ Kafka events use a common envelope with event-specific payloads.
 | `PaymentAuthorizationFailed` | `stockrush.payment.events.v1` | payment-service | order-service |
 | `PaymentAuthorizationDelayed` | `stockrush.payment.events.v1` | payment-service | order-service |
 | `PaymentCanceled` | `stockrush.payment.events.v1` | payment-service | order-service |
-| `OrderConfirmed` | `stockrush.order.events.v1` | order-service | inventory-service, promotion-service, read models |
+| `OrderConfirmed` | `stockrush.order.events.v1` | order-service | inventory-service, promotion-service, fulfillment-service, read models |
 | `OrderCancelled` | `stockrush.order.events.v1` | order-service | inventory-service, promotion-service, read models |
 | `InventoryReservationConfirmed` | `stockrush.inventory.events.v1` | inventory-service | operations/read models |
 | `InventoryReservationReleased` | `stockrush.inventory.events.v1` | inventory-service | operations/read models |
@@ -103,3 +103,11 @@ Promotion's Phase 1 usage lifecycle assumes `OrderCreated` is processed before `
 | `OrderCancelled` | Move reservation from `RESERVED` to `RELEASED`, restore `available_quantity`, decrement `reserved_quantity` | `InventoryReservationReleased` |
 
 Inventory Service consumes order result events from `stockrush.order.events.v1` and keeps all stock mutations inside the `inventory` schema.
+
+## Phase 1 Fulfillment Notes
+
+| Source event | Fulfillment action |
+|---|---|
+| `OrderConfirmed` | Create one `PREPARING` fulfillment request for the order |
+
+Fulfillment Service consumes only successful order result events in this slice. Shipment tracking, carrier assignment, and label generation are future states.

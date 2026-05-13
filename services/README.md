@@ -12,6 +12,7 @@ StockRush uses independent Spring Boot projects under `services/<service-name>`.
 | order-service | 18083 | orders | order API and Saga Orchestrator |
 | payment-service | 18084 | payment | payment simulation |
 | promotion-service | 18085 | promotion | coupon definition, quote API, and usage lifecycle |
+| fulfillment-service | 18086 | fulfillment | shipment preparation request |
 
 ## Local Java
 
@@ -35,8 +36,10 @@ cd services/inventory-service && STOCKRUSH_KAFKA_LISTENERS_ENABLED=true mvn spri
 cd services/order-service && STOCKRUSH_KAFKA_LISTENERS_ENABLED=true mvn spring-boot:run
 cd services/payment-service && STOCKRUSH_KAFKA_LISTENERS_ENABLED=true mvn spring-boot:run
 cd services/promotion-service && PROMOTION_KAFKA_LISTENERS_ENABLED=true mvn spring-boot:run
+cd services/fulfillment-service && FULFILLMENT_KAFKA_LISTENERS_ENABLED=true mvn spring-boot:run
 ```
 
 Promotion Service is currently service-local and is not proxied by Gateway. Order Service calls it through `PROMOTION_SERVICE_URL`, Customer App local development reaches it through the `/promotion` Vite proxy, and Kafka listeners consume order events for coupon usage state.
+Fulfillment Service is currently event-only and is not proxied by Gateway.
 
 First run may download Maven dependencies.

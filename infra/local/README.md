@@ -34,7 +34,7 @@ The single local PostgreSQL instance is split by schema.
 | `payment` | payment-service |
 | `auth` | future auth-service |
 | `promotion` | promotion-service |
-| `fulfillment` | future fulfillment-service |
+| `fulfillment` | fulfillment-service |
 | `read_model` | future read model services |
 
 ## Kafka

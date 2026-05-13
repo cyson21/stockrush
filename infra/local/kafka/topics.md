@@ -16,7 +16,7 @@ stockrush.<domain>.<message-kind>.v<version>.dlq
 
 | Topic | Key | Producer | Consumer |
 |---|---|---|---|
-| `stockrush.order.events.v1` | `orderId` | order-service | inventory-service, read models |
+| `stockrush.order.events.v1` | `orderId` | order-service | inventory-service, promotion-service, fulfillment-service, read models |
 | `stockrush.inventory.commands.v1` | `orderId` | order-service | inventory-service |
 | `stockrush.inventory.events.v1` | `orderId` | inventory-service | order-service |
 | `stockrush.payment.commands.v1` | `orderId` | order-service | payment-service |
