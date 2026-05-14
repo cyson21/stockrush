@@ -632,4 +632,5 @@ describe('ProductListScreen', () => {
 
     expect(detailCallCount).toBe(2);
   });
+
 });

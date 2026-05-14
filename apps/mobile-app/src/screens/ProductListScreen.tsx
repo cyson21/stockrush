@@ -15,6 +15,7 @@ import { createOrder, getOrder } from '../api/orders';
 import { quoteCoupon } from '../api/promotion';
 import { getDefaultMemberId } from '../config/runtime';
 import type { CreateOrderResponse, OrderDetail, Product, PromotionQuoteResponse, Stock } from '../types/api';
+import OrderHistoryScreen from './OrderHistoryScreen';
 
 type LoadStatus = 'idle' | 'loading' | 'ready' | 'error';
 type PaymentMethod = 'CARD' | 'FAIL_CARD' | 'DELAY_CARD';
@@ -471,6 +472,8 @@ export default function ProductListScreen() {
             <Text style={styles.stateText}>상품과 SKU를 선택하면 주문 입력을 확인합니다.</Text>
           )}
         </View>
+
+        <OrderHistoryScreen />
       </ScrollView>
     </View>
   );
