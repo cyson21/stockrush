@@ -188,6 +188,45 @@ describe('admin app operations', () => {
         );
       }
 
+      if (request.pathname === '/api/admin/coupon-usages' && method === 'GET') {
+        const usages = [
+          {
+            orderId: 'ord_coupon_usage_001',
+            memberId: 'member-a',
+            couponCode: 'WELCOME10',
+            status: 'CONSUMED',
+            orderAmount: 80000,
+            discountAmount: 5000,
+            payableAmount: 75000,
+            reservedAt: '2026-05-13T04:30:00Z',
+            consumedAt: '2026-05-13T04:31:00Z',
+            releasedAt: null,
+            releaseReason: null,
+            updatedAt: '2026-05-13T04:31:00Z',
+          },
+          {
+            orderId: 'ord_coupon_usage_002',
+            memberId: 'member-b',
+            couponCode: 'WELCOME10',
+            status: 'RELEASED',
+            orderAmount: 40000,
+            discountAmount: 4000,
+            payableAmount: 36000,
+            reservedAt: '2026-05-13T04:32:00Z',
+            consumedAt: null,
+            releasedAt: '2026-05-13T04:33:00Z',
+            releaseReason: 'PAYMENT_DECLINED',
+            updatedAt: '2026-05-13T04:33:00Z',
+          },
+        ].filter((usage) => {
+          const couponCode = request.searchParams.get('couponCode');
+          const status = request.searchParams.get('status');
+          return (!couponCode || usage.couponCode === couponCode) && (!status || usage.status === status);
+        });
+
+        return toJsonResponse(buildResponse(true, { page: 0, size: 50, items: usages }), 200);
+      }
+
       if (request.pathname === '/api/admin/outbox-services/inventory/events' && method === 'GET') {
         return toJsonResponse(
           buildResponse(true, {
@@ -379,6 +418,144 @@ describe('admin app operations', () => {
 
     expect(await screen.findByRole('alert')).toHaveTextContent('READ_MODEL_FAIL: 대시보드 조회 실패');
     expect(screen.getByText('대시보드 데이터를 불러오지 못했습니다.')).toBeInTheDocument();
+  });
+
+  it('loads coupon usage history and applies filters through gateway', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(screen.getByRole('tab', { name: 'Coupons' }));
+
+    expect(await screen.findByText('쿠폰 사용 이력')).toBeInTheDocument();
+    expect(screen.getByText('ord_coupon_usage_001')).toBeInTheDocument();
+    expect(screen.getByText('ord_coupon_usage_002')).toBeInTheDocument();
+    expect(screen.getByText('₩5,000')).toBeInTheDocument();
+    expect(screen.getByText('PAYMENT_DECLINED')).toBeInTheDocument();
+
+    await user.type(screen.getByLabelText('쿠폰 코드'), 'WELCOME10');
+    await user.selectOptions(screen.getByLabelText('사용 상태'), 'CONSUMED');
+    await user.click(screen.getByRole('button', { name: '쿠폰 이력 조회' }));
+
+    await waitFor(() => {
+      const filteredCalls = fetchMock.mock.calls.filter(([url]) => {
+        const request = new URL(String(url), 'http://localhost:5173');
+        return (
+          request.pathname === '/api/admin/coupon-usages' &&
+          request.searchParams.get('couponCode') === 'WELCOME10' &&
+          request.searchParams.get('status') === 'CONSUMED'
+        );
+      });
+      expect(filteredCalls.length).toBeGreaterThanOrEqual(1);
+    });
+
+    expect(screen.getByText('ord_coupon_usage_001')).toBeInTheDocument();
+    expect(screen.queryByText('ord_coupon_usage_002')).not.toBeInTheDocument();
+  });
+
+  it('shows coupon usage error when history request fails', async () => {
+    const user = userEvent.setup();
+    fetchMock.mockImplementation((input, init) => {
+      const request = new URL(String(input), 'http://localhost:5173');
+      const method = init?.method ?? 'GET';
+
+      if (request.pathname === '/api/admin/coupon-usages' && method === 'GET') {
+        return buildErrorResponse('COUPON_USAGE_FAIL', '쿠폰 사용 이력 조회 실패');
+      }
+
+      return defaultRequestHandler(input, init);
+    });
+
+    render(<App />);
+    await user.click(screen.getByRole('tab', { name: 'Coupons' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('COUPON_USAGE_FAIL: 쿠폰 사용 이력 조회 실패');
+    expect(screen.getByText('쿠폰 사용 이력을 불러오지 못했습니다.')).toBeInTheDocument();
+  });
+
+  it('keeps coupon usage list from the latest request when responses return out of order', async () => {
+    const user = userEvent.setup();
+    const initialRequestResolvers: Array<(response: Response) => void> = [];
+
+    fetchMock.mockImplementation((input, init) => {
+      const request = new URL(String(input), 'http://localhost:5173');
+      const method = init?.method ?? 'GET';
+
+      if (request.pathname === '/api/admin/coupon-usages' && method === 'GET') {
+        if (!request.searchParams.get('status')) {
+          return new Promise<Response>((resolve) => {
+            initialRequestResolvers.push(resolve);
+          });
+        }
+
+        return toJsonResponse(
+          buildResponse(true, {
+            page: 0,
+            size: 50,
+            items: [
+              {
+                orderId: 'ord_coupon_latest',
+                memberId: 'member-latest',
+                couponCode: 'WELCOME10',
+                status: 'CONSUMED',
+                orderAmount: 80000,
+                discountAmount: 5000,
+                payableAmount: 75000,
+                reservedAt: '2026-05-13T04:30:00Z',
+                consumedAt: '2026-05-13T04:31:00Z',
+                releasedAt: null,
+                releaseReason: null,
+                updatedAt: '2026-05-13T04:31:00Z',
+              },
+            ],
+          }),
+          200,
+        );
+      }
+
+      return defaultRequestHandler(input, init);
+    });
+
+    render(<App />);
+    await user.click(screen.getByRole('tab', { name: 'Coupons' }));
+    await screen.findByText('쿠폰 사용 이력');
+
+    await user.selectOptions(screen.getByLabelText('사용 상태'), 'CONSUMED');
+    await user.click(screen.getByRole('button', { name: '쿠폰 이력 조회' }));
+
+    expect(await screen.findByText('ord_coupon_latest')).toBeInTheDocument();
+    expect(initialRequestResolvers).toHaveLength(1);
+    initialRequestResolvers[0](
+      new Response(
+        JSON.stringify(
+          buildResponse(true, {
+            page: 0,
+            size: 50,
+            items: [
+              {
+                orderId: 'ord_coupon_late_stale',
+                memberId: 'member-late',
+                couponCode: 'WELCOME10',
+                status: 'RELEASED',
+                orderAmount: 40000,
+                discountAmount: 4000,
+                payableAmount: 36000,
+                reservedAt: '2026-05-13T04:32:00Z',
+                consumedAt: null,
+                releasedAt: '2026-05-13T04:33:00Z',
+                releaseReason: 'PAYMENT_DECLINED',
+                updatedAt: '2026-05-13T04:33:00Z',
+              },
+            ],
+          }),
+        ),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ),
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('ord_coupon_latest')).toBeInTheDocument();
+      expect(screen.queryByText('ord_coupon_late_stale')).not.toBeInTheDocument();
+    });
   });
 
   it('requests cancel for a payment delayed order', async () => {

@@ -5,6 +5,7 @@ import {
   createCatalogProduct,
   getOrderSaga,
   listCatalogProducts,
+  listCouponUsages,
   listOutbox,
   listReadModelAdminOrders,
   listRecentOrders,
@@ -19,6 +20,7 @@ import type {
   AdminOrderSaga,
   AdminOrderSummary,
   CatalogProduct,
+  CouponUsageSummary,
   OutboxEvent,
   OutboxRequeueResult,
   OutboxRetryResult,
@@ -30,7 +32,7 @@ import type {
   StockSetPayload,
 } from './types/admin';
 
-type TabId = 'dashboard' | 'orders' | 'outbox' | 'products';
+type TabId = 'dashboard' | 'orders' | 'coupons' | 'outbox' | 'products';
 type LoadState = 'idle' | 'loading' | 'ready' | 'error';
 type SubmitState = 'idle' | 'loading' | 'ready' | 'error';
 type ProductSubmitMode = 'create' | 'update';
@@ -266,6 +268,158 @@ function DashboardTab() {
                 )}
               </section>
             </div>
+          </>
+        )}
+      </section>
+    </section>
+  );
+}
+
+function CouponUsageTab() {
+  const [usages, setUsages] = useState<CouponUsageSummary[]>([]);
+  const [usageState, setUsageState] = useState<LoadState>('idle');
+  const [usageError, setUsageError] = useState<string | null>(null);
+  const [couponCodeInput, setCouponCodeInput] = useState('');
+  const [memberIdInput, setMemberIdInput] = useState('');
+  const [statusInput, setStatusInput] = useState('');
+  const isMountedRef = useRef(true);
+  const usageRequestId = useRef(0);
+
+  const loadUsages = (filters = {
+    couponCode: couponCodeInput,
+    memberId: memberIdInput,
+    status: statusInput,
+  }) => {
+    const requestId = ++usageRequestId.current;
+    setUsageState('loading');
+    setUsageError(null);
+
+    listCouponUsages(filters)
+      .then((response) => {
+        if (!isMountedRef.current || requestId !== usageRequestId.current) {
+          return;
+        }
+
+        setUsages(response.items);
+        setUsageState('ready');
+      })
+      .catch((error) => {
+        if (!isMountedRef.current || requestId !== usageRequestId.current) {
+          return;
+        }
+
+        setUsages([]);
+        setUsageState('error');
+        setUsageError(errorMessage(error));
+      });
+  };
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    loadUsages({ couponCode: '', memberId: '', status: '' });
+
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
+  const onSubmitFilters = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    loadUsages();
+  };
+
+  return (
+    <section className="panel-shell">
+      <section className="panel">
+        <div className="panel-head">
+          <h2>쿠폰 사용 이력</h2>
+          <p className="panel-meta">
+            {usageState === 'loading'
+              ? '쿠폰 이력 조회 중'
+              : usageState === 'ready'
+                ? `최근 ${usages.length}건`
+                : '조회 대기'}
+          </p>
+        </div>
+
+        <form className="filter-grid" onSubmit={onSubmitFilters}>
+          <label className="form-field">
+            <span>쿠폰 코드</span>
+            <input
+              value={couponCodeInput}
+              onChange={(event) => setCouponCodeInput(event.target.value)}
+              placeholder="예: WELCOME10"
+            />
+          </label>
+          <label className="form-field">
+            <span>회원 ID</span>
+            <input
+              value={memberIdInput}
+              onChange={(event) => setMemberIdInput(event.target.value)}
+              placeholder="예: member-a"
+            />
+          </label>
+          <label className="form-field">
+            <span>사용 상태</span>
+            <select value={statusInput} onChange={(event) => setStatusInput(event.target.value)}>
+              <option value="">전체</option>
+              <option value="RESERVED">RESERVED</option>
+              <option value="CONSUMED">CONSUMED</option>
+              <option value="RELEASED">RELEASED</option>
+            </select>
+          </label>
+          <button type="submit" className="action-btn">
+            쿠폰 이력 조회
+          </button>
+        </form>
+
+        {usageError && (
+          <p className="error-banner" role="alert">
+            {usageError}
+          </p>
+        )}
+
+        {usageState === 'error' ? (
+          <p className="empty-message">쿠폰 사용 이력을 불러오지 못했습니다.</p>
+        ) : (
+          <>
+            <table className="events-table">
+              <thead>
+                <tr>
+                  <th>주문</th>
+                  <th>회원</th>
+                  <th>쿠폰</th>
+                  <th>상태</th>
+                  <th>주문 금액</th>
+                  <th>할인</th>
+                  <th>결제 예정</th>
+                  <th>예약</th>
+                  <th>확정/복구</th>
+                  <th>사유</th>
+                </tr>
+              </thead>
+              <tbody>
+                {usages.map((usage) => (
+                  <tr key={`${usage.orderId}-${usage.couponCode}-${usage.updatedAt}`}>
+                    <td>{usage.orderId}</td>
+                    <td>{usage.memberId}</td>
+                    <td>{usage.couponCode}</td>
+                    <td>
+                      <span className={`status-pill ${statusClass(usage.status)}`}>{usage.status}</span>
+                    </td>
+                    <td>{moneyValue(Number(usage.orderAmount))}</td>
+                    <td>{moneyValue(Number(usage.discountAmount))}</td>
+                    <td>{moneyValue(Number(usage.payableAmount))}</td>
+                    <td>{formatTime(usage.reservedAt)}</td>
+                    <td>{usage.consumedAt ? formatTime(usage.consumedAt) : usage.releasedAt ? formatTime(usage.releasedAt) : '-'}</td>
+                    <td>{emptyIfNull(usage.releaseReason)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {usages.length === 0 && usageState === 'ready' ? (
+              <p className="empty-message">조건에 맞는 쿠폰 사용 이력이 없습니다.</p>
+            ) : null}
           </>
         )}
       </section>
@@ -1295,7 +1449,7 @@ export default function App() {
           <p className="eyebrow">StockRush</p>
           <h1>포트폴리오 운영</h1>
         </div>
-        <p className="runtime-note">Dashboard / Orders / Outbox / Products</p>
+        <p className="runtime-note">Dashboard / Orders / Coupons / Outbox / Products</p>
       </header>
 
       <div className="segmented" role="tablist" aria-label="작업 영역">
@@ -1316,6 +1470,15 @@ export default function App() {
           onClick={() => setTab('orders')}
         >
           Orders
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={tab === 'coupons'}
+          className={tab === 'coupons' ? 'segment selected' : 'segment'}
+          onClick={() => setTab('coupons')}
+        >
+          Coupons
         </button>
         <button
           type="button"
@@ -1341,6 +1504,8 @@ export default function App() {
         <DashboardTab />
       ) : tab === 'orders' ? (
         <OrdersTab />
+      ) : tab === 'coupons' ? (
+        <CouponUsageTab />
       ) : tab === 'outbox' ? (
         <OutboxTab />
       ) : (

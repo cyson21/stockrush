@@ -12,10 +12,11 @@ Promotion Service owns coupon definitions, discount quote calculation, and order
 | `POST` | `/api/admin/coupons` | create coupon |
 | `GET` | `/api/admin/coupons?status=ACTIVE` | list coupons by status |
 | `GET` | `/api/admin/coupons/{couponCode}` | get coupon detail |
+| `GET` | `/api/admin/coupon-usages` | list coupon usage history |
 | `POST` | `/api/coupons/quote` | calculate coupon discount quote |
 | `GET` | `/ping` | local ping |
 
-Gateway routing and admin usage screens remain future scope. Customer App and Order Service already use the quote API, and the service can consume order events for coupon usage state.
+Gateway routes coupon quote and admin coupon usage history. Customer App and Order Service already use the quote API, and the service can consume order events for coupon usage state.
 
 Admin create requests require `Idempotency-Key`. Reusing the same key with the same request body returns the existing coupon; reusing it with a different body returns `409`.
 

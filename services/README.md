@@ -58,7 +58,7 @@ cd services/fulfillment-service && FULFILLMENT_KAFKA_LISTENERS_ENABLED=true mvn 
 cd services/read-model-service && READ_MODEL_KAFKA_LISTENERS_ENABLED=true mvn spring-boot:run
 ```
 
-Promotion Service is proxied by Gateway for coupon quote and is also reachable through the Customer App `/promotion` development proxy. Order Service calls it through `PROMOTION_SERVICE_URL`, and Kafka listeners consume order events for coupon usage state.
+Promotion Service is proxied by Gateway for coupon quote and admin coupon usage history. It is also reachable through the Customer App `/promotion` development proxy. Order Service calls it through `PROMOTION_SERVICE_URL`, and Kafka listeners consume order events for coupon usage state.
 Fulfillment Service is currently event-only and is not proxied by Gateway.
 Read Model Service is proxied by Gateway for customer/admin order summaries. It consumes order lifecycle events and exposes projection-backed order summary APIs.
 

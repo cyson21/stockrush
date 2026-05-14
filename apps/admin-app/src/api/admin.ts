@@ -4,6 +4,7 @@ import type {
   AdminOrderCancelResult,
   AdminOrderSaga,
   CatalogProduct,
+  CouponUsagePage,
   OutboxEventPage,
   OutboxRequeueResult,
   OutboxRetryResult,
@@ -27,6 +28,28 @@ export function listReadModelAdminOrders(): Promise<ReadModelOrderPage> {
       size: '50',
     }),
   );
+}
+
+export function listCouponUsages(filters: {
+  couponCode?: string;
+  memberId?: string;
+  status?: string;
+} = {}): Promise<CouponUsagePage> {
+  const params: Record<string, string> = {
+    page: '0',
+    size: '50',
+  };
+  if (filters.couponCode?.trim()) {
+    params.couponCode = filters.couponCode.trim();
+  }
+  if (filters.memberId?.trim()) {
+    params.memberId = filters.memberId.trim();
+  }
+  if (filters.status?.trim()) {
+    params.status = filters.status.trim();
+  }
+
+  return request<CouponUsagePage>(gatewayApiUrl('/api/admin/coupon-usages', params));
 }
 
 export function getOrderSaga(orderId: string): Promise<AdminOrderSaga> {

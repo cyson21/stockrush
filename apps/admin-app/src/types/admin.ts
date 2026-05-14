@@ -52,6 +52,27 @@ export type ReadModelOrderPage = {
   items: ReadModelOrderSummary[];
 };
 
+export type CouponUsageSummary = {
+  orderId: string;
+  memberId: string;
+  couponCode: string;
+  status: string;
+  orderAmount: number;
+  discountAmount: number;
+  payableAmount: number;
+  reservedAt: string;
+  consumedAt: string | null;
+  releasedAt: string | null;
+  releaseReason: string | null;
+  updatedAt: string;
+};
+
+export type CouponUsagePage = {
+  page: number;
+  size: number;
+  items: CouponUsageSummary[];
+};
+
 export type AdminOrderSaga = {
   orderId: string;
   orderStatus: string;

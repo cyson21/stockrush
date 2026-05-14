@@ -406,6 +406,14 @@ hr {
   margin: 14px 0;
 }
 
+.filter-grid {
+  align-items: end;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
+  margin: 14px 0;
+}
+
 .form-field {
   display: grid;
   gap: 6px;
@@ -502,7 +510,8 @@ hr {
     gap: 12px;
   }
 
-  .form-grid {
+  .form-grid,
+  .filter-grid {
     grid-template-columns: 1fr;
   }
 

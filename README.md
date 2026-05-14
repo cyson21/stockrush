@@ -142,7 +142,7 @@ Windows 11 PowerShell에서는 `.\scripts\demo-up.ps1`, `.\scripts\demo-smoke.ps
 - 실제 로컬 E2E는 [Local E2E Runbook](docs/runbooks/local-e2e.md)의 `CARD`, `FAIL_CARD`, `DELAY_CARD`, 지연 결제 취소 시나리오를 기준으로 재현합니다.
 - 최근 지연 결제 취소 E2E 증거: `ord_20260513012031_8c06cd49` 주문이 `CREATED/PAYMENT_DELAYED` 도달 후 관리자 취소로 `CANCELLED/FAILED`가 됐고, SKU `DELAY-E2E-102029-S` 재고는 `available=20`, `reserved=0`으로 복구됐습니다.
 - 동일 SKU 최종 상태 E2E 증거: `tools/local-e2e/local-e2e same-sku-concurrency` 실행에서 주문 생성/조회는 Gateway를 경유했고, 주문 6건, 초기 재고 3개 기준 3건 완료/3건 취소, 재고 `available=0`, `reserved=0`, 서비스별 `pendingOutboxDelta=0`을 확인했습니다.
-- Gateway 주문/운영 라우팅 smoke 증거: fake upstream 기준 주문 생성/조회, 관리자 주문 조회/취소, Outbox 조회/재시도/requeue, 쿠폰 견적, Read Model 주문 요약이 method, path, query, body, 핵심 헤더, status, body를 전달하는지 `services/gateway` Maven 테스트로 확인했습니다.
+- Gateway 주문/운영 라우팅 smoke 증거: fake upstream 기준 주문 생성/조회, 관리자 주문 조회/취소, Outbox 조회/재시도/requeue, 쿠폰 견적/사용 이력, Read Model 주문 요약이 method, path, query, body, 핵심 헤더, status, body를 전달하는지 `services/gateway` Maven 테스트로 확인했습니다.
 - Gateway 주문 시나리오 E2E 증거: `GW-E2E-20260513111940-332ba0dc` 기준 `CARD`, `FAIL_CARD`, `DELAY_CARD`, 지연 결제 취소가 Gateway 주문 경로에서 처리됐고, 최종 재고 `available=19`, `reserved=0`, 서비스별 `pendingOutboxDelta=0`을 확인했습니다.
 - Promotion Service 집중 검증: `PromotionCouponControllerIntegrationTest`로 쿠폰 생성, 상태별 목록, 퍼센트 할인 상한, 최소 주문 금액 미달, 중복 쿠폰 코드 응답을 확인했습니다.
 - 쿠폰 주문 반영 검증: Order Service 테스트로 quote 실패/타임아웃/금액 일관성, 주문 저장 가격 snapshot, Payment command 결제 예정 금액을 확인하고 Customer App Vitest/build로 쿠폰 UI를 확인했습니다.
@@ -153,7 +153,7 @@ Windows 11 PowerShell에서는 `.\scripts\demo-up.ps1`, `.\scripts\demo-smoke.ps
 ## 현재 한계
 
 - Gateway는 주문 생성/조회, 관리자 주문 조회/취소, Outbox 조회/재시도/requeue 라우팅 smoke와 동일 SKU runner/runbook의 Gateway 경유 경로까지 검증 범위를 넓혔습니다.
-- Promotion Service는 주문 이벤트 기반 쿠폰 사용 상태와 Gateway 쿠폰 견적 route까지 연결했습니다. 관리자 사용 이력 화면은 후속 확장 범위입니다.
+- Promotion Service는 주문 이벤트 기반 쿠폰 사용 상태, Gateway 쿠폰 견적/사용 이력 route, 관리자 사용 이력 화면까지 연결했습니다.
 - Fulfillment Service는 출고 준비 요청 기록까지 연결했습니다. carrier/label/tracking 상태와 관리자 화면은 후속 확장 범위입니다.
-- Read Model Service는 주문 요약 projection, 서비스-local 조회 API, Gateway 조회 route까지 연결했습니다. 상품 검색 projection과 관리자 대시보드는 후속 확장 범위입니다.
+- Read Model Service는 주문 요약 projection, 서비스-local 조회 API, Gateway 조회 route, 관리자 대시보드까지 연결했습니다. 상품 검색 projection은 후속 확장 범위입니다.
 - 인증/권한, 부하 벤치마크, Kafka consumer 병렬성 검증, Kafka 장애 복구 자동화는 후속 확장 범위입니다.

@@ -71,6 +71,44 @@ Returns coupons filtered by `status` in creation order.
 
 Returns the coupon detail exposed by the `Location` header from create.
 
+## Admin: List Coupon Usages
+
+`GET /api/admin/coupon-usages?couponCode=WELCOME10&memberId=member-a&status=CONSUMED&page=0&size=20`
+
+This endpoint is available through Gateway and Promotion Service with the same path. Query parameters are optional. `page` is normalized to `0` or greater, and `size` is capped at `100`.
+
+Response:
+
+```json
+{
+  "success": true,
+  "data": {
+    "page": 0,
+    "size": 20,
+    "items": [
+      {
+        "orderId": "ord_coupon_usage_001",
+        "memberId": "member-a",
+        "couponCode": "WELCOME10",
+        "status": "CONSUMED",
+        "orderAmount": 80000.00,
+        "discountAmount": 5000.00,
+        "payableAmount": 75000.00,
+        "reservedAt": "2026-05-13T04:30:00Z",
+        "consumedAt": "2026-05-13T04:31:00Z",
+        "releasedAt": null,
+        "releaseReason": null,
+        "updatedAt": "2026-05-13T04:31:00Z"
+      }
+    ]
+  },
+  "error": null,
+  "trace": {
+    "correlationId": "corr-promotion-usage-list"
+  }
+}
+```
+
 ## Customer: Quote Coupon
 
 `POST /api/coupons/quote`

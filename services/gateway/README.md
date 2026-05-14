@@ -18,6 +18,7 @@ Phase 1 keeps the gateway light and focused on routing smoke coverage.
 | `POST` | `/api/admin/outbox-services/{service}/events/retry` | Selected service `POST /api/admin/outbox-events/retry` |
 | `POST` | `/api/admin/outbox-services/{service}/events/failed/requeue` | Selected service `POST /api/admin/outbox-events/failed/requeue` |
 | `POST` | `/api/coupons/quote` | Promotion Service `POST /api/coupons/quote` |
+| `GET` | `/api/admin/coupon-usages` | Promotion Service `GET /api/admin/coupon-usages` |
 | `GET` | `/api/read-model/orders` | Read Model Service `GET /api/read-model/orders` |
 | `GET` | `/api/read-model/admin/orders` | Read Model Service `GET /api/read-model/admin/orders` |
 | `GET` | `/internal/ping` | Gateway local health-style ping |
@@ -41,6 +42,6 @@ Phase 1 keeps the gateway light and focused on routing smoke coverage.
 JAVA_HOME=/Users/chanyang.son/Library/Java/JavaVirtualMachines/ms-17.0.18/Contents/Home mvn test
 ```
 
-The routing smoke test uses fake upstream services and verifies method, path, query string, body, `Idempotency-Key`, `X-Correlation-Id`, `X-Operator-Id`, response status, `Location`, and response body propagation for customer order routes, admin order routes, Outbox admin routes including failed requeue, coupon quote, and Read Model order summary routes.
+The routing smoke test uses fake upstream services and verifies method, path, query string, body, `Idempotency-Key`, `X-Correlation-Id`, `X-Operator-Id`, response status, `Location`, and response body propagation for customer order routes, admin order routes, Outbox admin routes including failed requeue, coupon quote, coupon usage history, and Read Model order summary routes.
 
 Auth and broader service routing remain future scope.

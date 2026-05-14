@@ -384,6 +384,55 @@ class OrderGatewayControllerIntegrationTest {
     }
 
     @Test
+    void routes_admin_coupon_usage_history_to_promotion_service() throws Exception {
+        HttpRequest request = HttpRequest.newBuilder(
+                gatewayUri("/api/admin/coupon-usages?couponCode=WELCOME10&status=CONSUMED&page=0&size=20")
+            )
+            .header("X-Correlation-Id", "corr-gateway-coupon-usages")
+            .GET()
+            .build();
+
+        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.headers().firstValue("X-Correlation-Id")).contains("corr-gateway-coupon-usages");
+        assertThat(response.body()).contains("\"orderId\":\"ord_coupon_gateway_001\"");
+        assertThat(response.body()).contains("\"couponCode\":\"WELCOME10\"");
+
+        RecordedRequest forwarded = STUB_PROMOTION_SERVICE.singleRequest();
+        assertThat(forwarded.method()).isEqualTo("GET");
+        assertThat(forwarded.path()).isEqualTo("/api/admin/coupon-usages");
+        assertThat(forwarded.query()).contains("couponCode=WELCOME10&status=CONSUMED&page=0&size=20");
+        assertThat(forwarded.firstHeader("X-Correlation-Id")).contains("corr-gateway-coupon-usages");
+        STUB_ORDER_SERVICE.assertNoRequests();
+        STUB_READ_MODEL_SERVICE.assertNoRequests();
+    }
+
+    @Test
+    void routes_admin_coupon_usage_history_with_trailing_slash_to_promotion_service() throws Exception {
+        HttpRequest request = HttpRequest.newBuilder(
+                gatewayUri("/api/admin/coupon-usages/?status=RELEASED")
+            )
+            .header("X-Correlation-Id", "corr-gateway-coupon-usages-slash")
+            .GET()
+            .build();
+
+        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.headers().firstValue("X-Correlation-Id")).contains("corr-gateway-coupon-usages-slash");
+        assertThat(response.body()).contains("\"couponCode\":\"WELCOME10\"");
+
+        RecordedRequest forwarded = STUB_PROMOTION_SERVICE.singleRequest();
+        assertThat(forwarded.method()).isEqualTo("GET");
+        assertThat(forwarded.path()).isEqualTo("/api/admin/coupon-usages");
+        assertThat(forwarded.query()).contains("status=RELEASED");
+        assertThat(forwarded.firstHeader("X-Correlation-Id")).contains("corr-gateway-coupon-usages-slash");
+        STUB_ORDER_SERVICE.assertNoRequests();
+        STUB_READ_MODEL_SERVICE.assertNoRequests();
+    }
+
+    @Test
     void routes_customer_order_history_to_read_model_service() throws Exception {
         HttpRequest request = HttpRequest.newBuilder(
                 gatewayUri("/api/read-model/orders?memberId=member-mobile&page=0&size=10")
@@ -523,6 +572,7 @@ class OrderGatewayControllerIntegrationTest {
             server.createContext("/api/orders", this::handle);
             server.createContext("/api/admin/orders", this::handle);
             server.createContext("/api/admin/outbox-events", this::handle);
+            server.createContext("/api/admin/coupon-usages", this::handle);
             server.createContext("/api/coupons", this::handle);
             server.createContext("/api/read-model", this::handle);
             server.start();
@@ -610,6 +660,15 @@ class OrderGatewayControllerIntegrationTest {
             if ("POST".equals(exchange.getRequestMethod()) && "/api/coupons/quote".equals(path)) {
                 writeJson(exchange, 200, currentCorrelationId(exchange), null, """
                     {"success":true,"data":{"couponCode":"WELCOME10","applied":true,"discountAmount":5000.0,"payAmount":75000.0,"reason":"APPLIED"},"error":null,"trace":{"correlationId":"%s"}}
+                    """.formatted(currentCorrelationId(exchange)));
+                return;
+            }
+            if (
+                "GET".equals(exchange.getRequestMethod())
+                    && ("/api/admin/coupon-usages".equals(path) || "/api/admin/coupon-usages/".equals(path))
+            ) {
+                writeJson(exchange, 200, currentCorrelationId(exchange), null, """
+                    {"success":true,"data":{"page":0,"size":20,"items":[{"orderId":"ord_coupon_gateway_001","memberId":"member-gateway","couponCode":"WELCOME10","status":"CONSUMED","orderAmount":80000.0,"discountAmount":5000.0,"payableAmount":75000.0,"reservedAt":"2026-05-13T04:30:00Z","consumedAt":"2026-05-13T04:31:00Z","releasedAt":null,"releaseReason":null,"updatedAt":"2026-05-13T04:31:00Z"}]},"error":null,"trace":{"correlationId":"%s"}}
                     """.formatted(currentCorrelationId(exchange)));
                 return;
             }
