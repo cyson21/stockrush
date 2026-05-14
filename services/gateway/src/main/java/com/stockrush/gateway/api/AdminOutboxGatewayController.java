@@ -15,10 +15,10 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/admin/outbox-services/{service}/events")
 class AdminOutboxGatewayController {
 
-    private final OrderServiceProxy orderServiceProxy;
+    private final GatewayServiceProxy gatewayServiceProxy;
 
-    AdminOutboxGatewayController(OrderServiceProxy orderServiceProxy) {
-        this.orderServiceProxy = orderServiceProxy;
+    AdminOutboxGatewayController(GatewayServiceProxy gatewayServiceProxy) {
+        this.gatewayServiceProxy = gatewayServiceProxy;
     }
 
     @GetMapping
@@ -56,7 +56,7 @@ class AdminOutboxGatewayController {
         String body
     ) {
         try {
-            return orderServiceProxy.forward(ServiceRoute.from(service), method, path, headers, body);
+            return gatewayServiceProxy.forward(ServiceRoute.from(service), method, path, headers, body);
         } catch (IllegalArgumentException exception) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body("""
                 {"success":false,"data":null,"error":{"code":"SERVICE_ROUTE_NOT_FOUND","message":"unsupported service route"},"trace":{"correlationId":null}}

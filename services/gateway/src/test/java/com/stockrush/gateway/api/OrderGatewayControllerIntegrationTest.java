@@ -42,6 +42,16 @@ class OrderGatewayControllerIntegrationTest {
         "PaymentAuthorized",
         "stockrush.payment.events.v1"
     );
+    private static final StubService STUB_PROMOTION_SERVICE = new StubService(
+        "promotion",
+        "CouponUsageReserved",
+        "stockrush.promotion.events.v1"
+    );
+    private static final StubService STUB_READ_MODEL_SERVICE = new StubService(
+        "read-model",
+        "OrderSummaryProjected",
+        "stockrush.read-model.events.v1"
+    );
 
     private final HttpClient httpClient = HttpClient.newHttpClient();
 
@@ -53,9 +63,13 @@ class OrderGatewayControllerIntegrationTest {
         STUB_ORDER_SERVICE.start();
         STUB_INVENTORY_SERVICE.start();
         STUB_PAYMENT_SERVICE.start();
+        STUB_PROMOTION_SERVICE.start();
+        STUB_READ_MODEL_SERVICE.start();
         registry.add("stockrush.routes.order-service-url", STUB_ORDER_SERVICE::baseUrl);
         registry.add("stockrush.routes.inventory-service-url", STUB_INVENTORY_SERVICE::baseUrl);
         registry.add("stockrush.routes.payment-service-url", STUB_PAYMENT_SERVICE::baseUrl);
+        registry.add("stockrush.routes.promotion-service-url", STUB_PROMOTION_SERVICE::baseUrl);
+        registry.add("stockrush.routes.read-model-service-url", STUB_READ_MODEL_SERVICE::baseUrl);
     }
 
     @BeforeEach
@@ -63,6 +77,8 @@ class OrderGatewayControllerIntegrationTest {
         STUB_ORDER_SERVICE.reset();
         STUB_INVENTORY_SERVICE.reset();
         STUB_PAYMENT_SERVICE.reset();
+        STUB_PROMOTION_SERVICE.reset();
+        STUB_READ_MODEL_SERVICE.reset();
     }
 
     @AfterAll
@@ -70,6 +86,8 @@ class OrderGatewayControllerIntegrationTest {
         STUB_ORDER_SERVICE.stop();
         STUB_INVENTORY_SERVICE.stop();
         STUB_PAYMENT_SERVICE.stop();
+        STUB_PROMOTION_SERVICE.stop();
+        STUB_READ_MODEL_SERVICE.stop();
     }
 
     @Test
@@ -296,6 +314,87 @@ class OrderGatewayControllerIntegrationTest {
     }
 
     @Test
+    void routes_coupon_quote_command_to_promotion_service() throws Exception {
+        String requestBody = """
+            {
+              "couponCode": "WELCOME10",
+              "orderAmount": 80000.00
+            }
+            """;
+
+        HttpRequest request = HttpRequest.newBuilder(gatewayUri("/api/coupons/quote"))
+            .header("Content-Type", "application/json")
+            .header("X-Correlation-Id", "corr-gateway-coupon-quote")
+            .POST(HttpRequest.BodyPublishers.ofString(requestBody))
+            .build();
+
+        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.headers().firstValue("X-Correlation-Id")).contains("corr-gateway-coupon-quote");
+        assertThat(response.body()).contains("\"couponCode\":\"WELCOME10\"");
+        assertThat(response.body()).contains("\"discountAmount\":5000.0");
+
+        RecordedRequest forwarded = STUB_PROMOTION_SERVICE.singleRequest();
+        assertThat(forwarded.method()).isEqualTo("POST");
+        assertThat(forwarded.path()).isEqualTo("/api/coupons/quote");
+        assertThat(forwarded.firstHeader("Content-Type")).contains("application/json");
+        assertThat(forwarded.firstHeader("X-Correlation-Id")).contains("corr-gateway-coupon-quote");
+        assertThat(forwarded.body()).contains("\"couponCode\": \"WELCOME10\"");
+        STUB_ORDER_SERVICE.assertNoRequests();
+        STUB_READ_MODEL_SERVICE.assertNoRequests();
+    }
+
+    @Test
+    void routes_customer_order_history_to_read_model_service() throws Exception {
+        HttpRequest request = HttpRequest.newBuilder(
+                gatewayUri("/api/read-model/orders?memberId=member-mobile&page=0&size=10")
+            )
+            .header("X-Correlation-Id", "corr-gateway-read-model-customer")
+            .GET()
+            .build();
+
+        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.headers().firstValue("X-Correlation-Id")).contains("corr-gateway-read-model-customer");
+        assertThat(response.body()).contains("\"memberId\":\"member-mobile\"");
+        assertThat(response.body()).contains("\"orderId\":\"ord_read_model_001\"");
+
+        RecordedRequest forwarded = STUB_READ_MODEL_SERVICE.singleRequest();
+        assertThat(forwarded.method()).isEqualTo("GET");
+        assertThat(forwarded.path()).isEqualTo("/api/read-model/orders");
+        assertThat(forwarded.query()).contains("memberId=member-mobile&page=0&size=10");
+        assertThat(forwarded.firstHeader("X-Correlation-Id")).contains("corr-gateway-read-model-customer");
+        STUB_ORDER_SERVICE.assertNoRequests();
+        STUB_PROMOTION_SERVICE.assertNoRequests();
+    }
+
+    @Test
+    void routes_admin_order_summary_to_read_model_service() throws Exception {
+        HttpRequest request = HttpRequest.newBuilder(
+                gatewayUri("/api/read-model/admin/orders?status=CONFIRMED&page=1&size=5")
+            )
+            .header("X-Correlation-Id", "corr-gateway-read-model-admin")
+            .GET()
+            .build();
+
+        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.headers().firstValue("X-Correlation-Id")).contains("corr-gateway-read-model-admin");
+        assertThat(response.body()).contains("\"status\":\"CONFIRMED\"");
+
+        RecordedRequest forwarded = STUB_READ_MODEL_SERVICE.singleRequest();
+        assertThat(forwarded.method()).isEqualTo("GET");
+        assertThat(forwarded.path()).isEqualTo("/api/read-model/admin/orders");
+        assertThat(forwarded.query()).contains("status=CONFIRMED&page=1&size=5");
+        assertThat(forwarded.firstHeader("X-Correlation-Id")).contains("corr-gateway-read-model-admin");
+        STUB_ORDER_SERVICE.assertNoRequests();
+        STUB_PROMOTION_SERVICE.assertNoRequests();
+    }
+
+    @Test
     void rejects_unknown_outbox_service_without_calling_upstream() throws Exception {
         HttpRequest request = HttpRequest.newBuilder(gatewayUri("/api/admin/outbox-services/finance/events"))
             .header("X-Correlation-Id", "corr-gateway-unknown-outbox")
@@ -309,6 +408,8 @@ class OrderGatewayControllerIntegrationTest {
         STUB_ORDER_SERVICE.assertNoRequests();
         STUB_INVENTORY_SERVICE.assertNoRequests();
         STUB_PAYMENT_SERVICE.assertNoRequests();
+        STUB_PROMOTION_SERVICE.assertNoRequests();
+        STUB_READ_MODEL_SERVICE.assertNoRequests();
     }
 
     private URI gatewayUri(String path) {
@@ -335,11 +436,13 @@ class OrderGatewayControllerIntegrationTest {
             try {
                 server = HttpServer.create(new InetSocketAddress(0), 0);
             } catch (IOException exception) {
-                throw new IllegalStateException("Failed to start stub order service", exception);
+                throw new IllegalStateException("Failed to start stub service", exception);
             }
             server.createContext("/api/orders", this::handle);
             server.createContext("/api/admin/orders", this::handle);
             server.createContext("/api/admin/outbox-events", this::handle);
+            server.createContext("/api/coupons", this::handle);
+            server.createContext("/api/read-model", this::handle);
             server.start();
         }
 
@@ -420,6 +523,24 @@ class OrderGatewayControllerIntegrationTest {
                 writeJson(exchange, 202, "corr-gateway-admin-cancel", null, """
                     {"success":true,"data":{"orderId":"ord_gateway_delay","status":"CREATED","sagaStatus":"PAYMENT_CANCEL_REQUESTED"},"error":null,"trace":{"correlationId":"corr-gateway-admin-cancel"}}
                     """);
+                return;
+            }
+            if ("POST".equals(exchange.getRequestMethod()) && "/api/coupons/quote".equals(path)) {
+                writeJson(exchange, 200, currentCorrelationId(exchange), null, """
+                    {"success":true,"data":{"couponCode":"WELCOME10","applied":true,"discountAmount":5000.0,"payAmount":75000.0,"reason":"APPLIED"},"error":null,"trace":{"correlationId":"%s"}}
+                    """.formatted(currentCorrelationId(exchange)));
+                return;
+            }
+            if ("GET".equals(exchange.getRequestMethod()) && "/api/read-model/orders".equals(path)) {
+                writeJson(exchange, 200, currentCorrelationId(exchange), null, """
+                    {"success":true,"data":{"page":0,"size":10,"items":[{"orderId":"ord_read_model_001","memberId":"member-mobile","status":"CONFIRMED","sagaStatus":"COMPLETED","couponCode":"WELCOME10","totalAmount":80000.0,"discountAmount":5000.0,"payableAmount":75000.0,"itemCount":1}]},"error":null,"trace":{"correlationId":"%s"}}
+                    """.formatted(currentCorrelationId(exchange)));
+                return;
+            }
+            if ("GET".equals(exchange.getRequestMethod()) && "/api/read-model/admin/orders".equals(path)) {
+                writeJson(exchange, 200, currentCorrelationId(exchange), null, """
+                    {"success":true,"data":{"page":1,"size":5,"items":[{"orderId":"ord_read_model_admin_001","memberId":"member-admin","status":"CONFIRMED","sagaStatus":"COMPLETED","totalAmount":80000.0,"discountAmount":5000.0,"payableAmount":75000.0,"itemCount":1}]},"error":null,"trace":{"correlationId":"%s"}}
+                    """.formatted(currentCorrelationId(exchange)));
                 return;
             }
 

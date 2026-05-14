@@ -15,7 +15,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
 
 @Component
-class OrderServiceProxy {
+class GatewayServiceProxy {
 
     private static final Set<String> REQUEST_HEADERS = Set.of(
         "content-type",
@@ -30,14 +30,14 @@ class OrderServiceProxy {
     );
 
     private final HttpClient httpClient;
-    private final OrderServiceRoutingProperties routingProperties;
+    private final GatewayRoutingProperties routingProperties;
 
     @Autowired
-    OrderServiceProxy(OrderServiceRoutingProperties routingProperties) {
+    GatewayServiceProxy(GatewayRoutingProperties routingProperties) {
         this(HttpClient.newHttpClient(), routingProperties);
     }
 
-    OrderServiceProxy(HttpClient httpClient, OrderServiceRoutingProperties routingProperties) {
+    GatewayServiceProxy(HttpClient httpClient, GatewayRoutingProperties routingProperties) {
         this.httpClient = httpClient;
         this.routingProperties = routingProperties;
     }
@@ -65,10 +65,10 @@ class OrderServiceProxy {
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
             return toResponseEntity(response);
         } catch (IOException exception) {
-            throw new IllegalStateException("Failed to route request to order service", exception);
+            throw new IllegalStateException("Failed to route request to upstream service", exception);
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
-            throw new IllegalStateException("Interrupted while routing request to order service", exception);
+            throw new IllegalStateException("Interrupted while routing request to upstream service", exception);
         }
     }
 
@@ -96,33 +96,43 @@ class OrderServiceProxy {
 enum ServiceRoute {
     ORDER,
     INVENTORY,
-    PAYMENT;
+    PAYMENT,
+    PROMOTION,
+    READ_MODEL;
 
     static ServiceRoute from(String value) {
         return switch (value) {
             case "order" -> ORDER;
             case "inventory" -> INVENTORY;
             case "payment" -> PAYMENT;
+            case "promotion" -> PROMOTION;
+            case "read-model" -> READ_MODEL;
             default -> throw new IllegalArgumentException("unsupported service route: " + value);
         };
     }
 }
 
 @ConfigurationProperties(prefix = "stockrush.routes")
-record OrderServiceRoutingProperties(
+record GatewayRoutingProperties(
     String orderServiceUrl,
     String inventoryServiceUrl,
-    String paymentServiceUrl
+    String paymentServiceUrl,
+    String promotionServiceUrl,
+    String readModelServiceUrl
 ) {
 
     private static final String DEFAULT_ORDER_SERVICE_URL = "http://localhost:18083";
     private static final String DEFAULT_INVENTORY_SERVICE_URL = "http://localhost:18082";
     private static final String DEFAULT_PAYMENT_SERVICE_URL = "http://localhost:18084";
+    private static final String DEFAULT_PROMOTION_SERVICE_URL = "http://localhost:18085";
+    private static final String DEFAULT_READ_MODEL_SERVICE_URL = "http://localhost:18087";
 
-    OrderServiceRoutingProperties {
+    GatewayRoutingProperties {
         orderServiceUrl = normalize(orderServiceUrl, DEFAULT_ORDER_SERVICE_URL);
         inventoryServiceUrl = normalize(inventoryServiceUrl, DEFAULT_INVENTORY_SERVICE_URL);
         paymentServiceUrl = normalize(paymentServiceUrl, DEFAULT_PAYMENT_SERVICE_URL);
+        promotionServiceUrl = normalize(promotionServiceUrl, DEFAULT_PROMOTION_SERVICE_URL);
+        readModelServiceUrl = normalize(readModelServiceUrl, DEFAULT_READ_MODEL_SERVICE_URL);
     }
 
     String serviceUrl(ServiceRoute service) {
@@ -130,6 +140,8 @@ record OrderServiceRoutingProperties(
             case ORDER -> orderServiceUrl;
             case INVENTORY -> inventoryServiceUrl;
             case PAYMENT -> paymentServiceUrl;
+            case PROMOTION -> promotionServiceUrl;
+            case READ_MODEL -> readModelServiceUrl;
         };
     }
 

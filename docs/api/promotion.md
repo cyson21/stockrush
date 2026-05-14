@@ -1,8 +1,11 @@
 # Promotion API
 
-Promotion API는 쿠폰 정의와 주문 전 할인 견적을 다룬다. 현재 API 호출은 `promotion-service` 직접 호출 기준이며, 주문 이벤트 소비로 쿠폰 사용 상태도 기록한다. Gateway route는 후속 범위이다.
+Promotion API는 쿠폰 정의와 주문 전 할인 견적을 다룬다. 주문 이벤트 소비로 쿠폰 사용 상태도 기록한다.
 
-Base URL: `http://localhost:18085`
+Base URLs:
+
+- Gateway customer quote: `http://localhost:18080`
+- Service-local admin and direct service check: `http://localhost:18085`
 
 ## Admin: Create Coupon
 
@@ -71,6 +74,8 @@ Returns the coupon detail exposed by the `Location` header from create.
 ## Customer: Quote Coupon
 
 `POST /api/coupons/quote`
+
+Customer quote is available through Gateway and Promotion Service with the same path. Mobile and external demo clients should use the Gateway route.
 
 Request:
 

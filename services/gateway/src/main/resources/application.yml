@@ -10,6 +10,8 @@ stockrush:
     order-service-url: ${ORDER_SERVICE_URL:http://localhost:18083}
     inventory-service-url: ${INVENTORY_SERVICE_URL:http://localhost:18082}
     payment-service-url: ${PAYMENT_SERVICE_URL:http://localhost:18084}
+    promotion-service-url: ${PROMOTION_SERVICE_URL:http://localhost:18085}
+    read-model-service-url: ${READ_MODEL_SERVICE_URL:http://localhost:18087}
 
 management:
   endpoints:

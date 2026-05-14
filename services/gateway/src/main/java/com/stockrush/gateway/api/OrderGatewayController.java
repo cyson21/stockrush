@@ -16,10 +16,10 @@ import org.springframework.web.util.UriUtils;
 @RequestMapping("/api/orders")
 class OrderGatewayController {
 
-    private final OrderServiceProxy orderServiceProxy;
+    private final GatewayServiceProxy gatewayServiceProxy;
 
-    OrderGatewayController(OrderServiceProxy orderServiceProxy) {
-        this.orderServiceProxy = orderServiceProxy;
+    OrderGatewayController(GatewayServiceProxy gatewayServiceProxy) {
+        this.gatewayServiceProxy = gatewayServiceProxy;
     }
 
     @PostMapping
@@ -27,7 +27,7 @@ class OrderGatewayController {
         @RequestHeader HttpHeaders headers,
         @RequestBody(required = false) String body
     ) {
-        return orderServiceProxy.forward("POST", "/api/orders", headers, body);
+        return gatewayServiceProxy.forward("POST", "/api/orders", headers, body);
     }
 
     @GetMapping("/{orderId}")
@@ -36,6 +36,6 @@ class OrderGatewayController {
         @RequestHeader HttpHeaders headers
     ) {
         String encodedOrderId = UriUtils.encodePathSegment(orderId, StandardCharsets.UTF_8);
-        return orderServiceProxy.forward("GET", "/api/orders/" + encodedOrderId, headers, null);
+        return gatewayServiceProxy.forward("GET", "/api/orders/" + encodedOrderId, headers, null);
     }
 }

@@ -16,10 +16,10 @@ import org.springframework.web.util.UriUtils;
 @RequestMapping("/api/admin/orders")
 class AdminOrderGatewayController {
 
-    private final OrderServiceProxy orderServiceProxy;
+    private final GatewayServiceProxy gatewayServiceProxy;
 
-    AdminOrderGatewayController(OrderServiceProxy orderServiceProxy) {
-        this.orderServiceProxy = orderServiceProxy;
+    AdminOrderGatewayController(GatewayServiceProxy gatewayServiceProxy) {
+        this.gatewayServiceProxy = gatewayServiceProxy;
     }
 
     @GetMapping
@@ -27,7 +27,7 @@ class AdminOrderGatewayController {
         @RequestHeader HttpHeaders headers,
         HttpServletRequest request
     ) {
-        return orderServiceProxy.forward("GET", withQueryString("/api/admin/orders", request), headers, null);
+        return gatewayServiceProxy.forward("GET", withQueryString("/api/admin/orders", request), headers, null);
     }
 
     @GetMapping("/{orderId}/saga")
@@ -36,7 +36,7 @@ class AdminOrderGatewayController {
         @RequestHeader HttpHeaders headers
     ) {
         String encodedOrderId = UriUtils.encodePathSegment(orderId, StandardCharsets.UTF_8);
-        return orderServiceProxy.forward("GET", "/api/admin/orders/" + encodedOrderId + "/saga", headers, null);
+        return gatewayServiceProxy.forward("GET", "/api/admin/orders/" + encodedOrderId + "/saga", headers, null);
     }
 
     @PostMapping("/{orderId}/cancel")
@@ -45,7 +45,7 @@ class AdminOrderGatewayController {
         @RequestHeader HttpHeaders headers
     ) {
         String encodedOrderId = UriUtils.encodePathSegment(orderId, StandardCharsets.UTF_8);
-        return orderServiceProxy.forward("POST", "/api/admin/orders/" + encodedOrderId + "/cancel", headers, null);
+        return gatewayServiceProxy.forward("POST", "/api/admin/orders/" + encodedOrderId + "/cancel", headers, null);
     }
 
     private String withQueryString(String path, HttpServletRequest request) {

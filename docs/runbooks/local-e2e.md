@@ -104,18 +104,18 @@ curl -sSf http://localhost:18087/actuator/health
 
 ## Gateway 주문/운영 라우팅 Smoke
 
-Gateway는 주문 생성/조회, 관리자 주문 조회/취소, Outbox 조회/재시도/requeue 라우팅 smoke를 제공한다. 이 테스트는 Gateway가 대상 서비스로 method, path, query string, body, 핵심 헤더와 응답을 전달하는지를 fake upstream으로 고정한다.
+Gateway는 주문 생성/조회, 관리자 주문 조회/취소, Outbox 조회/재시도/requeue, 쿠폰 견적, Read Model 주문 요약 라우팅 smoke를 제공한다. 이 테스트는 Gateway가 대상 서비스로 method, path, query string, body, 핵심 헤더와 응답을 전달하는지를 fake upstream으로 고정한다.
 
 ```bash
 cd services/gateway
 JAVA_HOME=/Users/chanyang.son/Library/Java/JavaVirtualMachines/ms-17.0.18/Contents/Home mvn test
 ```
 
-로컬 기동 시 Gateway는 기본적으로 `ORDER_SERVICE_URL=http://localhost:18083`, `INVENTORY_SERVICE_URL=http://localhost:18082`, `PAYMENT_SERVICE_URL=http://localhost:18084`로 각 서비스를 호출한다. Outbox admin API는 `service` path 값으로 `order`, `inventory`, `payment`를 선택한다.
+로컬 기동 시 Gateway는 기본적으로 `ORDER_SERVICE_URL=http://localhost:18083`, `INVENTORY_SERVICE_URL=http://localhost:18082`, `PAYMENT_SERVICE_URL=http://localhost:18084`, `PROMOTION_SERVICE_URL=http://localhost:18085`, `READ_MODEL_SERVICE_URL=http://localhost:18087`로 각 서비스를 호출한다. Outbox admin API는 `service` path 값으로 `order`, `inventory`, `payment`를 선택한다.
 
-Promotion Service는 현재 Gateway를 거치지 않는 API로 확인한다. Customer App은 `/promotion` Vite proxy로 quote API를 호출하고, Order Service는 `PROMOTION_SERVICE_URL`로 quote API를 호출한다. `PROMOTION_KAFKA_LISTENERS_ENABLED=true`로 기동하면 주문 이벤트를 소비해 쿠폰 사용 상태를 `RESERVED`, `CONSUMED`, `RELEASED`로 기록한다.
+Promotion Service는 Gateway의 `/api/coupons/quote` route 또는 service-local API로 확인한다. Customer App은 아직 `/promotion` Vite proxy로 quote API를 호출하고, Order Service는 `PROMOTION_SERVICE_URL`로 quote API를 호출한다. `PROMOTION_KAFKA_LISTENERS_ENABLED=true`로 기동하면 주문 이벤트를 소비해 쿠폰 사용 상태를 `RESERVED`, `CONSUMED`, `RELEASED`로 기록한다.
 
-Fulfillment Service는 현재 이벤트 기반 출고 준비 요청 기록을 담당한다. Read Model Service는 현재 service-local 조회 API로 주문 요약 projection을 제공하며, 모바일 앱 구현 전 Gateway route를 추가한다.
+Fulfillment Service는 현재 이벤트 기반 출고 준비 요청 기록을 담당한다. Read Model Service는 service-local 조회 API와 Gateway의 `/api/read-model/orders`, `/api/read-model/admin/orders` route로 주문 요약 projection을 제공한다.
 
 ## 반복 실행용 Local E2E Runner
 
