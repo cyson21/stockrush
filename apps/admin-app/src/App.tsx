@@ -829,9 +829,10 @@ function CatalogTab() {
   const onSubmitStock = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    const availableQuantity = Number(stockQuantityInput);
+    const trimmedStockQuantity = stockQuantityInput.trim();
+    const availableQuantity = Number(trimmedStockQuantity);
 
-    if (!skuIdInput.trim() || !stockProductCodeInput.trim() || !Number.isFinite(availableQuantity)) {
+    if (!skuIdInput.trim() || !stockProductCodeInput.trim() || !trimmedStockQuantity || !Number.isFinite(availableQuantity)) {
       setStockSubmitState('error');
       setStockSubmitError('SKU, 상품코드, 재고 수량을 모두 입력하세요.');
       return;
@@ -948,7 +949,7 @@ function CatalogTab() {
             </p>
           )}
 
-          <form className="form-grid" onSubmit={onSubmitProduct}>
+          <form className="form-grid" onSubmit={onSubmitProduct} noValidate>
             <label className="form-field">
               <span>상품코드(등록/수정)</span>
               <input
@@ -1022,6 +1023,11 @@ function CatalogTab() {
             </p>
           )}
           {stockSubmitMessage && <p className="success-banner">{stockSubmitMessage}</p>}
+          {stockSubmitError && (
+            <p className="error-banner" role="alert">
+              {stockSubmitError}
+            </p>
+          )}
 
           <form className="stock-search" onSubmit={(event) => {
             event.preventDefault();
@@ -1074,7 +1080,7 @@ function CatalogTab() {
             ) : null}
           </div>
 
-          <form className="stock-update" onSubmit={onSubmitStock}>
+          <form className="stock-update" onSubmit={onSubmitStock} noValidate>
             <div className="form-grid">
               <label className="form-field">
                 <span>SKU</span>

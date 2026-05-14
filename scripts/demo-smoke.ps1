@@ -70,10 +70,12 @@ python (Join-Path $RootDir "tools/local-e2e/local-e2e") demo-order-flow `
   --outbox-api-url "http://localhost:$GatewayPort" `
   --payment-url "http://localhost:$PaymentPort" `
   --promotion-url "http://localhost:$PromotionPort" `
+  --relay-mode automatic `
   --orders 3 `
   --initial-stock 20 `
   --quantity 1 `
-  --max-attempts 12
+  --max-attempts 30 `
+  --wait-seconds 1
 
 if ($LASTEXITCODE -ne 0) {
   exit $LASTEXITCODE

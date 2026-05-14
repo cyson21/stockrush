@@ -649,4 +649,680 @@ describe('admin app operations', () => {
     expect(headerValue(stockInit?.headers, 'Content-Type')).toBe('application/json');
     expect(stockInit?.body).toBe(JSON.stringify({ productCode: 'NEW-PROD-001', availableQuantity: 7 }));
   });
+
+  it('shows an alert when order list request fails', async () => {
+    fetchMock.mockImplementation((input, init) => {
+      const request = new URL(String(input), 'http://localhost:5173');
+      const method = init?.method ?? 'GET';
+
+      if (request.pathname === '/orders/api/admin/orders' && method === 'GET') {
+        return buildErrorResponse('ORDER_LIST_FAIL', '주문 목록 조회 실패');
+      }
+
+      return defaultRequestHandler(input, init);
+    });
+
+    render(<App />);
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('ORDER_LIST_FAIL: 주문 목록 조회 실패');
+    expect(await screen.findByText('목록을 읽지 못했습니다.')).toBeInTheDocument();
+    expect(screen.queryByText('ord_admin_001')).not.toBeInTheDocument();
+  });
+
+  it('shows saga detail error and removes previous saga content after failed fetch', async () => {
+    const user = userEvent.setup();
+    fetchMock.mockImplementation((input, init) => {
+      const request = new URL(String(input), 'http://localhost:5173');
+      const method = init?.method ?? 'GET';
+
+      if (request.pathname === '/orders/api/admin/orders' && method === 'GET') {
+        return toJsonResponse(
+          buildResponse(true, {
+            page: 0,
+            size: 20,
+            items: [
+              {
+                orderId: 'ord_admin_001',
+                memberId: 'member-a',
+                status: 'CREATED',
+                sagaStatus: 'STARTED',
+                paymentMethod: 'CARD',
+                totalAmount: 12000,
+                itemCount: 1,
+                createdAt: '2026-05-13T00:00:00Z',
+                updatedAt: '2026-05-13T00:10:00Z',
+              },
+              {
+                orderId: 'ord_admin_002',
+                memberId: 'member-b',
+                status: 'CREATED',
+                sagaStatus: 'FAILED',
+                paymentMethod: 'CARD',
+                totalAmount: 22000,
+                itemCount: 2,
+                createdAt: '2026-05-13T00:20:00Z',
+                updatedAt: '2026-05-13T00:30:00Z',
+              },
+            ],
+          }),
+          200,
+        );
+      }
+
+      if (request.pathname === '/orders/api/admin/orders/ord_admin_001/saga' && method === 'GET') {
+        return toJsonResponse(
+          buildResponse(true, {
+            orderId: 'ord_admin_001',
+            orderStatus: 'CREATED',
+            sagaStatus: 'STARTED',
+            failedAt: null,
+            businessReason: 'CREATED',
+            technicalErrorMessage: 'ok',
+            lastEventType: 'OrderCreated',
+            outboxAttempts: 0,
+          }),
+          200,
+        );
+      }
+
+      if (request.pathname === '/orders/api/admin/orders/ord_admin_002/saga' && method === 'GET') {
+        return buildErrorResponse('SAGA_FETCH_FAILED', '주문 상세 조회 실패');
+      }
+
+      return defaultRequestHandler(input, init);
+    });
+
+    render(<App />);
+
+    expect(await screen.findByText('ord_admin_001')).toBeInTheDocument();
+    expect(await screen.findByText('OrderCreated')).toBeInTheDocument();
+
+    await user.click(await screen.findByText('ord_admin_002'));
+
+    await waitFor(() => {
+      expect(screen.getByRole('alert')).toHaveTextContent('SAGA_FETCH_FAILED: 주문 상세 조회 실패');
+    });
+
+    expect(screen.queryByText('OrderCreated')).not.toBeInTheDocument();
+    expect(screen.queryByText('ok')).not.toBeInTheDocument();
+  });
+
+  it('does not show cancel action for non-delayed selected order', async () => {
+    const user = userEvent.setup();
+    fetchMock.mockImplementation((input, init) => {
+      const request = new URL(String(input), 'http://localhost:5173');
+      const method = init?.method ?? 'GET';
+
+      if (request.pathname === '/orders/api/admin/orders' && method === 'GET') {
+        return toJsonResponse(
+          buildResponse(true, {
+            page: 0,
+            size: 20,
+            items: [
+              {
+                orderId: 'ord_admin_ready_001',
+                memberId: 'member-ready',
+                status: 'CREATED',
+                sagaStatus: 'COMPLETED',
+                paymentMethod: 'CARD',
+                totalAmount: 3000,
+                itemCount: 1,
+                createdAt: '2026-05-13T00:00:00Z',
+                updatedAt: '2026-05-13T00:00:10Z',
+              },
+            ],
+          }),
+          200,
+        );
+      }
+
+      if (request.pathname === '/orders/api/admin/orders/ord_admin_ready_001/saga' && method === 'GET') {
+        return toJsonResponse(
+          buildResponse(true, {
+            orderId: 'ord_admin_ready_001',
+            orderStatus: 'CREATED',
+            sagaStatus: 'COMPLETED',
+            failedAt: null,
+            businessReason: 'NONE',
+            technicalErrorMessage: null,
+            lastEventType: 'OrderCompleted',
+            outboxAttempts: 0,
+          }),
+          200,
+        );
+      }
+
+      return defaultRequestHandler(input, init);
+    });
+
+    render(<App />);
+
+    expect(await screen.findByText('ord_admin_ready_001')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '결제 취소 요청' })).not.toBeInTheDocument();
+  });
+
+  it('shows cancel error and keeps idempotency key for payment-cancel retry', async () => {
+    const user = userEvent.setup();
+    let attempt = 0;
+    const keys: string[] = [];
+
+    fetchMock.mockImplementation((input, init) => {
+      const request = new URL(String(input), 'http://localhost:5173');
+      const method = init?.method ?? 'GET';
+
+      if (request.pathname === '/orders/api/admin/orders' && method === 'GET') {
+        return toJsonResponse(
+          buildResponse(true, {
+            page: 0,
+            size: 20,
+            items: [
+              {
+                orderId: 'ord_admin_delay_retry_002',
+                memberId: 'member-delay',
+                status: 'CREATED',
+                sagaStatus: 'PAYMENT_DELAYED',
+                paymentMethod: 'DELAY_CARD',
+                totalAmount: 24000,
+                itemCount: 1,
+                createdAt: '2026-05-13T00:10:00Z',
+                updatedAt: '2026-05-13T00:11:00Z',
+              },
+            ],
+          }),
+          200,
+        );
+      }
+
+      if (request.pathname === '/orders/api/admin/orders/ord_admin_delay_retry_002/saga' && method === 'GET') {
+        return toJsonResponse(
+          buildResponse(true, {
+            orderId: 'ord_admin_delay_retry_002',
+            orderStatus: 'CREATED',
+            sagaStatus: 'PAYMENT_DELAYED',
+            failedAt: null,
+            businessReason: 'PAYMENT_DELAYED',
+            technicalErrorMessage: null,
+            lastEventType: 'PaymentAuthorizationDelayed',
+            outboxAttempts: 0,
+          }),
+          200,
+        );
+      }
+
+      if (request.pathname === '/orders/api/admin/orders/ord_admin_delay_retry_002/cancel' && method === 'POST') {
+        attempt += 1;
+        keys.push(headerValue(init?.headers, 'Idempotency-Key'));
+
+        if (attempt === 1) {
+          return buildErrorResponse('CANCEL_FAIL', '일시적으로 취소 요청에 실패했습니다.');
+        }
+
+        return toJsonResponse(
+          buildResponse(true, {
+            orderId: 'ord_admin_delay_retry_002',
+            status: 'CREATED',
+            sagaStatus: 'PAYMENT_CANCEL_REQUESTED',
+          }),
+          202,
+        );
+      }
+
+      return defaultRequestHandler(input, init);
+    });
+
+    render(<App />);
+
+    expect(await screen.findByText('ord_admin_delay_retry_002')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: '결제 취소 요청' }));
+    await waitFor(() => {
+      expect(screen.getByRole('alert')).toHaveTextContent('CANCEL_FAIL: 일시적으로 취소 요청에 실패했습니다.');
+    });
+
+    await user.click(screen.getByRole('button', { name: '결제 취소 요청' }));
+    await waitFor(() => {
+      expect(screen.getByText('ord_admin_delay_retry_002 결제 취소 요청이 접수되었습니다.')).toBeInTheDocument();
+    });
+
+    expect(keys).toHaveLength(2);
+    expect(keys[0]).toBe(keys[1]);
+  });
+
+  it('loads order/inventory/payment outbox lists according to selected service', async () => {
+    const user = userEvent.setup();
+    const outboxLoadCalls: string[] = [];
+
+    fetchMock.mockImplementation((input, init) => {
+      const request = new URL(String(input), 'http://localhost:5173');
+      const method = init?.method ?? 'GET';
+
+      if (request.pathname === '/api/admin/outbox-services/order/events' && method === 'GET') {
+        outboxLoadCalls.push('order');
+        return toJsonResponse(
+          buildResponse(true, {
+            limit: 50,
+            offset: 0,
+            items: [
+              {
+                eventId: 'evt-order-001',
+                aggregateType: 'order',
+                aggregateId: 'ord_admin_001',
+                eventType: 'OrderCreated',
+                status: 'FAILED',
+                retryCount: 1,
+                maxRetryCount: 3,
+                errorMessage: 'order event err',
+                nextRetryAt: null,
+                createdAt: '2026-05-13T00:01:00Z',
+                publishedAt: null,
+              },
+            ],
+          }),
+          200,
+        );
+      }
+
+      if (request.pathname === '/api/admin/outbox-services/inventory/events' && method === 'GET') {
+        outboxLoadCalls.push('inventory');
+        return toJsonResponse(
+          buildResponse(true, {
+            limit: 50,
+            offset: 0,
+            items: [
+              {
+                eventId: 'evt-inventory-001',
+                aggregateType: 'inventory',
+                aggregateId: 'sku-1',
+                eventType: 'InventoryReserved',
+                status: 'FAILED',
+                retryCount: 0,
+                maxRetryCount: 3,
+                errorMessage: 'inventory event err',
+                nextRetryAt: null,
+                createdAt: '2026-05-13T00:01:00Z',
+                publishedAt: null,
+              },
+            ],
+          }),
+          200,
+        );
+      }
+
+      if (request.pathname === '/api/admin/outbox-services/payment/events' && method === 'GET') {
+        outboxLoadCalls.push('payment');
+        return toJsonResponse(buildResponse(true, { limit: 50, offset: 0, items: [] }), 200);
+      }
+
+      return defaultRequestHandler(input, init);
+    });
+
+    render(<App />);
+    await user.click(screen.getByRole('tab', { name: 'Outbox' }));
+
+    expect(await screen.findByText('evt-order-001')).toBeInTheDocument();
+    await user.selectOptions(screen.getByLabelText('서비스'), 'inventory');
+    expect(await screen.findByText('evt-inventory-001')).toBeInTheDocument();
+    await user.selectOptions(screen.getByLabelText('서비스'), 'payment');
+    expect(await screen.findByText('조건에 맞는 이벤트가 없습니다.')).toBeInTheDocument();
+
+    expect(outboxLoadCalls).toEqual(['order', 'inventory', 'payment']);
+  });
+
+  it('shows outbox retry and requeue failures as alerts', async () => {
+    const user = userEvent.setup();
+    fetchMock.mockImplementation((input, init) => {
+      const request = new URL(String(input), 'http://localhost:5173');
+      const method = init?.method ?? 'GET';
+
+      if (request.pathname === '/api/admin/outbox-services/inventory/events' && method === 'GET') {
+        return toJsonResponse(
+          buildResponse(true, {
+            limit: 50,
+            offset: 0,
+            items: [
+              {
+                eventId: 'evt-inventory-001',
+                aggregateType: 'inventory',
+                aggregateId: 'ord-admin-001',
+                eventType: 'InventoryReserved',
+                status: 'FAILED',
+                retryCount: 1,
+                maxRetryCount: 3,
+                errorMessage: 'retry soon',
+                nextRetryAt: null,
+                createdAt: '2026-05-13T00:04:00Z',
+                publishedAt: null,
+              },
+            ],
+          }),
+          200,
+        );
+      }
+
+      if (request.pathname === '/api/admin/outbox-services/inventory/events/retry' && method === 'POST') {
+        return buildErrorResponse('OUTBOX_RETRY_FAIL', '재시도 요청 처리 실패');
+      }
+
+      if (request.pathname === '/api/admin/outbox-services/inventory/events/failed/requeue' && method === 'POST') {
+        return buildErrorResponse('OUTBOX_REQUEUE_FAIL', '재처리 준비 실패');
+      }
+
+      return defaultRequestHandler(input, init);
+    });
+
+    render(<App />);
+    await user.click(screen.getByRole('tab', { name: 'Outbox' }));
+    await user.selectOptions(screen.getByLabelText('서비스'), 'inventory');
+
+    expect(await screen.findByText('evt-inventory-001')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '선택한 서비스 재시도' }));
+    await waitFor(() => {
+      expect(screen.getByRole('alert')).toHaveTextContent('OUTBOX_RETRY_FAIL: 재시도 요청 처리 실패');
+    });
+
+    await user.click(screen.getByRole('button', { name: '실패 이벤트 재처리 준비' }));
+    await waitFor(() => {
+      expect(screen.getByRole('alert')).toHaveTextContent('OUTBOX_REQUEUE_FAIL: 재처리 준비 실패');
+    });
+  });
+
+  it('disables retry button while retry is in progress', async () => {
+    const user = userEvent.setup();
+    let retryResolver: (response: Response) => void = () => {};
+    const retryDeferred = new Promise<Response>((resolve) => {
+      retryResolver = resolve;
+    });
+
+    fetchMock.mockImplementation((input, init) => {
+      const request = new URL(String(input), 'http://localhost:5173');
+      const method = init?.method ?? 'GET';
+
+      if (request.pathname === '/api/admin/outbox-services/order/events' && method === 'GET') {
+        return toJsonResponse(
+          buildResponse(true, {
+            limit: 50,
+            offset: 0,
+            items: [
+              {
+                eventId: 'evt-order-001',
+                aggregateType: 'order',
+                aggregateId: 'ord-admin-001',
+                eventType: 'OrderCreated',
+                status: 'FAILED',
+                retryCount: 1,
+                maxRetryCount: 3,
+                errorMessage: 'retry soon',
+                nextRetryAt: null,
+                createdAt: '2026-05-13T00:04:00Z',
+                publishedAt: null,
+              },
+            ],
+          }),
+          200,
+        );
+      }
+
+      if (request.pathname === '/api/admin/outbox-services/order/events/retry' && method === 'POST') {
+        return retryDeferred;
+      }
+
+      return defaultRequestHandler(input, init);
+    });
+
+    render(<App />);
+    await user.click(screen.getByRole('tab', { name: 'Outbox' }));
+    expect(await screen.findByText('evt-order-001')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '선택한 서비스 재시도' }));
+    expect(screen.getByRole('button', { name: '재시도 진행 중' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '실패 이벤트 재처리 준비' })).toBeEnabled();
+
+    retryResolver(
+      new Response(
+        JSON.stringify(buildResponse(true, { claimed: 0, published: 0, failed: 0 })),
+        {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        },
+      ),
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: '선택한 서비스 재시도' })).toBeEnabled();
+    });
+  });
+
+  it('disables requeue button while requeue is in progress', async () => {
+    const user = userEvent.setup();
+    let requeueResolver: (response: Response) => void = () => {};
+    const requeueDeferred = new Promise<Response>((resolve) => {
+      requeueResolver = resolve;
+    });
+
+    fetchMock.mockImplementation((input, init) => {
+      const request = new URL(String(input), 'http://localhost:5173');
+      const method = init?.method ?? 'GET';
+
+      if (request.pathname === '/api/admin/outbox-services/order/events' && method === 'GET') {
+        return toJsonResponse(
+          buildResponse(true, {
+            limit: 50,
+            offset: 0,
+            items: [
+              {
+                eventId: 'evt-order-001',
+                aggregateType: 'order',
+                aggregateId: 'ord-admin-001',
+                eventType: 'OrderCreated',
+                status: 'FAILED',
+                retryCount: 1,
+                maxRetryCount: 3,
+                errorMessage: 'requeue soon',
+                nextRetryAt: null,
+                createdAt: '2026-05-13T00:04:00Z',
+                publishedAt: null,
+              },
+            ],
+          }),
+          200,
+        );
+      }
+
+      if (request.pathname === '/api/admin/outbox-services/order/events/failed/requeue' && method === 'POST') {
+        return requeueDeferred;
+      }
+
+      return defaultRequestHandler(input, init);
+    });
+
+    render(<App />);
+    await user.click(screen.getByRole('tab', { name: 'Outbox' }));
+    expect(await screen.findByText('evt-order-001')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '실패 이벤트 재처리 준비' }));
+    expect(screen.getByRole('button', { name: '재처리 준비 중' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '선택한 서비스 재시도' })).toBeEnabled();
+
+    requeueResolver(
+      new Response(
+        JSON.stringify(buildResponse(true, { updated: 1 })),
+        {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        },
+      ),
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: '실패 이벤트 재처리 준비' })).toBeEnabled();
+    });
+  });
+
+  it('shows empty outbox state for a service with no events', async () => {
+    const user = userEvent.setup();
+    fetchMock.mockImplementation((input, init) => {
+      const request = new URL(String(input), 'http://localhost:5173');
+      const method = init?.method ?? 'GET';
+
+      if (request.pathname === '/api/admin/outbox-services/order/events' && method === 'GET') {
+        return toJsonResponse(
+          buildResponse(true, { limit: 50, offset: 0, items: [] }),
+          200,
+        );
+      }
+
+      return defaultRequestHandler(input, init);
+    });
+
+    render(<App />);
+    await user.click(screen.getByRole('tab', { name: 'Outbox' }));
+
+    expect(await screen.findByText('조건에 맞는 이벤트가 없습니다.')).toBeInTheDocument();
+  });
+
+  it('validates product create form for missing code and name', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(screen.getByRole('tab', { name: 'Products' }));
+    await screen.findByText('LAPTOP-001');
+    await user.click(screen.getByRole('button', { name: '새로 등록' }));
+
+    await user.clear(screen.getByLabelText('상품코드(등록/수정)'));
+    await user.clear(screen.getByLabelText('상품명'));
+    await user.clear(screen.getByLabelText('가격'));
+    await user.type(screen.getByLabelText('가격'), '1000');
+    await user.click(screen.getByRole('button', { name: '상품 등록' }));
+
+    expect(screen.getByRole('alert')).toHaveTextContent('상품코드, 상품명, 판매가격을 모두 입력하세요.');
+  });
+
+  it.each(['0', '-100'])('validates non-positive product list price: %s', async (listPrice) => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(screen.getByRole('tab', { name: 'Products' }));
+    await screen.findByText('LAPTOP-001');
+    await user.click(screen.getByRole('button', { name: '새로 등록' }));
+    await user.clear(screen.getByLabelText('상품코드(등록/수정)'));
+    await user.type(screen.getByLabelText('상품코드(등록/수정)'), 'NEW-001');
+    await user.clear(screen.getByLabelText('상품명'));
+    await user.type(screen.getByLabelText('상품명'), 'wireless bag');
+    await user.clear(screen.getByLabelText('가격'));
+    await user.type(screen.getByLabelText('가격'), listPrice);
+
+    await user.click(screen.getByRole('button', { name: '상품 등록' }));
+    expect(screen.getByRole('alert')).toHaveTextContent('판매가격은 0보다 커야 합니다.');
+  });
+
+  it('validates stock quantity input: blank, negative, and non-integer values', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(screen.getByRole('tab', { name: 'Products' }));
+    await screen.findByText('재고 조회 / 설정');
+    await user.click(await screen.findByRole('button', { name: '재고 조회' }));
+    await screen.findByText('SKU-001');
+
+    await user.click(screen.getByRole('button', { name: '선택' }));
+    await user.clear(screen.getByLabelText('가능 수량'));
+    await user.click(screen.getByRole('button', { name: '재고 설정' }));
+
+    expect(screen.getByRole('alert')).toHaveTextContent('SKU, 상품코드, 재고 수량을 모두 입력하세요.');
+
+    await user.clear(screen.getByLabelText('가능 수량'));
+    await user.type(screen.getByLabelText('가능 수량'), '-1');
+    await user.click(screen.getByRole('button', { name: '재고 설정' }));
+    expect(screen.getByRole('alert')).toHaveTextContent('재고 수량은 0 이상의 정수여야 합니다.');
+
+    await user.clear(screen.getByLabelText('가능 수량'));
+    await user.type(screen.getByLabelText('가능 수량'), '3.5');
+    await user.click(screen.getByRole('button', { name: '재고 설정' }));
+    expect(screen.getByRole('alert')).toHaveTextContent('재고 수량은 0 이상의 정수여야 합니다.');
+  });
+
+  it('validates stock lookup requires product code', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(screen.getByRole('tab', { name: 'Products' }));
+    await screen.findByText('재고 조회 / 설정');
+    await user.clear(screen.getByLabelText('조회 상품코드'));
+    await user.click(screen.getByRole('button', { name: '재고 조회' }));
+
+    expect(screen.getByText('상품코드를 입력하거나 상품을 선택해 주세요.')).toBeInTheDocument();
+  });
+
+  it('shows catalog list and stock lookup failures', async () => {
+    const user = userEvent.setup();
+    fetchMock.mockImplementation((input, init) => {
+      const request = new URL(String(input), 'http://localhost:5173');
+      const method = init?.method ?? 'GET';
+
+      if (request.pathname === '/catalog/api/products' && method === 'GET') {
+        return buildErrorResponse('PRODUCT_LIST_FAIL', '상품 목록 조회 실패');
+      }
+
+      if (request.pathname === '/inventory/api/stocks' && method === 'GET') {
+        return buildErrorResponse('STOCK_LIST_FAIL', '재고 조회 실패');
+      }
+
+      return defaultRequestHandler(input, init);
+    });
+
+    render(<App />);
+    await user.click(screen.getByRole('tab', { name: 'Products' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('PRODUCT_LIST_FAIL: 상품 목록 조회 실패');
+
+    await user.click(screen.getByRole('button', { name: '재고 조회' }));
+    await user.type(screen.getByLabelText('조회 상품코드'), 'LAPTOP-001');
+    await user.click(screen.getByRole('button', { name: '재고 조회' }));
+    expect(await screen.findByText('STOCK_LIST_FAIL: 재고 조회 실패')).toBeInTheDocument();
+  });
+
+  it('isolates per-tab states when switching tabs', async () => {
+    const user = userEvent.setup();
+    const callCounts = {
+      orders: 0,
+      outbox: 0,
+      products: 0,
+    };
+
+    fetchMock.mockImplementation((input, init) => {
+      const request = new URL(String(input), 'http://localhost:5173');
+      const method = init?.method ?? 'GET';
+
+      if (request.pathname === '/orders/api/admin/orders' && method === 'GET') {
+        callCounts.orders += 1;
+      }
+
+      if (request.pathname === '/api/admin/outbox-services/order/events' && method === 'GET') {
+        callCounts.outbox += 1;
+      }
+
+      if (request.pathname === '/catalog/api/products' && method === 'GET') {
+        callCounts.products += 1;
+      }
+
+      return defaultRequestHandler(input, init);
+    });
+
+    render(<App />);
+
+    expect(await screen.findByText('ord_admin_001')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('tab', { name: 'Outbox' }));
+    expect(await screen.findByText('Outbox 운영')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('tab', { name: 'Products' }));
+    expect(await screen.findByText('LAPTOP-001')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('tab', { name: 'Orders' }));
+    expect(await screen.findByText('ord_admin_001')).toBeInTheDocument();
+
+    expect(callCounts.outbox).toBe(1);
+    expect(callCounts.products).toBe(1);
+    expect(callCounts.orders).toBeGreaterThanOrEqual(2);
+    expect(screen.queryByText('evt-order-001')).not.toBeInTheDocument();
+  });
 });

@@ -51,7 +51,9 @@ check_url "gateway-read-model" "http://localhost:${GATEWAY_HOST_PORT:-28080}/api
   --outbox-api-url "http://localhost:${GATEWAY_HOST_PORT:-28080}" \
   --payment-url "http://localhost:${PAYMENT_HOST_PORT:-28084}" \
   --promotion-url "http://localhost:${PROMOTION_HOST_PORT:-28085}" \
+  --relay-mode automatic \
   --orders 3 \
   --initial-stock 20 \
   --quantity 1 \
-  --max-attempts 12
+  --max-attempts 30 \
+  --wait-seconds 1

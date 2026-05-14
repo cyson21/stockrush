@@ -55,6 +55,7 @@ class ScenarioConfig:
     relay_batch_size: int
     wait_seconds: float
     fail_on_existing_pending: bool
+    relay_mode: str = "manual"
     idempotency_replays: int = 1
     relay_workers: int = 1
     stability_waves: int = 1
@@ -550,7 +551,7 @@ def run_concurrent_sku_scenario(config: ScenarioConfig) -> Mapping[str, Any]:
     final_stock: Mapping[str, Any] = {}
     pending_after = pending_before
     for attempt in range(1, config.max_attempts + 1):
-        relay_wave(client, config)
+        maybe_relay_wave(client, config)
         final_orders = [get_order(client, config, order["orderId"]) for order in orders]
         final_stock = get_stock(client, config, sku_id)
         pending_after = count_pending_outbox(client, config)
@@ -609,7 +610,7 @@ def run_burst_idempotency_scenario(config: ScenarioConfig) -> Mapping[str, Any]:
     pending_ids_after = pending_ids_before
     pending_new_ids: dict[str, list[str]] = {}
     for _ in range(config.max_attempts):
-        relay_wave_concurrently(client, config)
+        maybe_relay_wave_concurrently(client, config)
         final_orders = [get_order(client, config, order_id) for order_id in unique_order_ids]
         final_stock = get_stock(client, config, sku_id)
         pending_after = count_pending_outbox(client, config)
@@ -638,7 +639,7 @@ def run_burst_idempotency_scenario(config: ScenarioConfig) -> Mapping[str, Any]:
     post_replay_pending_ids_after = pending_ids_after
     post_replay_new_pending_ids = pending_new_ids
     for _ in range(config.stability_waves):
-        relay_wave_concurrently(client, config)
+        maybe_relay_wave_concurrently(client, config)
         time.sleep(config.wait_seconds)
 
     post_replay_orders = [get_order(client, config, order_id) for order_id in unique_order_ids]
@@ -718,7 +719,7 @@ def run_demo_order_flow_scenario(config: ScenarioConfig) -> Mapping[str, Any]:
     }
     pending_after = pending_before
     for _ in range(config.max_attempts):
-        relay_wave(client, config)
+        maybe_relay_wave(client, config)
         orders = {
             "card": get_order(client, config, str(card_order["orderId"])),
             "fail": get_order(client, config, str(fail_order["orderId"])),
@@ -738,7 +739,7 @@ def run_demo_order_flow_scenario(config: ScenarioConfig) -> Mapping[str, Any]:
 
     final_stock: Mapping[str, Any] = {}
     for _ in range(config.max_attempts):
-        relay_wave(client, config)
+        maybe_relay_wave(client, config)
         orders = {
             "card": get_order(client, config, str(card_order["orderId"])),
             "fail": get_order(client, config, str(fail_order["orderId"])),
@@ -1027,6 +1028,18 @@ def relay_wave_concurrently(client: ApiClient, config: ScenarioConfig) -> None:
             future.result()
 
 
+def maybe_relay_wave(client: ApiClient, config: ScenarioConfig) -> None:
+    if config.relay_mode == "automatic":
+        return
+    relay_wave(client, config)
+
+
+def maybe_relay_wave_concurrently(client: ApiClient, config: ScenarioConfig) -> None:
+    if config.relay_mode == "automatic":
+        return
+    relay_wave_concurrently(client, config)
+
+
 def get_order(client: ApiClient, config: ScenarioConfig, order_id: str) -> Mapping[str, Any]:
     return response_data(client.get(f"{config.order_api_url}/api/orders/{order_id}"))
 
@@ -1069,6 +1082,12 @@ def add_runtime_arguments(
     command_parser.add_argument("--max-attempts", type=positive_int, default=12)
     command_parser.add_argument("--relay-batch-size", type=relay_batch_size, default=100)
     command_parser.add_argument("--wait-seconds", type=non_negative_float, default=0.5)
+    command_parser.add_argument(
+        "--relay-mode",
+        choices=("manual", "automatic"),
+        default="manual",
+        help="manual calls admin retry APIs; automatic only waits for service schedulers.",
+    )
     command_parser.add_argument(
         "--allow-existing-pending",
         action="store_true",
@@ -1155,6 +1174,7 @@ def config_from_args(args: argparse.Namespace) -> ScenarioConfig:
         relay_batch_size=args.relay_batch_size,
         wait_seconds=args.wait_seconds,
         fail_on_existing_pending=not args.allow_existing_pending,
+        relay_mode=args.relay_mode,
         idempotency_replays=getattr(args, "idempotency_replays", 1),
         relay_workers=getattr(args, "relay_workers", 1),
         stability_waves=getattr(args, "stability_waves", 1),

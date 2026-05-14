@@ -342,15 +342,17 @@ class LocalE2ERunnerTest(unittest.TestCase):
         self.assertEqual(args.order_url, "http://localhost:18083")
         self.assertEqual(args.order_api_url, "http://localhost:18080")
         self.assertEqual(args.outbox_api_url, "http://localhost:18080")
+        self.assertEqual(args.relay_mode, "manual")
 
     def test_cli_accepts_demo_order_flow_command_name(self) -> None:
-        args = local_e2e_runner.parse_args(["demo-order-flow"])
+        args = local_e2e_runner.parse_args(["demo-order-flow", "--relay-mode", "automatic"])
 
         self.assertEqual(args.command, "demo-order-flow")
         self.assertEqual(args.orders, 3)
         self.assertEqual(args.initial_stock, 20)
         self.assertEqual(args.prefix, "DEMO-E2E")
         self.assertEqual(args.promotion_url, "http://localhost:18085")
+        self.assertEqual(args.relay_mode, "automatic")
 
     def test_cli_accepts_burst_idempotency_command_name(self) -> None:
         args = local_e2e_runner.parse_args(["burst-idempotency"])
@@ -410,6 +412,7 @@ class LocalE2ERunnerTest(unittest.TestCase):
             ["burst-idempotency", "--idempotency-replays", "0"],
             ["burst-idempotency", "--relay-workers", "0"],
             ["burst-idempotency", "--stability-waves", "0"],
+            ["demo-order-flow", "--relay-mode", "external"],
         ]
 
         for argv in invalid_args:
@@ -425,6 +428,32 @@ class LocalE2ERunnerTest(unittest.TestCase):
         self.assertEqual(sku_id, f"{product_code}-S")
         self.assertLessEqual(len(product_code), 80)
         self.assertLessEqual(len(sku_id), 80)
+
+    def test_maybe_relay_wave_uses_manual_retry_when_configured(self) -> None:
+        args = local_e2e_runner.parse_args(["demo-order-flow", "--relay-mode", "manual"])
+        config = local_e2e_runner.config_from_args(args)
+        calls: list[str] = []
+        original = local_e2e_runner.relay_wave
+        local_e2e_runner.relay_wave = lambda _client, _config: calls.append("manual")
+        try:
+            local_e2e_runner.maybe_relay_wave(object(), config)
+        finally:
+            local_e2e_runner.relay_wave = original
+
+        self.assertEqual(calls, ["manual"])
+
+    def test_maybe_relay_wave_skips_retry_when_automatic_relay_is_configured(self) -> None:
+        args = local_e2e_runner.parse_args(["demo-order-flow", "--relay-mode", "automatic"])
+        config = local_e2e_runner.config_from_args(args)
+        calls: list[str] = []
+        original = local_e2e_runner.relay_wave
+        local_e2e_runner.relay_wave = lambda _client, _config: calls.append("manual")
+        try:
+            local_e2e_runner.maybe_relay_wave(object(), config)
+        finally:
+            local_e2e_runner.relay_wave = original
+
+        self.assertEqual(calls, [])
 
 
 if __name__ == "__main__":

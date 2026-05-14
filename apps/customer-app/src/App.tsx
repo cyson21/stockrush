@@ -237,6 +237,8 @@ export default function App() {
       setCreatedOrder(order);
       setOrderDetail(null);
     } catch (error) {
+      setCreatedOrder(null);
+      setOrderDetail(null);
       setMessage(errorMessage(error));
     } finally {
       setSubmitting(false);

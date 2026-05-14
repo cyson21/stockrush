@@ -121,10 +121,16 @@ class DemoRuntimeArtifactsTest(unittest.TestCase):
         self.assertIn("tools/local-e2e/local-e2e", shell_script)
         self.assertIn("demo-order-flow", shell_script)
         self.assertIn("--promotion-url", shell_script)
+        self.assertIn("--relay-mode automatic", shell_script)
+        self.assertIn("--max-attempts 30", shell_script)
+        self.assertIn("--wait-seconds 1", shell_script)
         self.assertIn("PROMOTION_HOST_PORT", shell_script)
         self.assertIn("tools/local-e2e/local-e2e", powershell_script)
         self.assertIn("demo-order-flow", powershell_script)
         self.assertIn("--promotion-url", powershell_script)
+        self.assertIn("--relay-mode automatic", powershell_script)
+        self.assertIn("--max-attempts 30", powershell_script)
+        self.assertIn("--wait-seconds 1", powershell_script)
         self.assertIn("$PromotionPort", powershell_script)
 
 
