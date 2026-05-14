@@ -19,9 +19,26 @@ StockRush uses independent Spring Boot projects under `services/<service-name>`.
 
 Use Java 17.
 
+macOS:
+
 ```bash
 export JAVA_HOME=$(/usr/libexec/java_home -v 17)
 ```
+
+Windows 11 PowerShell:
+
+```powershell
+$env:JAVA_HOME = "C:\Program Files\Java\jdk-17"
+$env:Path = "$env:JAVA_HOME\bin;$env:Path"
+```
+
+Windows 11 WSL2:
+
+```bash
+export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
+```
+
+Adjust the paths to the installed JDK location. The portable demo runtime will later avoid host Java setup by running backend services in containers.
 
 ## Service Run Shape
 

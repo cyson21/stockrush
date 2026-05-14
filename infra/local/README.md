@@ -1,6 +1,8 @@
 # Local Infra
 
-This directory defines the local StockRush infrastructure.
+This directory defines the local StockRush infrastructure for developer runtime.
+
+`infra/local` intentionally runs infrastructure only. Spring Boot services, React/Vite web apps, and the Expo mobile app run on the host runtime for faster debugging. The later portable demo runtime will live under `infra/demo` and run the full backend/web stack with Docker Compose.
 
 ## Services
 
@@ -21,6 +23,8 @@ docker compose up -d
 ```
 
 `docker compose up -d` may pull images the first time it runs.
+
+The same commands work from macOS, Linux, or Windows 11 WSL2. On native Windows PowerShell, run them from the repository path mounted by Docker Desktop or use WSL2 for path consistency.
 
 ## Database
 

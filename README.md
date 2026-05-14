@@ -27,6 +27,10 @@ StockRush는 한정 판매 주문 흐름에서 Kafka, Outbox, Saga를 묶은 엔
 
 ## 빠른 실행 순서
 
+현재 실행 방식은 개발 모드와 데모 모드로 분리한다.
+
+개발 모드는 빠른 디버깅을 위해 Docker Compose로 PostgreSQL, Redis, Kafka, Kafka UI만 실행하고, Spring Boot 서비스와 앱은 host 런타임에서 실행한다.
+
 1. `infra/local`에서 PostgreSQL, Redis, Kafka, Kafka UI를 실행합니다.
 2. gateway, catalog-service, inventory-service, order-service, payment-service를 각각 기동합니다.
    - 쿠폰 API를 확인할 때는 promotion-service도 함께 기동합니다.
@@ -44,6 +48,7 @@ docker compose up -d
 ```
 
 서비스와 앱 기동 명령은 [Local E2E Runbook](docs/runbooks/local-e2e.md)과 [서비스 실행 가이드](services/README.md)를 기준으로 실행합니다.
+
 
 ## 핵심 공개 문서
 

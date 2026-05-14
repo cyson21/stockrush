@@ -13,6 +13,7 @@
 ## Prerequisites
 
 - Docker Desktop
+- Windows 11에서 실행할 때는 WSL2 + Docker Desktop
 - Java 17
 - Maven 3.9+
 - Node.js 20 + npm
@@ -20,7 +21,13 @@
 - `mvn -version`, `node -v`, `npm -v`, `jq --version`이 동작해야 함
 - 포트 충돌이 없어야 함:
   - 15432(PostgreSQL), 16379(Redis), 19092(Kafka), 19090(Kafka UI)
-  - 18080~18085(Backend), 5173, 5174(Frontend)
+  - 18080~18087(Backend), 5173, 5174(Frontend)
+
+## Runtime Modes
+
+이 runbook은 개발 모드 기준이다.
+
+- 개발 모드: `infra/local` Docker Compose로 PostgreSQL/Redis/Kafka만 실행하고, Spring Boot 서비스와 앱은 host에서 실행한다.
 
 ## Infrastructure
 
@@ -41,6 +48,8 @@ docker compose ps
 | Order Service | 18083 | `http://localhost:18083` |
 | Payment Service | 18084 | `http://localhost:18084` |
 | Promotion Service | 18085 | `http://localhost:18085` |
+| Fulfillment Service | 18086 | `http://localhost:18086` |
+| Read Model Service | 18087 | `http://localhost:18087` |
 | Customer App | 5173 | `http://localhost:5173` |
 | Admin App | 5174 | `http://localhost:5174` |
 | PostgreSQL | 15432 | `localhost:15432` |
@@ -60,7 +69,9 @@ cd services/catalog-service && mvn spring-boot:run
 cd services/inventory-service && STOCKRUSH_KAFKA_LISTENERS_ENABLED=true mvn spring-boot:run
 cd services/order-service && STOCKRUSH_KAFKA_LISTENERS_ENABLED=true mvn spring-boot:run
 cd services/payment-service && STOCKRUSH_KAFKA_LISTENERS_ENABLED=true mvn spring-boot:run
-cd services/promotion-service && mvn spring-boot:run
+cd services/promotion-service && PROMOTION_KAFKA_LISTENERS_ENABLED=true mvn spring-boot:run
+cd services/fulfillment-service && FULFILLMENT_KAFKA_LISTENERS_ENABLED=true mvn spring-boot:run
+cd services/read-model-service && READ_MODEL_KAFKA_LISTENERS_ENABLED=true mvn spring-boot:run
 ```
 
 2. Start frontend apps.
@@ -81,6 +92,8 @@ curl -sSf http://localhost:18082/actuator/health
 curl -sSf http://localhost:18083/actuator/health
 curl -sSf http://localhost:18084/actuator/health
 curl -sSf http://localhost:18085/actuator/health
+curl -sSf http://localhost:18086/actuator/health
+curl -sSf http://localhost:18087/actuator/health
 ```
 
 4. (옵션) 브라우저로 확인:
@@ -101,6 +114,8 @@ JAVA_HOME=/Users/chanyang.son/Library/Java/JavaVirtualMachines/ms-17.0.18/Conten
 로컬 기동 시 Gateway는 기본적으로 `ORDER_SERVICE_URL=http://localhost:18083`, `INVENTORY_SERVICE_URL=http://localhost:18082`, `PAYMENT_SERVICE_URL=http://localhost:18084`로 각 서비스를 호출한다. Outbox admin API는 `service` path 값으로 `order`, `inventory`, `payment`를 선택한다.
 
 Promotion Service는 현재 Gateway를 거치지 않는 API로 확인한다. Customer App은 `/promotion` Vite proxy로 quote API를 호출하고, Order Service는 `PROMOTION_SERVICE_URL`로 quote API를 호출한다. `PROMOTION_KAFKA_LISTENERS_ENABLED=true`로 기동하면 주문 이벤트를 소비해 쿠폰 사용 상태를 `RESERVED`, `CONSUMED`, `RELEASED`로 기록한다.
+
+Fulfillment Service는 현재 이벤트 기반 출고 준비 요청 기록을 담당한다. Read Model Service는 현재 service-local 조회 API로 주문 요약 projection을 제공하며, 모바일 앱 구현 전 Gateway route를 추가한다.
 
 ## 반복 실행용 Local E2E Runner
 
@@ -305,7 +320,7 @@ Admin App에서 아래 화면을 순차적으로 확인한다.
 ## Verification Checklist
 
 - [ ] Docker 컨테이너가 모두 실행 중이며 Postgres, Kafka, Kafka UI가 정상 기동
-- [ ] 18080~18085 모든 서비스 `actuator/health` 응답 200
+- [ ] 18080~18087 모든 서비스 `actuator/health` 응답 200
 - [ ] Customer App / Admin App 접속 가능
 - [ ] `CARD` 주문에서 주문이 `CONFIRMED`/`COMPLETED` 전환
 - [ ] `FAIL_CARD` 주문에서 주문이 `CANCELLED`/`FAILED` 전환
