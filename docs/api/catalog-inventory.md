@@ -6,15 +6,16 @@
 
 ## List Products
 
-`GET /api/products?status={status}`
+`GET /api/products?status={status}&q={query}`
 
 ### Query
 
 | Name | Required | Description |
 |---|---:|---|
 | `status` | yes | 상품 판매 상태. 고객 앱은 `ON_SALE`을 사용한다. |
+| `q` | no | 상품 코드 또는 상품명 부분 검색어. 공백은 제거되며 빈 값이면 필터를 적용하지 않는다. |
 
-`status`는 현재 조회 API에서 필수 query parameter다. 고객 앱은 항상 `ON_SALE`을 전달한다.
+`status`는 현재 조회 API에서 필수 query parameter다. 고객 앱은 항상 `ON_SALE`을 전달한다. `q`는 대소문자를 구분하지 않고 `productCode`, `name`에 적용된다.
 
 ### Headers
 

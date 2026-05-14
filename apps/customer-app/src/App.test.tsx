@@ -51,6 +51,13 @@ const productFixture = {
   listPrice: 12000,
 };
 
+const searchProductFixture = {
+  productCode: 'LIMITED-002',
+  name: 'Limited Cap',
+  status: 'ON_SALE',
+  listPrice: 8000,
+};
+
 const stockFixture = {
   skuId: 'SKU-001',
   productCode: 'LIMITED-001',
@@ -252,14 +259,32 @@ describe('Customer order flow', () => {
       const url = String(input);
       const method = init?.method ?? 'GET';
 
-      if (url === '/catalog/api/products?status=ON_SALE') {
+      if (url.startsWith('/catalog/api/products?status=ON_SALE')) {
+        const parsedUrl = new URL(url, 'http://localhost');
+        const query = parsedUrl.searchParams.get('q')?.trim().toLowerCase();
+        const matchingProducts = (() => {
+          if (!query) {
+            return [productFixture, searchProductFixture];
+          }
+
+          if (query.includes('hoodie') || query.includes('limited-001') || query.includes('limited hoodie')) {
+            return [productFixture];
+          }
+
+          if (query.includes('cap') || query.includes('limited-002')) {
+            return [searchProductFixture];
+          }
+
+          return [];
+        })();
+
         if (productsMode === 'error') {
           return errorResponse('PRODUCT_LIST_FAILED', '상품 목록 조회 실패');
         }
 
         return jsonResponse({
           success: true,
-          data: [productFixture],
+          data: matchingProducts,
           trace: { correlationId: 'corr-products' },
         });
       }
@@ -585,6 +610,64 @@ describe('Customer order flow', () => {
     render(<App />);
     expect(await screen.findByRole('alert')).toHaveTextContent('PRODUCT_LIST_FAILED: 상품 목록 조회 실패');
     expect(screen.queryByRole('button', { name: '주문 생성' })).not.toBeInTheDocument();
+  });
+
+  it('clears product list error after a successful search retry', async () => {
+    const user = userEvent.setup();
+    productsMode = 'error';
+
+    render(<App />);
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('PRODUCT_LIST_FAILED: 상품 목록 조회 실패');
+
+    productsMode = 'success';
+    await user.type(screen.getByLabelText('상품 검색'), 'cap');
+
+    await screen.findByRole('button', { name: /Limited Cap/ });
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('searches catalog products by query while preserving existing list flow', async () => {
+    const user = userEvent.setup();
+
+    render(<App />);
+
+    await screen.findByRole('button', { name: /Limited Hoodie/ });
+    const queryInput = screen.getByLabelText('상품 검색');
+
+    await user.clear(queryInput);
+    await user.type(queryInput, ' cap ');
+
+    await screen.findByRole('button', { name: /Limited Cap/ });
+    expect(screen.queryByRole('button', { name: /Limited Hoodie/ })).not.toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/catalog/api/products?status=ON_SALE&q=cap',
+      expect.objectContaining({ method: 'GET' }),
+    );
+  });
+
+  it('returns full catalog when query is only whitespace', async () => {
+    const user = userEvent.setup();
+
+    render(<App />);
+
+    await screen.findByRole('button', { name: /Limited Hoodie/ });
+    const queryInput = screen.getByLabelText('상품 검색');
+
+    await user.type(queryInput, 'cap');
+    expect(await screen.findByRole('button', { name: /Limited Cap/ })).toBeInTheDocument();
+
+    await user.clear(queryInput);
+    await user.type(queryInput, '   ');
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Limited Hoodie/ })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Limited Cap/ })).toBeInTheDocument();
+    });
+
+    const catalogCalls = fetchMock.mock.calls.filter(([url]) => String(url).startsWith('/catalog/api/products'));
+    const latestCatalogCall = catalogCalls[catalogCalls.length - 1];
+    expect(latestCatalogCall?.[0]).toBe('/catalog/api/products?status=ON_SALE');
   });
 
   it('stock load failure after product selection shows alert and disables order creation', async () => {

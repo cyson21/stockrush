@@ -6,14 +6,16 @@ COMPOSE_FILE="$ROOT_DIR/infra/demo/docker-compose.yml"
 ENV_FILE="$ROOT_DIR/infra/demo/.env"
 ENV_EXAMPLE="$ROOT_DIR/infra/demo/.env.example"
 skip_burst=false
+kafka_outage=false
 
 usage() {
   cat <<'EOF'
 Usage: ./scripts/demo-smoke.sh [options]
 
 Options:
-  --skip-burst  Run only health checks and demo-order-flow
-  -h, --help    Show this help
+  --skip-burst    Run only health checks and demo-order-flow
+  --kafka-outage  Run opt-in Kafka recovery smoke using docker compose pause kafka / unpause kafka
+  -h, --help      Show this help
 EOF
 }
 
@@ -21,6 +23,10 @@ while (($#)); do
   case "$1" in
     --skip-burst)
       skip_burst=true
+      shift
+      ;;
+    --kafka-outage)
+      kafka_outage=true
       shift
       ;;
     -h|--help)
@@ -112,6 +118,27 @@ if [[ "$skip_burst" != true ]]; then
     --idempotency-replays 3 \
     --relay-workers 4 \
     --stability-waves 2 \
+    --max-attempts 30 \
+    --wait-seconds 1
+fi
+
+if [[ "$kafka_outage" == true ]]; then
+  "$ROOT_DIR/tools/local-e2e/local-e2e" kafka-outage-recovery \
+    --compose-file "$COMPOSE_FILE" \
+    --env-file "$ENV_FILE" \
+    --kafka-service kafka \
+    --catalog-url "http://localhost:${CATALOG_HOST_PORT:-28081}" \
+    --inventory-url "http://localhost:${INVENTORY_HOST_PORT:-28082}" \
+    --order-url "http://localhost:${ORDER_HOST_PORT:-28083}" \
+    --order-api-url "http://localhost:${GATEWAY_HOST_PORT:-28080}" \
+    --outbox-api-url "http://localhost:${GATEWAY_HOST_PORT:-28080}" \
+    --payment-url "http://localhost:${PAYMENT_HOST_PORT:-28084}" \
+    --promotion-url "http://localhost:${PROMOTION_HOST_PORT:-28085}" \
+    --relay-mode automatic \
+    --orders 1 \
+    --initial-stock 3 \
+    --quantity 1 \
+    --outage-observation-seconds 2 \
     --max-attempts 30 \
     --wait-seconds 1
 fi

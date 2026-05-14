@@ -25,10 +25,11 @@ class CatalogProductController {
     @GetMapping
     ResponseEntity<ApiResponse<List<ProductResponse>>> listProducts(
         @RequestParam String status,
+        @RequestParam(required = false) String q,
         @RequestHeader(value = CorrelationIds.HEADER_NAME, required = false) String correlationId
     ) {
         String resolvedCorrelationId = CorrelationIds.resolve(correlationId);
-        List<ProductResponse> products = catalogProductQueryService.listByStatus(status).stream()
+        List<ProductResponse> products = catalogProductQueryService.listByStatus(status, q).stream()
             .map(ProductResponse::from)
             .toList();
 

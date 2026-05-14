@@ -35,7 +35,7 @@
 - 최종 재고는 `availableQuantity=0`, `reservedQuantity=0`이어야 한다.
 - 이번 실행으로 증가한 Order/Inventory/Payment `PENDING` outbox가 없어야 한다.
 
-이 도구는 로컬 최종 상태 회귀 검증용이다. Kafka consumer 병렬성, broker 장애, 외부 부하 벤치마크까지 증명하는 테스트는 아니다.
+이 도구는 로컬 최종 상태 회귀 검증용이다. Kafka consumer 병렬성과 외부 부하 벤치마크까지 증명하는 테스트는 아니다. Broker 장애는 `kafka-outage-recovery` 명령으로 선택 실행한다.
 
 ## demo-order-flow
 
@@ -104,8 +104,32 @@ Order/Inventory/Payment outbox의 `PENDING`/`FAILED` 장기 체류 row를 운영
 - `nextRetryAt`이 미래인 `PENDING` row는 deferred로 분류하고 실패로 보지 않는다.
 - 최종 결과에서 `retryablePendingCounts`와 `failedCounts`가 모두 0이어야 성공이다.
 
+## kafka-outage-recovery
+
+데모 Docker Compose의 Kafka service를 일시 중지한 상태에서 주문을 생성하고, Kafka 복구 뒤 주문/재고/outbox가 수렴하는지 확인한다. 기본 smoke에는 포함하지 않고 장애 주입이 필요할 때만 실행한다.
+
+```bash
+./tools/local-e2e/local-e2e kafka-outage-recovery \
+  --compose-file infra/demo/docker-compose.yml \
+  --env-file infra/demo/.env \
+  --kafka-service kafka \
+  --relay-mode automatic \
+  --outage-observation-seconds 2 \
+  --max-attempts 30 \
+  --wait-seconds 1
+```
+
+### 검증 기준
+
+- `docker compose pause kafka` 구간에서 주문이 최종 완료로 즉시 수렴하지 않아야 한다.
+- Kafka pause 구간에서 이번 실행으로 생긴 `PENDING`/`PUBLISHING`/`FAILED` outbox가 관측되어야 한다.
+- `docker compose unpause kafka` 이후 주문은 `CONFIRMED/COMPLETED`가 되어야 한다.
+- 최종 재고는 `availableQuantity=initialStock-quantity`, `reservedQuantity=0`이어야 한다.
+- Order/Inventory/Payment `pendingOutboxDelta`와 신규 `PENDING`/`PUBLISHING`/`FAILED` outbox event ID가 남지 않아야 한다.
+
 ## 주의 사항
 
 - 기본값은 실행 전 기존 `PENDING` outbox가 있으면 중단한다.
 - `--allow-existing-pending`은 기존 대기 row를 허용하되, 실행 전후 증가분을 기준으로 실패 여부를 판단한다.
 - product code와 sku id는 실행마다 `{prefix}-YYYYMMDDHHMMSS-xxxxxxxx` 형태로 생성한다.
+- `kafka-outage-recovery`는 demo compose의 Kafka service를 `pause/unpause`하므로 다른 로컬 검증과 동시에 실행하지 않는다.

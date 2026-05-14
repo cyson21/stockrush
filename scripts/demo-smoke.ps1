@@ -5,18 +5,21 @@ $ComposeFile = Join-Path $RootDir "infra/demo/docker-compose.yml"
 $EnvFile = Join-Path $RootDir "infra/demo/.env"
 $EnvExample = Join-Path $RootDir "infra/demo/.env.example"
 $SkipBurst = $false
+$KafkaOutage = $false
 
 function Show-Usage {
   Write-Host "Usage: .\scripts\demo-smoke.ps1 [options]"
   Write-Host ""
   Write-Host "Options:"
-  Write-Host "  --skip-burst  Run only health checks and demo-order-flow"
-  Write-Host "  -h, --help    Show this help"
+  Write-Host "  --skip-burst    Run only health checks and demo-order-flow"
+  Write-Host "  --kafka-outage  Run opt-in Kafka recovery smoke using docker compose pause kafka / unpause kafka"
+  Write-Host "  -h, --help      Show this help"
 }
 
 foreach ($Arg in $args) {
   switch ($Arg) {
     "--skip-burst" { $SkipBurst = $true }
+    "--kafka-outage" { $KafkaOutage = $true }
     "-h" {
       Show-Usage
       exit 0
@@ -131,6 +134,31 @@ if (-not $SkipBurst) {
     --idempotency-replays 3 `
     --relay-workers 4 `
     --stability-waves 2 `
+    --max-attempts 30 `
+    --wait-seconds 1
+
+  if ($LASTEXITCODE -ne 0) {
+    exit $LASTEXITCODE
+  }
+}
+
+if ($KafkaOutage) {
+  python (Join-Path $RootDir "tools/local-e2e/local-e2e") kafka-outage-recovery `
+    --compose-file $ComposeFile `
+    --env-file $EnvFile `
+    --kafka-service kafka `
+    --catalog-url "http://localhost:$CatalogPort" `
+    --inventory-url "http://localhost:$InventoryPort" `
+    --order-url "http://localhost:$OrderPort" `
+    --order-api-url "http://localhost:$GatewayPort" `
+    --outbox-api-url "http://localhost:$GatewayPort" `
+    --payment-url "http://localhost:$PaymentPort" `
+    --promotion-url "http://localhost:$PromotionPort" `
+    --relay-mode automatic `
+    --orders 1 `
+    --initial-stock 3 `
+    --quantity 1 `
+    --outage-observation-seconds 2 `
     --max-attempts 30 `
     --wait-seconds 1
 

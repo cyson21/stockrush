@@ -64,6 +64,70 @@ class CatalogProductControllerIntegrationTest {
     }
 
     @Test
+    void filters_on_sale_products_with_trimmed_query_case_insensitive() throws Exception {
+        mockMvc.perform(get("/api/products")
+                .param("status", "ON_SALE")
+                .param("q", "  HOODIE  ")
+                .header("X-Correlation-Id", "corr-catalog-search-1"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.success", is(true)))
+            .andExpect(jsonPath("$.data", hasSize(1)))
+            .andExpect(jsonPath("$.data[0].productCode", is("LIMITED-001")))
+            .andExpect(jsonPath("$.data[0].name", is("Limited Hoodie")))
+            .andExpect(jsonPath("$.trace.correlationId", is("corr-catalog-search-1")));
+    }
+
+    @Test
+    void filters_on_sale_products_with_case_insensitive_code_query() throws Exception {
+        mockMvc.perform(get("/api/products")
+                .param("status", "ON_SALE")
+                .param("q", "LIMITED-002")
+                .header("X-Correlation-Id", "corr-catalog-search-2"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.success", is(true)))
+            .andExpect(jsonPath("$.data", hasSize(1)))
+            .andExpect(jsonPath("$.data[0].productCode", is("LIMITED-002")))
+            .andExpect(jsonPath("$.data[0].name", is("Limited Cap")))
+            .andExpect(jsonPath("$.trace.correlationId", is("corr-catalog-search-2")));
+    }
+
+    @Test
+    void applies_default_order_when_query_is_blank() throws Exception {
+        mockMvc.perform(get("/api/products")
+                .param("status", "ON_SALE")
+                .param("q", "   ")
+                .header("X-Correlation-Id", "corr-catalog-search-default"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.success", is(true)))
+            .andExpect(jsonPath("$.data", hasSize(2)))
+            .andExpect(jsonPath("$.data[0].productCode", is("LIMITED-001")))
+            .andExpect(jsonPath("$.data[1].productCode", is("LIMITED-002")));
+    }
+
+    @Test
+    void treats_like_wildcard_characters_as_literal_search_text() throws Exception {
+        mockMvc.perform(get("/api/products")
+                .param("status", "ON_SALE")
+                .param("q", "%")
+                .header("X-Correlation-Id", "corr-catalog-search-wildcard"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.success", is(true)))
+            .andExpect(jsonPath("$.data", hasSize(0)))
+            .andExpect(jsonPath("$.trace.correlationId", is("corr-catalog-search-wildcard")));
+    }
+
+    @Test
+    void returns_common_error_response_when_status_query_is_missing() throws Exception {
+        mockMvc.perform(get("/api/products")
+                .header("X-Correlation-Id", "corr-catalog-missing-status"))
+            .andExpect(status().isBadRequest())
+            .andExpect(header().string("X-Correlation-Id", "corr-catalog-missing-status"))
+            .andExpect(jsonPath("$.success", is(false)))
+            .andExpect(jsonPath("$.error.code", is("CATALOG_INVALID_REQUEST")))
+            .andExpect(jsonPath("$.trace.correlationId", is("corr-catalog-missing-status")));
+    }
+
+    @Test
     void returns_product_detail_by_product_code() throws Exception {
         mockMvc.perform(get("/api/products/{productCode}", "LIMITED-001")
                 .header("X-Correlation-Id", "corr-catalog-detail"))

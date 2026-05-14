@@ -41,7 +41,7 @@ Docker 데모 모드에서는 Nginx가 같은 prefix를 compose 내부 서비스
 
 ## 화면 흐름
 
-1. `GET /api/products?status=ON_SALE`로 판매 중 상품을 조회한다.
+1. `GET /api/products?status=ON_SALE&q={query}`로 판매 중 상품을 조회하고, 검색어가 비어 있으면 전체 판매 중 상품을 보여준다.
 2. 상품 선택 시 `GET /api/stocks?productCode={productCode}`로 SKU별 재고를 조회한다.
 3. 쿠폰 코드가 있으면 `POST /api/coupons/quote`로 할인 금액과 결제 예정 금액을 확인한다.
 4. 회원 ID, 수량, 결제수단, 쿠폰 코드를 입력해 `POST /api/orders`를 호출한다.

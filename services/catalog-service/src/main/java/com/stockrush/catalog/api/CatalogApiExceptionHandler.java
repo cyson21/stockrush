@@ -8,6 +8,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingRequestHeaderException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
@@ -46,6 +47,14 @@ class CatalogApiExceptionHandler {
             : "COMMON_MISSING_HEADER";
 
         return badRequest(code, exception.getMessage(), request);
+    }
+
+    @ExceptionHandler(MissingServletRequestParameterException.class)
+    ResponseEntity<ApiResponse<Void>> handleMissingRequestParameter(
+        MissingServletRequestParameterException exception,
+        HttpServletRequest request
+    ) {
+        return badRequest("CATALOG_INVALID_REQUEST", exception.getMessage(), request);
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)

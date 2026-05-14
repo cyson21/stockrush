@@ -19,16 +19,36 @@ class JdbcProductQueryRepository implements ProductQueryRepository {
     }
 
     @Override
-    public List<ProductSnapshot> findByStatus(String status) {
-        return jdbcClient.sql("""
+    public List<ProductSnapshot> findByStatus(String status, String query) {
+        StringBuilder sql = new StringBuilder("""
                 select product_code, name, sales_status, list_price
                 from products
                 where sales_status = :status
-                order by product_code
-                """)
-            .param("status", status)
-            .query(this::mapProduct)
-            .list();
+                """);
+        if (query != null) {
+            sql.append(" and (")
+                .append("lower(product_code) like :query escape '\\'")
+                .append(" or ")
+                .append("lower(name) like :query escape '\\'")
+                .append(")");
+        }
+        sql.append(" order by product_code");
+
+        var queryBuilder = jdbcClient.sql(sql.toString())
+            .param("status", status);
+
+        if (query != null) {
+            queryBuilder.param("query", "%" + escapeLikePattern(query.toLowerCase()) + "%");
+        }
+
+        return queryBuilder.query(this::mapProduct).list();
+    }
+
+    private String escapeLikePattern(String value) {
+        return value
+            .replace("\\", "\\\\")
+            .replace("%", "\\%")
+            .replace("_", "\\_");
     }
 
     @Override

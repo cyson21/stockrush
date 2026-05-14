@@ -26,7 +26,7 @@ StockRush 테스트 전략은 한정 판매 주문 흐름에서 서비스별 도
 | Mobile behavior | Android/iOS 고객 앱의 API 호출과 화면 상태 렌더링 확인 | `apps/mobile-app/src/screens/ProductListScreen.test.tsx` |
 | Gateway routing smoke | Gateway가 주문 생성/조회, 관리자 주문 조회/취소, Outbox 조회/재시도/requeue, 쿠폰/출고/Read Model 조회 요청을 대상 서비스로 전달하는지 확인 | `services/gateway/src/test/java/com/stockrush/gateway/api/OrderGatewayControllerIntegrationTest.java` |
 | Architecture Guard | schema ownership, Controller 반환 타입, event envelope, outbox table shape 확인 | `tools/architecture-guard/tests/test_architecture_guard.py`, `tools/architecture-guard/architecture_guard.py` |
-| Manual E2E | 실제 서비스 기동 후 `CARD`, `FAIL_CARD`, `DELAY_CARD`, 관리자 취소, Gateway 경유 동일 SKU 최종 상태 확인 | `docs/runbooks/local-e2e.md`, `tools/local-e2e` |
+| Manual E2E | 실제 서비스 기동 후 `CARD`, `FAIL_CARD`, `DELAY_CARD`, 관리자 취소, Gateway 경유 동일 SKU 최종 상태, Kafka pause/unpause 복구 확인 | `docs/runbooks/local-e2e.md`, `tools/local-e2e` |
 
 ## Command Matrix
 
@@ -84,6 +84,7 @@ cd services/gateway && mvn test
 Local end-to-end verification follows [Local E2E Runbook](runbooks/local-e2e.md).
 
 데모 스택 smoke는 자동 relay scheduler를 검증하기 위해 `--relay-mode automatic`을 사용한다. 관리자 취소 흐름은 여러 relay 주기를 거치므로 smoke 스크립트는 `--max-attempts 30 --wait-seconds 1`로 시간 예산을 둔다. 개발 중 수동 Outbox retry 경로를 직접 확인할 때만 `--relay-mode manual`을 쓴다.
+Kafka 장애 복구는 기본 smoke와 분리해 `--kafka-outage` 또는 `local-e2e kafka-outage-recovery`로 선택 실행한다.
 
 ## Scenario Coverage
 
@@ -97,6 +98,7 @@ Local end-to-end verification follows [Local E2E Runbook](runbooks/local-e2e.md)
 | Burst idempotency replay under stock pressure | Idempotency replay and 재처리 경로 회귀 커버리지 | `tools/local-e2e/local-e2e burst-idempotency`로 대량 요청 후 멱등성 수렴 및 outbox 잔여분 0 확인 |
 | Outbox retry, requeue and relay | Service-local outbox relay/admin tests, Gateway outbox routing smoke | Admin App outbox operation checklist |
 | Automatic Outbox relay | `OutboxRelaySchedulerTest`, demo smoke `--relay-mode automatic` | Customer App에서 주문 생성 후 PENDING 정체 없이 수렴 확인 |
+| Kafka outage recovery | Docker Compose `pause/unpause` 기반 opt-in runner 테스트 | `tools/local-e2e/local-e2e kafka-outage-recovery`로 pause 중 outbox 대기 관측, unpause 후 주문/재고/outbox 수렴 확인 |
 | Coupon quote, order pricing, usage lifecycle | Promotion coupon controller, Promotion usage event handler/consumer, Order coupon pricing, Customer App quote UI tests | Direct customer app/API smoke |
 | Fulfillment request preparation | Fulfillment handler/consumer tests, service API test, Gateway route smoke, Admin App fulfillment tab test | Admin App Fulfillment tab with demo stack |
 | Order summary projection | Read Model projection handler, JSON consumer dispatch, customer/admin API tests, admin dashboard filter UI tests | Future local E2E with read-model-service enabled |
@@ -108,8 +110,9 @@ Local end-to-end verification follows [Local E2E Runbook](runbooks/local-e2e.md)
 - `tools/local-e2e/local-e2e same-sku-concurrency --orders 6 --initial-stock 3 --quantity 1 --max-attempts 12` 실행에서 productCode `CONC-E2E-20260513110249-07e052f0`, SKU `CONC-E2E-20260513110249-07e052f0-S` 기준 주문 생성/조회는 Gateway 기본 URL(`http://localhost:18080`)을 경유했다. 주문 6건 중 3건은 `CONFIRMED/COMPLETED`, 3건은 `CANCELLED/FAILED`가 됐다. 최종 재고는 `availableQuantity=0`, `reservedQuantity=0`이고 Order/Inventory/Payment `pendingOutboxDelta`는 모두 0이었다.
 - `tools/local-e2e/local-e2e burst-idempotency --orders 30 --initial-stock 10 --idempotency-replays 2 --relay-workers 4 --stability-waves 2` 실행에서 productCode `BURST-E2E-20260514175639-9f933e0f` 기준 requestAttemptCount `60`에서 unique orderIds `30`이 생성됐고, 최종 `CONFIRMED/COMPLETED` 10건 / `CANCELLED/FAILED` 20건 / `unresolved` 0건으로 수렴했다. 재고 `availableQuantity=0`, `reservedQuantity=0`, Order/Inventory/Payment `pendingOutboxDelta`와 `postReplayPendingOutboxDelta`가 모두 `0`이었고 신규 pending outbox event ID도 남지 않았다.
 - Gateway(`http://localhost:18080`) 기준 주문 생성/조회/취소 E2E에서 productCode `GW-E2E-20260513111940-332ba0dc`, SKU `GW-E2E-20260513111940-332ba0dc-S`를 사용했다. `CARD` 주문 `ord_20260513021940_57874d04`는 `CONFIRMED/COMPLETED`, `FAIL_CARD` 주문 `ord_20260513021940_5ea74236`은 `CANCELLED/FAILED`, `DELAY_CARD` 주문 `ord_20260513021940_8c5b95cf`는 `PAYMENT_DELAYED` 확인 후 Gateway 관리자 취소로 `CANCELLED/FAILED`가 됐다. 최종 재고는 `availableQuantity=19`, `reservedQuantity=0`이고 Order/Inventory/Payment `pendingOutboxDelta`는 모두 0이었다.
-- demo stack automatic relay smoke에서 productCode `DEMO-E2E-20260514223735-9adc0400`, SKU `DEMO-E2E-20260514223735-9adc0400-S`를 사용했다. `CARD` 주문 `ord_20260514133735_62e19e78`는 `CONFIRMED/COMPLETED`, `FAIL_CARD` 주문 `ord_20260514133735_c26a0a33`과 `DELAY_CARD` 주문 `ord_20260514133735_f9a2cb95`는 `CANCELLED/FAILED`가 됐다. 최종 재고는 `availableQuantity=19`, `reservedQuantity=0`이고 Order/Inventory/Payment `pendingOutboxDelta`는 모두 0이었다.
+- demo stack automatic relay smoke에서 productCode `DEMO-E2E-20260515014041-3107213e`, SKU `DEMO-E2E-20260515014041-3107213e-S`를 사용했다. `CARD` 주문 `ord_20260514164041_9bff0062`는 `CONFIRMED/COMPLETED`, `FAIL_CARD` 주문 `ord_20260514164041_e3491a01`과 `DELAY_CARD` 주문 `ord_20260514164041_782120c3`는 `CANCELLED/FAILED`가 됐다. 최종 재고는 `availableQuantity=19`, `reservedQuantity=0`이고 Order/Inventory/Payment `pendingOutboxDelta`는 모두 0이었다.
 - demo stack Outbox recovery smoke에서 correlation id `corr-outbox-recovery-cddd5a2bd7d9`를 사용했다. Order/Inventory/Payment의 `pendingCounts`, `retryablePendingCounts`, `deferredPendingCounts`, `failedCounts`는 실행 전후 모두 0이었고, `retryPending`과 `requeueFailed`는 처리 대상 0건으로 정상 종료했다.
+- demo stack Kafka outage recovery smoke에서 productCode `KAFKA-OUTAGE-E2E-20260515014056-84904d76`, orderId `ord_20260514164100_80a5f7f8`를 사용했다. Kafka pause 중 주문은 `CREATED/STARTED`로 남고 order outbox 1건이 관측됐으며, unpause 후 `CONFIRMED/COMPLETED`, 재고 `availableQuantity=2`, `reservedQuantity=0`, Order/Inventory/Payment `finalPendingOutboxDelta=0`으로 수렴했다.
 
 ## Stability Rules
 
@@ -129,10 +132,10 @@ These are known gaps, not hidden assumptions.
 
 - Gateway has order create/query, admin order list/saga/cancel, and Outbox admin routing smoke coverage with fake upstreams. The same-SKU local E2E runner and runbook send order-facing calls and outbox retry/query calls through Gateway.
 - Inventory handler has a focused same-SKU concurrent reservation regression test and a local final-state E2E runner. Kafka consumer parallelism, external load benchmarking, and duplicate command race windows remain future scope.
-- Kafka broker outage and long-lived `PENDING` recovery scenarios are documented but not fully automated. Normal demo-runtime `PENDING` relay is now covered by property-gated schedulers and `--relay-mode automatic`; broker outage recovery remains future scope.
+- Kafka broker outage recovery is covered by an opt-in local runner. Normal demo-runtime `PENDING` relay is covered by property-gated schedulers and `--relay-mode automatic`; consumer lag and external load benchmarking remain future scope.
 - Promotion Service currently covers coupon definition, quote, Customer App quote UI, Order Service discount application, order-event-driven coupon usage state, Gateway routing, and the Admin App usage history screen.
 - Fulfillment Service currently covers `OrderConfirmed` to `PREPARING` request creation, duplicate event handling, service API, Gateway route, and Admin App fulfillment request screen. Carrier assignment, labels, and tracking remain future scope.
-- Read Model Service currently covers order summary projection, service-local customer/admin APIs, Gateway routing, Admin Dashboard metrics and filters, late `OrderCreated` protection, and result-event retry rollback when the summary is missing. Product search projection and full Kafka retry/DLQ drills remain future scope.
+- Read Model Service currently covers order summary projection, service-local customer/admin APIs, Gateway routing, Admin Dashboard metrics and filters, late `OrderCreated` protection, and result-event retry rollback when the summary is missing. Customer product search is currently handled by Catalog API/UI; a separate product search projection and full Kafka retry/DLQ drills remain future scope.
 - Mobile customer app now has the Expo scaffold, Gateway-first API client, product/SKU stock screen tests, coupon quote tests, order creation payload/header tests, order status polling tests, Read Model order history tests, and a dependency-free smoke preflight. Android/iOS live smoke evidence and screenshots remain future scope until mobile dependencies and a simulator/emulator target are available.
 - Authentication and authorization tests are outside the current public slice.
 - Customer API documentation is now separated from runbook examples, but inventory customer query docs can still be expanded later.

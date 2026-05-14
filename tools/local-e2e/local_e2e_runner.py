@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import subprocess
 import sys
 import time
 import urllib.error
@@ -28,6 +29,7 @@ MAX_RELAY_BATCH_SIZE = 100
 MAX_BURST_WORKERS = 64
 OUTBOX_QUERY_LIMIT = 200
 DEMO_COUPON_DISCOUNT_AMOUNT = 1000
+KAFKA_OUTAGE_OBSERVATION_STATUSES = ("PENDING", "PUBLISHING", "FAILED")
 
 
 @dataclass(frozen=True)
@@ -61,6 +63,10 @@ class ScenarioConfig:
     stability_waves: int = 1
     operator_id: str = "local-e2e"
     requeue_failed: bool = True
+    compose_file: str | None = None
+    env_file: str | None = None
+    kafka_service: str = "kafka"
+    outage_observation_seconds: float = 2.0
 
 
 def expected_success_count(initial_stock: int, quantity_per_order: int, order_count: int) -> int:
@@ -576,18 +582,97 @@ def validate_outbox_recovery_result(
     return errors
 
 
+def kafka_outage_observation_statuses() -> tuple[str, ...]:
+    return KAFKA_OUTAGE_OBSERVATION_STATUSES
+
+
+def validate_kafka_outage_recovery_result(
+    *,
+    paused_order: Mapping[str, Any],
+    paused_pending_outbox_counts: Mapping[str, int],
+    paused_new_pending_outbox_event_ids: Mapping[str, Sequence[str]],
+    final_order: Mapping[str, Any],
+    final_stock: Mapping[str, Any],
+    initial_stock: int,
+    quantity_per_order: int,
+    final_pending_outbox_counts: Mapping[str, int],
+    final_new_pending_outbox_event_ids: Mapping[str, Sequence[str]],
+) -> list[str]:
+    errors: list[str] = []
+    if is_order_state(paused_order, "CONFIRMED", "COMPLETED") or is_order_state(paused_order, "CANCELLED", "FAILED"):
+        errors.append(
+            "order settled while kafka was paused: "
+            f"{paused_order.get('status')}/{paused_order.get('sagaStatus')}"
+        )
+
+    paused_pending = positive_pending_outbox_changes(paused_pending_outbox_counts)
+    paused_new_pending = {
+        name: list(ids)
+        for name, ids in paused_new_pending_outbox_event_ids.items()
+        if ids
+    }
+    if not paused_pending and not paused_new_pending:
+        errors.append("pending outbox was not observed while kafka was paused")
+
+    if not is_order_state(final_order, "CONFIRMED", "COMPLETED"):
+        errors.append(
+            "final order expected CONFIRMED/COMPLETED; "
+            f"got {final_order.get('status')}/{final_order.get('sagaStatus')}"
+        )
+
+    expected_available = initial_stock - quantity_per_order
+    if final_stock.get("availableQuantity") != expected_available or final_stock.get("reservedQuantity") != 0:
+        errors.append(
+            "stock expected "
+            f"availableQuantity={expected_available}, reservedQuantity=0; "
+            f"got availableQuantity={final_stock.get('availableQuantity')}, "
+            f"reservedQuantity={final_stock.get('reservedQuantity')}"
+        )
+
+    final_pending = positive_pending_outbox_changes(final_pending_outbox_counts)
+    if final_pending:
+        errors.append(f"final pending outbox remains: {final_pending}")
+
+    final_new_pending = {
+        name: list(ids)
+        for name, ids in final_new_pending_outbox_event_ids.items()
+        if ids
+    }
+    if final_new_pending:
+        errors.append(f"final new pending outbox events remain: {final_new_pending}")
+    return errors
+
+
 def count_pending_outbox(client: ApiClient, config: ScenarioConfig) -> dict[str, int]:
+    return count_outbox(client, config, statuses=("PENDING",))
+
+
+def count_outbox(
+    client: ApiClient,
+    config: ScenarioConfig,
+    *,
+    statuses: Sequence[str],
+) -> dict[str, int]:
     counts: dict[str, int] = {}
     for name in SERVICE_BASES:
-        payload = response_data(client.get(outbox_list_url(config, name)))
+        payload = response_data(client.get(outbox_list_url(config, name, statuses=statuses)))
         counts[name] = len(payload.get("items", []))
     return counts
 
 
 def pending_outbox_event_ids(client: ApiClient, config: ScenarioConfig) -> dict[str, set[str]]:
+    return outbox_event_ids(client, config, statuses=("PENDING",))
+
+
+def outbox_event_ids(
+    client: ApiClient,
+    config: ScenarioConfig,
+    *,
+    statuses: Sequence[str],
+) -> dict[str, set[str]]:
     event_ids: dict[str, set[str]] = {}
     for name in SERVICE_BASES:
-        payload = response_data(client.get(outbox_list_url(config, name)))
+        payload = response_data(client.get(outbox_list_url(config, name, statuses=statuses)))
         event_ids[name] = {str(item.get("eventId")) for item in payload.get("items", []) if item.get("eventId")}
     return event_ids
 
@@ -979,6 +1064,178 @@ def run_outbox_recovery_scenario(config: ScenarioConfig) -> Mapping[str, Any]:
     }
 
 
+def run_kafka_outage_recovery_scenario(config: ScenarioConfig) -> Mapping[str, Any]:
+    client = ApiClient(timeout_seconds=120.0)
+    product_code, sku_id = scenario_ids(config.prefix)
+
+    healthcheck(client, config)
+    ensure_no_pending_outbox(client, config)
+    outage_counts_before = count_outbox(client, config, statuses=kafka_outage_observation_statuses())
+    outage_ids_before = outbox_event_ids(client, config, statuses=kafka_outage_observation_statuses())
+    seed_product(client, config, product_code)
+    seed_stock(client, config, product_code, sku_id)
+
+    initial_order: Mapping[str, Any] = {}
+    paused_order: Mapping[str, Any] = {}
+    paused_pending_after = outage_counts_before
+    paused_pending_delta = pending_outbox_delta(outage_counts_before, paused_pending_after)
+    paused_new_pending_ids: dict[str, list[str]] = {}
+    final_order: Mapping[str, Any] = {}
+    final_stock: Mapping[str, Any] = {}
+    final_pending_after = outage_counts_before
+    final_pending_delta = pending_outbox_delta(outage_counts_before, final_pending_after)
+    final_new_pending_ids: dict[str, list[str]] = {}
+    paused = False
+
+    try:
+        run_docker_compose_action(config, "pause")
+        paused = True
+        initial_order = create_order(client, config, product_code, sku_id, "CARD", "member-kafka-outage", 1)
+        order_id = require_order_id(initial_order)
+        observed = observe_kafka_outage_state(
+            client,
+            config,
+            order_id,
+            outage_counts_before,
+            outage_ids_before,
+        )
+        paused_order = observed["order"]
+        paused_pending_after = observed["pendingOutboxCounts"]
+        paused_pending_delta = observed["pendingOutboxDelta"]
+        paused_new_pending_ids = observed["newPendingOutboxEventIds"]
+    finally:
+        if paused:
+            run_docker_compose_action(config, "unpause")
+
+    order_id = require_order_id(initial_order)
+    final_pending_ids_after = outage_ids_before
+    for _ in range(config.max_attempts):
+        maybe_relay_wave(client, config)
+        final_order = get_order(client, config, order_id)
+        final_stock = get_stock(client, config, sku_id)
+        final_pending_after = count_outbox(client, config, statuses=kafka_outage_observation_statuses())
+        final_pending_delta = pending_outbox_delta(outage_counts_before, final_pending_after)
+        final_pending_ids_after = outbox_event_ids(client, config, statuses=kafka_outage_observation_statuses())
+        final_new_pending_ids = new_pending_outbox_event_ids(outage_ids_before, final_pending_ids_after)
+        if (
+            is_order_state(final_order, "CONFIRMED", "COMPLETED")
+            and final_stock.get("reservedQuantity") == 0
+            and not positive_pending_outbox_changes(final_pending_delta)
+            and not final_new_pending_ids
+        ):
+            break
+        time.sleep(config.wait_seconds)
+    else:
+        final_order = get_order(client, config, order_id)
+        final_stock = get_stock(client, config, sku_id)
+        final_pending_after = count_outbox(client, config, statuses=kafka_outage_observation_statuses())
+        final_pending_delta = pending_outbox_delta(outage_counts_before, final_pending_after)
+        final_pending_ids_after = outbox_event_ids(client, config, statuses=kafka_outage_observation_statuses())
+        final_new_pending_ids = new_pending_outbox_event_ids(outage_ids_before, final_pending_ids_after)
+
+    errors = validate_kafka_outage_recovery_result(
+        paused_order=paused_order,
+        paused_pending_outbox_counts=paused_pending_delta,
+        paused_new_pending_outbox_event_ids=paused_new_pending_ids,
+        final_order=final_order,
+        final_stock=final_stock,
+        initial_stock=config.initial_stock,
+        quantity_per_order=config.quantity_per_order,
+        final_pending_outbox_counts=final_pending_delta,
+        final_new_pending_outbox_event_ids=final_new_pending_ids,
+    )
+
+    return {
+        "productCode": product_code,
+        "skuId": sku_id,
+        "orderId": order_id,
+        "pausedOrder": paused_order,
+        "pausedPendingOutboxCounts": paused_pending_after,
+        "pausedPendingOutboxDelta": paused_pending_delta,
+        "pausedPendingOutboxNewEventIds": paused_new_pending_ids,
+        "finalOrder": final_order,
+        "finalStock": final_stock,
+        "finalPendingOutboxCounts": final_pending_after,
+        "finalPendingOutboxDelta": final_pending_delta,
+        "finalPendingOutboxNewEventIds": final_new_pending_ids,
+        "kafkaService": config.kafka_service,
+        "composeFile": config.compose_file,
+        "errors": errors,
+    }
+
+
+def require_order_id(order: Mapping[str, Any]) -> str:
+    order_id = order.get("orderId")
+    if not order_id:
+        raise RuntimeError(f"order response did not include orderId: {order}")
+    return str(order_id)
+
+
+def observe_kafka_outage_state(
+    client: ApiClient,
+    config: ScenarioConfig,
+    order_id: str,
+    outbox_counts_before: Mapping[str, int],
+    outbox_ids_before: Mapping[str, set[str]],
+) -> dict[str, Any]:
+    deadline = time.monotonic() + config.outage_observation_seconds
+    latest_order: Mapping[str, Any] = {}
+    latest_counts = dict(outbox_counts_before)
+    latest_delta = pending_outbox_delta(outbox_counts_before, latest_counts)
+    latest_new_ids: dict[str, list[str]] = {}
+
+    for attempt in range(config.max_attempts):
+        latest_order = get_order(client, config, order_id)
+        latest_counts = count_outbox(client, config, statuses=kafka_outage_observation_statuses())
+        latest_delta = pending_outbox_delta(outbox_counts_before, latest_counts)
+        latest_ids = outbox_event_ids(client, config, statuses=kafka_outage_observation_statuses())
+        latest_new_ids = new_pending_outbox_event_ids(outbox_ids_before, latest_ids)
+        if (
+            positive_pending_outbox_changes(latest_delta)
+            or latest_new_ids
+            or is_order_state(latest_order, "CONFIRMED", "COMPLETED")
+            or is_order_state(latest_order, "CANCELLED", "FAILED")
+        ):
+            break
+        if config.outage_observation_seconds and time.monotonic() >= deadline:
+            break
+        if attempt < config.max_attempts - 1 and config.wait_seconds:
+            time.sleep(config.wait_seconds)
+
+    return {
+        "order": latest_order,
+        "pendingOutboxCounts": latest_counts,
+        "pendingOutboxDelta": latest_delta,
+        "newPendingOutboxEventIds": latest_new_ids,
+    }
+
+
+def run_docker_compose_action(config: ScenarioConfig, action: str) -> None:
+    if action not in {"pause", "unpause"}:
+        raise ValueError(f"unsupported compose action: {action}")
+    if not config.compose_file:
+        raise RuntimeError("--compose-file is required for kafka outage recovery")
+    if not config.env_file:
+        raise RuntimeError("--env-file is required for kafka outage recovery")
+
+    command = [
+        "docker",
+        "compose",
+        "--env-file",
+        config.env_file,
+        "-f",
+        config.compose_file,
+        action,
+        config.kafka_service,
+    ]
+    try:
+        subprocess.run(command, check=True, capture_output=True, text=True)
+    except subprocess.CalledProcessError as error:
+        output = (error.stderr or error.stdout or "").strip()
+        suffix = f": {output}" if output else ""
+        raise RuntimeError(f"docker compose {action} {config.kafka_service} failed{suffix}") from error
+
+
 def outbox_recovery_headers(
     config: ScenarioConfig,
     correlation_id: str,
@@ -1323,6 +1580,24 @@ def add_outbox_recovery_arguments(command_parser: argparse.ArgumentParser) -> No
     )
 
 
+def add_kafka_outage_recovery_arguments(command_parser: argparse.ArgumentParser) -> None:
+    add_runtime_arguments(
+        command_parser,
+        default_orders=1,
+        default_initial_stock=3,
+        default_prefix="KAFKA-OUTAGE-E2E",
+    )
+    command_parser.add_argument("--compose-file", default="infra/demo/docker-compose.yml")
+    command_parser.add_argument("--env-file", default="infra/demo/.env")
+    command_parser.add_argument("--kafka-service", type=non_blank_text, default="kafka")
+    command_parser.add_argument(
+        "--outage-observation-seconds",
+        type=non_negative_float,
+        default=2.0,
+        help="Seconds to observe the order/outbox state while Kafka is paused.",
+    )
+
+
 def parse_args(argv: Sequence[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="StockRush local E2E runner")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -1387,6 +1662,13 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
         help="Run manual retry/requeue waves for pending and failed outbox rows.",
     )
     add_outbox_recovery_arguments(outbox_recovery)
+
+    kafka_outage = subparsers.add_parser(
+        "kafka-outage-recovery",
+        aliases=["broker-outage-recovery"],
+        help="Pause the demo Kafka service, create an order, then unpause and verify recovery.",
+    )
+    add_kafka_outage_recovery_arguments(kafka_outage)
     return parser.parse_args(argv)
 
 
@@ -1415,6 +1697,10 @@ def config_from_args(args: argparse.Namespace) -> ScenarioConfig:
         stability_waves=getattr(args, "stability_waves", 1),
         operator_id=getattr(args, "operator_id", "local-e2e"),
         requeue_failed=not getattr(args, "skip_requeue_failed", False),
+        compose_file=getattr(args, "compose_file", None),
+        env_file=getattr(args, "env_file", None),
+        kafka_service=getattr(args, "kafka_service", "kafka"),
+        outage_observation_seconds=getattr(args, "outage_observation_seconds", 2.0),
     )
 
 
@@ -1435,6 +1721,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 1 if result["errors"] else 0
         if args.command in {"outbox-recovery", "recover-outbox"}:
             result = run_outbox_recovery_scenario(config_from_args(args))
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+            return 1 if result["errors"] else 0
+        if args.command in {"kafka-outage-recovery", "broker-outage-recovery"}:
+            result = run_kafka_outage_recovery_scenario(config_from_args(args))
             print(json.dumps(result, ensure_ascii=False, indent=2))
             return 1 if result["errors"] else 0
         raise AssertionError(f"Unsupported command: {args.command}")

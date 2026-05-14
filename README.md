@@ -141,10 +141,12 @@ Windows 11 PowerShell에서는 `.\scripts\demo-up.ps1`, `.\scripts\demo-smoke.ps
 - 모바일 앱은 상품/SKU 재고, 쿠폰 견적, 주문 생성, 주문 상태 추적, Read Model 주문 내역 화면을 React Native Testing Library, Jest Expo, TypeScript typecheck, scaffold validation으로 검증했습니다. `smoke:preflight`로 demo Gateway health와 iOS/Android 실행 도구 준비 상태를 점검하며, Android 또는 iOS live smoke는 의존성 설치와 simulator/emulator 준비 후 진행합니다.
 - `./tools/architecture-guard/architecture-guard check`로 schema ownership, Controller 반환 타입, 이벤트 envelope, Outbox table shape, Gateway/서비스 Correlation ID 전파, Actuator 운영 endpoint 노출을 점검합니다.
 - 실제 로컬 E2E는 [Local E2E Runbook](docs/runbooks/local-e2e.md)의 `CARD`, `FAIL_CARD`, `DELAY_CARD`, 지연 결제 취소 시나리오를 기준으로 재현합니다.
+- Kafka broker 장애 복구는 `./tools/local-e2e/local-e2e kafka-outage-recovery` 또는 `./scripts/demo-smoke.sh --kafka-outage`로 선택 실행합니다.
 - 최근 지연 결제 취소 E2E 증거: `ord_20260513012031_8c06cd49` 주문이 `CREATED/PAYMENT_DELAYED` 도달 후 관리자 취소로 `CANCELLED/FAILED`가 됐고, SKU `DELAY-E2E-102029-S` 재고는 `available=20`, `reserved=0`으로 복구됐습니다.
 - 동일 SKU 최종 상태 E2E 증거: `tools/local-e2e/local-e2e same-sku-concurrency` 실행에서 주문 생성/조회는 Gateway를 경유했고, 주문 6건, 초기 재고 3개 기준 3건 완료/3건 취소, 재고 `available=0`, `reserved=0`, 서비스별 `pendingOutboxDelta=0`을 확인했습니다.
 - Gateway 주문/운영 라우팅 smoke 증거: fake upstream 기준 주문 생성/조회, 관리자 주문 조회/취소, Outbox 조회/재시도/requeue, 쿠폰 견적/사용 이력, Read Model 주문 요약이 method, path, query, body, 핵심 헤더, status, body를 전달하는지 `services/gateway` Maven 테스트로 확인했습니다.
 - Gateway 주문 시나리오 E2E 증거: `GW-E2E-20260513111940-332ba0dc` 기준 `CARD`, `FAIL_CARD`, `DELAY_CARD`, 지연 결제 취소가 Gateway 주문 경로에서 처리됐고, 최종 재고 `available=19`, `reserved=0`, 서비스별 `pendingOutboxDelta=0`을 확인했습니다.
+- Kafka 장애 복구 smoke 증거: `KAFKA-OUTAGE-E2E-20260515014056-84904d76` 기준 Kafka pause 중 주문 `ord_20260514164100_80a5f7f8`가 `CREATED/STARTED`와 order outbox 1건으로 머문 뒤, unpause 후 `CONFIRMED/COMPLETED`, 재고 `available=2`, `reserved=0`, 잔여 outbox 0으로 수렴했습니다.
 - Promotion Service 집중 검증: `PromotionCouponControllerIntegrationTest`로 쿠폰 생성, 상태별 목록, 퍼센트 할인 상한, 최소 주문 금액 미달, 중복 쿠폰 코드 응답을 확인했습니다.
 - 쿠폰 주문 반영 검증: Order Service 테스트로 quote 실패/타임아웃/금액 일관성, 주문 저장 가격 snapshot, Payment command 결제 예정 금액을 확인하고 Customer App Vitest/build로 쿠폰 UI를 확인했습니다.
 - 쿠폰 사용 이벤트 검증: Promotion Service 테스트로 `OrderCreated` 사용 기록, `OrderConfirmed` 사용 완료, `OrderCancelled` 사용 해제와 중복 이벤트 무해 처리를 확인했습니다.
@@ -156,5 +158,5 @@ Windows 11 PowerShell에서는 `.\scripts\demo-up.ps1`, `.\scripts\demo-smoke.ps
 - Gateway는 주문 생성/조회, 관리자 주문 조회/취소, Outbox 조회/재시도/requeue 라우팅 smoke와 동일 SKU runner/runbook의 Gateway 경유 경로까지 검증 범위를 넓혔습니다.
 - Promotion Service는 주문 이벤트 기반 쿠폰 사용 상태, Gateway 쿠폰 견적/사용 이력 route, 관리자 사용 이력 화면까지 연결했습니다.
 - Fulfillment Service는 출고 준비 요청 기록, Gateway route, 관리자 출고 상태 화면까지 연결했습니다. carrier/label/tracking 상태는 후속 확장 범위입니다.
-- Read Model Service는 주문 요약 projection, 서비스-local 조회 API, Gateway 조회 route, 조건 검색 가능한 관리자 대시보드까지 연결했습니다. 상품 검색 projection은 후속 확장 범위입니다.
-- 인증/권한, 부하 벤치마크, Kafka consumer 병렬성 검증, Kafka 장애 복구 자동화는 후속 확장 범위입니다.
+- Read Model Service는 주문 요약 projection, 서비스-local 조회 API, Gateway 조회 route, 조건 검색 가능한 관리자 대시보드까지 연결했습니다. 고객 상품 검색은 Catalog API와 Customer App UI로 먼저 연결했고, 별도 상품 검색 projection은 후속 확장 범위입니다.
+- 인증/권한, 부하 벤치마크, Kafka consumer 병렬성 검증은 후속 확장 범위입니다.

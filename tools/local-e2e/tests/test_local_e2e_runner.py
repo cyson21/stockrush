@@ -482,6 +482,206 @@ class LocalE2ERunnerTest(unittest.TestCase):
         self.assertEqual(args.operator_id, "qa-runner")
         self.assertFalse(args.skip_requeue_failed)
 
+    def test_cli_accepts_kafka_outage_recovery_command_name(self) -> None:
+        args = local_e2e_runner.parse_args([
+            "kafka-outage-recovery",
+            "--compose-file",
+            "infra/demo/docker-compose.yml",
+            "--env-file",
+            "infra/demo/.env",
+            "--relay-mode",
+            "automatic",
+        ])
+
+        self.assertEqual(args.command, "kafka-outage-recovery")
+        self.assertEqual(args.compose_file, "infra/demo/docker-compose.yml")
+        self.assertEqual(args.env_file, "infra/demo/.env")
+        self.assertEqual(args.kafka_service, "kafka")
+        self.assertEqual(args.prefix, "KAFKA-OUTAGE-E2E")
+        self.assertEqual(args.orders, 1)
+        self.assertEqual(args.initial_stock, 3)
+        self.assertEqual(args.relay_mode, "automatic")
+
+    def test_docker_compose_action_pauses_named_kafka_service(self) -> None:
+        args = local_e2e_runner.parse_args([
+            "kafka-outage-recovery",
+            "--compose-file",
+            "infra/demo/docker-compose.yml",
+            "--env-file",
+            "infra/demo/.env",
+            "--kafka-service",
+            "broker",
+        ])
+        config = local_e2e_runner.config_from_args(args)
+        calls: list[list[str]] = []
+
+        def fake_run(command: list[str], **_kwargs: object) -> object:
+            calls.append(command)
+
+            class Result:
+                stdout = ""
+                stderr = ""
+
+            return Result()
+
+        original_run = local_e2e_runner.subprocess.run
+        local_e2e_runner.subprocess.run = fake_run
+        try:
+            local_e2e_runner.run_docker_compose_action(config, "pause")
+        finally:
+            local_e2e_runner.subprocess.run = original_run
+
+        self.assertEqual(
+            calls,
+            [[
+                "docker",
+                "compose",
+                "--env-file",
+                "infra/demo/.env",
+                "-f",
+                "infra/demo/docker-compose.yml",
+                "pause",
+                "broker",
+            ]],
+        )
+
+    def test_validate_kafka_outage_recovery_result_accepts_pause_then_recovery(self) -> None:
+        errors = local_e2e_runner.validate_kafka_outage_recovery_result(
+            paused_order={"orderId": "ord-1", "status": "CREATED", "sagaStatus": "PAYMENT_REQUESTED"},
+            paused_pending_outbox_counts={"order": 1, "inventory": 0, "payment": 0},
+            paused_new_pending_outbox_event_ids={"order": ["evt-1"]},
+            final_order={"orderId": "ord-1", "status": "CONFIRMED", "sagaStatus": "COMPLETED"},
+            final_stock={"availableQuantity": 2, "reservedQuantity": 0},
+            initial_stock=3,
+            quantity_per_order=1,
+            final_pending_outbox_counts={"order": 0, "inventory": 0, "payment": 0},
+            final_new_pending_outbox_event_ids={},
+        )
+
+        self.assertEqual(errors, [])
+
+    def test_validate_kafka_outage_recovery_result_reports_unobserved_or_unrecovered_state(self) -> None:
+        errors = local_e2e_runner.validate_kafka_outage_recovery_result(
+            paused_order={"orderId": "ord-1", "status": "CONFIRMED", "sagaStatus": "COMPLETED"},
+            paused_pending_outbox_counts={"order": 0, "inventory": 0, "payment": 0},
+            paused_new_pending_outbox_event_ids={},
+            final_order={"orderId": "ord-1", "status": "CREATED", "sagaStatus": "PAYMENT_REQUESTED"},
+            final_stock={"availableQuantity": 3, "reservedQuantity": 1},
+            initial_stock=3,
+            quantity_per_order=1,
+            final_pending_outbox_counts={"order": 1, "inventory": 0, "payment": 0},
+            final_new_pending_outbox_event_ids={"order": ["evt-1"]},
+        )
+
+        self.assertTrue(any("settled while kafka was paused" in error for error in errors))
+        self.assertTrue(any("pending outbox was not observed" in error for error in errors))
+        self.assertTrue(any("final order" in error for error in errors))
+        self.assertTrue(any("stock" in error for error in errors))
+        self.assertTrue(any("final pending outbox" in error for error in errors))
+        self.assertTrue(any("final new pending outbox events" in error for error in errors))
+
+    def test_kafka_outage_observation_statuses_include_publishing_rows(self) -> None:
+        self.assertEqual(
+            local_e2e_runner.kafka_outage_observation_statuses(),
+            ("PENDING", "PUBLISHING", "FAILED"),
+        )
+
+    def test_observe_kafka_outage_state_polls_until_outbox_is_visible(self) -> None:
+        args = local_e2e_runner.parse_args([
+            "kafka-outage-recovery",
+            "--outage-observation-seconds",
+            "0",
+            "--wait-seconds",
+            "0",
+        ])
+        config = local_e2e_runner.config_from_args(args)
+
+        class FakeClient:
+            pass
+
+        order_calls: list[str] = []
+        count_calls: list[str] = []
+        id_calls: list[str] = []
+
+        original_get_order = local_e2e_runner.get_order
+        original_count_outbox = local_e2e_runner.count_outbox
+        original_outbox_event_ids = local_e2e_runner.outbox_event_ids
+        try:
+            local_e2e_runner.get_order = lambda _client, _config, order_id: (
+                order_calls.append(order_id)
+                or {"orderId": order_id, "status": "CREATED", "sagaStatus": "STARTED"}
+            )
+            local_e2e_runner.count_outbox = lambda _client, _config, statuses: (
+                count_calls.append(",".join(statuses))
+                or (
+                    {"order": 0, "inventory": 0, "payment": 0}
+                    if len(count_calls) == 1
+                    else {"order": 1, "inventory": 0, "payment": 0}
+                )
+            )
+            local_e2e_runner.outbox_event_ids = lambda _client, _config, statuses: (
+                id_calls.append(",".join(statuses))
+                or (
+                    {"order": set(), "inventory": set(), "payment": set()}
+                    if len(id_calls) == 1
+                    else {"order": {"evt-1"}, "inventory": set(), "payment": set()}
+                )
+            )
+
+            observed = local_e2e_runner.observe_kafka_outage_state(
+                FakeClient(),
+                config,
+                "ord-1",
+                {"order": 0, "inventory": 0, "payment": 0},
+                {"order": set(), "inventory": set(), "payment": set()},
+            )
+        finally:
+            local_e2e_runner.get_order = original_get_order
+            local_e2e_runner.count_outbox = original_count_outbox
+            local_e2e_runner.outbox_event_ids = original_outbox_event_ids
+
+        self.assertEqual(order_calls, ["ord-1", "ord-1"])
+        self.assertEqual(observed["pendingOutboxDelta"], {"order": 1, "inventory": 0, "payment": 0})
+        self.assertEqual(observed["newPendingOutboxEventIds"], {"order": ["evt-1"]})
+
+    def test_kafka_outage_scenario_reports_missing_order_id_without_key_error(self) -> None:
+        args = local_e2e_runner.parse_args(["kafka-outage-recovery"])
+        config = local_e2e_runner.config_from_args(args)
+
+        original_healthcheck = local_e2e_runner.healthcheck
+        original_ensure_no_pending_outbox = local_e2e_runner.ensure_no_pending_outbox
+        original_count_outbox = local_e2e_runner.count_outbox
+        original_outbox_event_ids = local_e2e_runner.outbox_event_ids
+        original_seed_product = local_e2e_runner.seed_product
+        original_seed_stock = local_e2e_runner.seed_stock
+        original_run_docker_compose_action = local_e2e_runner.run_docker_compose_action
+        original_create_order = local_e2e_runner.create_order
+
+        actions: list[str] = []
+        try:
+            local_e2e_runner.healthcheck = lambda _client, _config: None
+            local_e2e_runner.ensure_no_pending_outbox = lambda _client, _config: None
+            local_e2e_runner.count_outbox = lambda _client, _config, statuses: {"order": 0, "inventory": 0, "payment": 0}
+            local_e2e_runner.outbox_event_ids = lambda _client, _config, statuses: {"order": set(), "inventory": set(), "payment": set()}
+            local_e2e_runner.seed_product = lambda _client, _config, _product_code: None
+            local_e2e_runner.seed_stock = lambda _client, _config, _product_code, _sku_id: None
+            local_e2e_runner.run_docker_compose_action = lambda _config, action: actions.append(action)
+            local_e2e_runner.create_order = lambda *_args, **_kwargs: {}
+
+            with self.assertRaisesRegex(RuntimeError, "order response did not include orderId"):
+                local_e2e_runner.run_kafka_outage_recovery_scenario(config)
+        finally:
+            local_e2e_runner.healthcheck = original_healthcheck
+            local_e2e_runner.ensure_no_pending_outbox = original_ensure_no_pending_outbox
+            local_e2e_runner.count_outbox = original_count_outbox
+            local_e2e_runner.outbox_event_ids = original_outbox_event_ids
+            local_e2e_runner.seed_product = original_seed_product
+            local_e2e_runner.seed_stock = original_seed_stock
+            local_e2e_runner.run_docker_compose_action = original_run_docker_compose_action
+            local_e2e_runner.create_order = original_create_order
+
+        self.assertEqual(actions, ["pause", "unpause"])
+
     def test_retryable_pending_outbox_items_excludes_future_retry_rows(self) -> None:
         now = local_e2e_runner.datetime(2031, 1, 2, 3, 4, 5, tzinfo=local_e2e_runner.timezone.utc)
         items = [

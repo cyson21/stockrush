@@ -61,8 +61,7 @@ Customer App
   -> read-model-service order summary projection on OrderCreated/OrderConfirmed/OrderCancelled
 ```
 
-The current customer web app reads order status through `GET /api/orders/{orderId}`. The planned Android/iOS customer app will reuse the same customer APIs and add Read Model order history. The admin web app reads order/Saga state and service-specific outbox rows through Gateway admin APIs.
-Read Model Service currently exposes service-local summary APIs and is not proxied by Gateway.
+The current customer web app reads order status through `GET /api/orders/{orderId}` and searches products through Catalog Service query parameters. The planned Android/iOS customer app reuses the same customer APIs and adds Read Model order history. The admin web app reads order/Saga state, Read Model summaries, and service-specific outbox rows through Gateway admin APIs.
 
 ## First Demo Scenario
 
@@ -94,7 +93,7 @@ Read Model Service currently exposes service-local summary APIs and is not proxi
 
 | Service | API | Purpose |
 |---|---|---|
-| catalog-service | `GET /api/products`, `GET /api/products/{productCode}` | customer product discovery |
+| catalog-service | `GET /api/products?status={status}&q={query}`, `GET /api/products/{productCode}` | customer product discovery and simple search |
 | inventory-service | `GET /api/stocks`, `GET /api/stocks/{skuId}` | customer stock visibility and admin stock check |
 | order-service | `GET /api/orders/{orderId}` | customer order status and Saga progress tracking |
 | order-service | `GET /api/admin/orders`, `GET /api/admin/orders/{orderId}/saga` | admin order monitoring and Saga failure inspection |
@@ -131,6 +130,7 @@ Smoke tests use the local Docker Kafka broker at `localhost:19092` and the local
 | Failure Point | Recovery Behavior | Current Proof |
 |---|---|---|
 | Kafka publish fails from a relay | Outbox row stays retryable or moves to `FAILED` with error detail | service-local relay tests |
+| Kafka broker is paused in demo compose | Order remains non-terminal while pending outbox is observed, then resumes after broker unpause | `local-e2e kafka-outage-recovery` |
 | Consumer receives the same message twice | processed event storage prevents duplicate side effects | Saga handler and payment handler tests |
 | Inventory reservation fails | Order moves to `CANCELLED` / `FAILED` and emits `OrderCancelled` | order Saga tests |
 | Payment authorization fails | Order moves to `CANCELLED` / `FAILED`; inventory releases reservation | service tests and local `FAIL_CARD` runbook |

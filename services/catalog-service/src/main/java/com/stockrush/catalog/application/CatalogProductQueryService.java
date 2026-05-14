@@ -12,8 +12,17 @@ public class CatalogProductQueryService {
         this.productQueryRepository = productQueryRepository;
     }
 
+    public List<ProductSnapshot> listByStatus(String status, String query) {
+        String normalizedQuery = query == null ? null : query.trim();
+        if (normalizedQuery != null && normalizedQuery.isBlank()) {
+            normalizedQuery = null;
+        }
+
+        return productQueryRepository.findByStatus(status, normalizedQuery);
+    }
+
     public List<ProductSnapshot> listByStatus(String status) {
-        return productQueryRepository.findByStatus(status);
+        return listByStatus(status, null);
     }
 
     public ProductSnapshot getByProductCode(String productCode) {

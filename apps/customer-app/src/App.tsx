@@ -32,6 +32,7 @@ function errorMessage(error: unknown): string {
 export default function App() {
   const [products, setProducts] = useState<Product[]>([]);
   const [productsState, setProductsState] = useState<LoadState>('idle');
+  const [productQuery, setProductQuery] = useState('');
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [stocks, setStocks] = useState<Stock[]>([]);
   const [selectedSkuId, setSelectedSkuId] = useState('');
@@ -51,12 +52,18 @@ export default function App() {
     let cancelled = false;
     setProductsState('loading');
 
-    listOnSaleProducts()
+    listOnSaleProducts(productQuery)
       .then((nextProducts) => {
         if (cancelled) {
           return;
         }
         setProducts(nextProducts);
+        setMessage(null);
+        setSelectedProduct((current) =>
+          current && nextProducts.some((product) => product.productCode === current.productCode)
+            ? current
+            : null,
+        );
         setProductsState('ready');
       })
       .catch((error) => {
@@ -70,7 +77,7 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [productQuery]);
 
   useEffect(() => {
     if (!selectedProduct) {
@@ -267,6 +274,14 @@ export default function App() {
             <h2>상품</h2>
             <span>{productsState === 'loading' ? '불러오는 중' : `${products.length}개`}</span>
           </div>
+          <label className="field">
+            <span>상품 검색</span>
+            <input
+              value={productQuery}
+              onChange={(event) => setProductQuery(event.target.value)}
+              placeholder="상품명 또는 코드 검색"
+            />
+          </label>
           <div className="product-list">
             {products.map((product) => (
               <button
