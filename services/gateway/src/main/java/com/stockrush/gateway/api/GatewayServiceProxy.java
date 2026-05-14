@@ -102,6 +102,7 @@ enum ServiceRoute {
     INVENTORY,
     PAYMENT,
     PROMOTION,
+    FULFILLMENT,
     READ_MODEL;
 
     static ServiceRoute from(String value) {
@@ -110,6 +111,7 @@ enum ServiceRoute {
             case "inventory" -> INVENTORY;
             case "payment" -> PAYMENT;
             case "promotion" -> PROMOTION;
+            case "fulfillment" -> FULFILLMENT;
             case "read-model" -> READ_MODEL;
             default -> throw new IllegalArgumentException("unsupported service route: " + value);
         };
@@ -122,6 +124,7 @@ record GatewayRoutingProperties(
     String inventoryServiceUrl,
     String paymentServiceUrl,
     String promotionServiceUrl,
+    String fulfillmentServiceUrl,
     String readModelServiceUrl
 ) {
 
@@ -129,6 +132,7 @@ record GatewayRoutingProperties(
     private static final String DEFAULT_INVENTORY_SERVICE_URL = "http://localhost:18082";
     private static final String DEFAULT_PAYMENT_SERVICE_URL = "http://localhost:18084";
     private static final String DEFAULT_PROMOTION_SERVICE_URL = "http://localhost:18085";
+    private static final String DEFAULT_FULFILLMENT_SERVICE_URL = "http://localhost:18086";
     private static final String DEFAULT_READ_MODEL_SERVICE_URL = "http://localhost:18087";
 
     GatewayRoutingProperties {
@@ -136,6 +140,7 @@ record GatewayRoutingProperties(
         inventoryServiceUrl = normalize(inventoryServiceUrl, DEFAULT_INVENTORY_SERVICE_URL);
         paymentServiceUrl = normalize(paymentServiceUrl, DEFAULT_PAYMENT_SERVICE_URL);
         promotionServiceUrl = normalize(promotionServiceUrl, DEFAULT_PROMOTION_SERVICE_URL);
+        fulfillmentServiceUrl = normalize(fulfillmentServiceUrl, DEFAULT_FULFILLMENT_SERVICE_URL);
         readModelServiceUrl = normalize(readModelServiceUrl, DEFAULT_READ_MODEL_SERVICE_URL);
     }
 
@@ -145,6 +150,7 @@ record GatewayRoutingProperties(
             case INVENTORY -> inventoryServiceUrl;
             case PAYMENT -> paymentServiceUrl;
             case PROMOTION -> promotionServiceUrl;
+            case FULFILLMENT -> fulfillmentServiceUrl;
             case READ_MODEL -> readModelServiceUrl;
         };
     }

@@ -37,6 +37,7 @@ API_CORRELATION_SERVICES = (
     "order-service",
     "payment-service",
     "promotion-service",
+    "fulfillment-service",
     "read-model-service",
 )
 ACTUATOR_REQUIRED_EXPOSURES = {"health", "info", "metrics"}

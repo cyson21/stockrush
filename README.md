@@ -10,7 +10,7 @@ StockRush는 한정 판매 주문 흐름에서 Kafka, Outbox, Saga를 묶은 엔
 - 관리자 앱(`apps/admin-app`) + 운영 화면(상품, 재고, 주문, Saga, Outbox)
 - Catalog / Inventory / Order / Payment API 체인
 - Promotion Service 쿠폰 등록/목록/할인 견적 API와 주문 이벤트 기반 사용 상태 기록
-- Fulfillment Service 주문 완료 이벤트 기반 출고 준비 요청 기록
+- Fulfillment Service 주문 완료 이벤트 기반 출고 준비 요청 기록과 관리자 출고 상태 조회
 - Read Model Service 주문 이벤트 기반 고객/관리자 주문 요약 projection
 - 고객 앱 쿠폰 견적 UI와 Order Service 주문 할인 반영
 - Expo React Native 기반 Android/iOS 고객 모바일 앱 scaffold, Gateway-first API client, 상품/SKU 재고 조회, 쿠폰 견적, 주문 생성, 주문 상태 추적, 주문 내역 화면
@@ -77,6 +77,7 @@ Windows 11 PowerShell에서는 `.\scripts\demo-up.ps1`, `.\scripts\demo-smoke.ps
 - [Customer Order API](docs/api/customer-orders.md)
 - [Catalog Admin API](docs/api/catalog-admin.md)
 - [Promotion API](docs/api/promotion.md)
+- [Fulfillment API](docs/api/fulfillment.md)
 - [Read Model API](docs/api/read-model.md)
 - [Admin Order API](docs/api/admin-orders.md)
 - [Outbox Admin API](docs/api/outbox-admin.md)
@@ -116,7 +117,7 @@ Windows 11 PowerShell에서는 `.\scripts\demo-up.ps1`, `.\scripts\demo-smoke.ps
 - 관리자 앱에서 상품 등록/수정, SKU 재고 설정, 지연 결제 취소, 주문 Saga 추적, Outbox retry와 failed requeue를 한 흐름으로 확인할 수 있습니다.
 - Outbox 운영 액션은 `X-Operator-Id`, `X-Correlation-Id`, batch size, 처리 건수를 서비스별 감사 테이블에 남깁니다.
 - Promotion Service는 쿠폰 등록/목록과 주문 전 할인 견적 계산을 제공하고, 주문 이벤트를 소비해 쿠폰 사용 상태를 기록합니다. Order Service는 주문 생성 시 할인 가격 snapshot을 저장해 결제 예정 금액을 Payment command로 전달합니다.
-- Fulfillment Service는 `OrderConfirmed`를 소비해 주문별 출고 준비 요청을 `PREPARING` 상태로 기록합니다.
+- Fulfillment Service는 `OrderConfirmed`를 소비해 주문별 출고 준비 요청을 `PREPARING` 상태로 기록하고, 관리자 출고 상태 조회 API를 제공합니다.
 - Read Model Service는 주문 생성/완료/취소 이벤트를 소비해 `read_model.order_summaries`를 갱신하고 고객 주문 내역과 관리자 주문 요약 API를 제공합니다.
 
 ## 대표 시나리오
@@ -154,6 +155,6 @@ Windows 11 PowerShell에서는 `.\scripts\demo-up.ps1`, `.\scripts\demo-smoke.ps
 
 - Gateway는 주문 생성/조회, 관리자 주문 조회/취소, Outbox 조회/재시도/requeue 라우팅 smoke와 동일 SKU runner/runbook의 Gateway 경유 경로까지 검증 범위를 넓혔습니다.
 - Promotion Service는 주문 이벤트 기반 쿠폰 사용 상태, Gateway 쿠폰 견적/사용 이력 route, 관리자 사용 이력 화면까지 연결했습니다.
-- Fulfillment Service는 출고 준비 요청 기록까지 연결했습니다. carrier/label/tracking 상태와 관리자 화면은 후속 확장 범위입니다.
+- Fulfillment Service는 출고 준비 요청 기록, Gateway route, 관리자 출고 상태 화면까지 연결했습니다. carrier/label/tracking 상태는 후속 확장 범위입니다.
 - Read Model Service는 주문 요약 projection, 서비스-local 조회 API, Gateway 조회 route, 관리자 대시보드까지 연결했습니다. 상품 검색 projection은 후속 확장 범위입니다.
 - 인증/권한, 부하 벤치마크, Kafka consumer 병렬성 검증, Kafka 장애 복구 자동화는 후속 확장 범위입니다.

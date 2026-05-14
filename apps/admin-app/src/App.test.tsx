@@ -227,6 +227,39 @@ describe('admin app operations', () => {
         return toJsonResponse(buildResponse(true, { page: 0, size: 50, items: usages }), 200);
       }
 
+      if (request.pathname === '/api/admin/fulfillment-requests' && method === 'GET') {
+        const requests = [
+          {
+            requestId: '018f8d0b-8d32-7c42-9f1b-78328e0f801',
+            orderId: 'ord_fulfillment_usage_001',
+            status: 'PREPARING',
+            requestedAt: '2026-05-13T08:10:00Z',
+            sourceEventId: '018f8d0b-8d32-7c42-9f1b-78328e0f7a1',
+            correlationId: 'corr-fulfillment-admin-001',
+            idempotencyKey: 'idem-fulfillment-admin-001',
+            createdAt: '2026-05-13T08:10:00Z',
+            updatedAt: '2026-05-13T08:10:00Z',
+          },
+          {
+            requestId: '018f8d0b-8d32-7c42-9f1b-78328e0f802',
+            orderId: 'ord_fulfillment_usage_002',
+            status: 'PREPARING',
+            requestedAt: '2026-05-13T08:12:00Z',
+            sourceEventId: '018f8d0b-8d32-7c42-9f1b-78328e0f7a2',
+            correlationId: 'corr-fulfillment-admin-002',
+            idempotencyKey: 'idem-fulfillment-admin-002',
+            createdAt: '2026-05-13T08:12:00Z',
+            updatedAt: '2026-05-13T08:12:00Z',
+          },
+        ].filter((item) => {
+          const orderId = request.searchParams.get('orderId');
+          const status = request.searchParams.get('status');
+          return (!orderId || item.orderId === orderId) && (!status || item.status === status);
+        });
+
+        return toJsonResponse(buildResponse(true, { page: 0, size: 50, items: requests }), 200);
+      }
+
       if (request.pathname === '/api/admin/outbox-services/inventory/events' && method === 'GET') {
         return toJsonResponse(
           buildResponse(true, {
@@ -470,6 +503,138 @@ describe('admin app operations', () => {
 
     expect(await screen.findByRole('alert')).toHaveTextContent('COUPON_USAGE_FAIL: 쿠폰 사용 이력 조회 실패');
     expect(screen.getByText('쿠폰 사용 이력을 불러오지 못했습니다.')).toBeInTheDocument();
+  });
+
+  it('loads fulfillment request history and applies filters through gateway', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(screen.getByRole('tab', { name: 'Fulfillment' }));
+
+    expect(await screen.findByText('출고 요청 이력')).toBeInTheDocument();
+    expect(screen.getByText('ord_fulfillment_usage_001')).toBeInTheDocument();
+    expect(screen.getByText('ord_fulfillment_usage_002')).toBeInTheDocument();
+    expect(screen.getAllByText('PREPARING').length).toBeGreaterThanOrEqual(2);
+    expect(screen.getByText('corr-fulfillment-admin-001')).toBeInTheDocument();
+
+    await user.type(screen.getByLabelText('주문 ID'), 'ord_fulfillment_usage_002');
+    await user.selectOptions(screen.getByLabelText('출고 상태'), 'PREPARING');
+    await user.click(screen.getByRole('button', { name: '출고 이력 조회' }));
+
+    await waitFor(() => {
+      const filteredCalls = fetchMock.mock.calls.filter(([url]) => {
+        const request = new URL(String(url), 'http://localhost:5173');
+        return (
+          request.pathname === '/api/admin/fulfillment-requests' &&
+          request.searchParams.get('orderId') === 'ord_fulfillment_usage_002' &&
+          request.searchParams.get('status') === 'PREPARING'
+        );
+      });
+      expect(filteredCalls.length).toBeGreaterThanOrEqual(1);
+    });
+
+    expect(screen.getByText('ord_fulfillment_usage_002')).toBeInTheDocument();
+    expect(screen.queryByText('ord_fulfillment_usage_001')).not.toBeInTheDocument();
+  });
+
+  it('shows fulfillment request error when history request fails', async () => {
+    const user = userEvent.setup();
+    fetchMock.mockImplementation((input, init) => {
+      const request = new URL(String(input), 'http://localhost:5173');
+      const method = init?.method ?? 'GET';
+
+      if (request.pathname === '/api/admin/fulfillment-requests' && method === 'GET') {
+        return buildErrorResponse('FULFILLMENT_REQUEST_FAIL', '출고 요청 이력 조회 실패');
+      }
+
+      return defaultRequestHandler(input, init);
+    });
+
+    render(<App />);
+    await user.click(screen.getByRole('tab', { name: 'Fulfillment' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('FULFILLMENT_REQUEST_FAIL: 출고 요청 이력 조회 실패');
+    expect(screen.getByText('출고 요청 이력을 불러오지 못했습니다.')).toBeInTheDocument();
+  });
+
+  it('keeps fulfillment request list from the latest request when responses return out of order', async () => {
+    const user = userEvent.setup();
+    const initialRequestResolvers: Array<(response: Response) => void> = [];
+
+    fetchMock.mockImplementation((input, init) => {
+      const request = new URL(String(input), 'http://localhost:5173');
+      const method = init?.method ?? 'GET';
+
+      if (request.pathname === '/api/admin/fulfillment-requests' && method === 'GET') {
+        if (!request.searchParams.get('orderId')) {
+          return new Promise<Response>((resolve) => {
+            initialRequestResolvers.push(resolve);
+          });
+        }
+
+        return toJsonResponse(
+          buildResponse(true, {
+            page: 0,
+            size: 50,
+            items: [
+              {
+                requestId: '018f8d0b-8d32-7c42-9f1b-78328e0f901',
+                orderId: 'ord_fulfillment_latest',
+                status: 'PREPARING',
+                requestedAt: '2026-05-13T08:20:00Z',
+                sourceEventId: '018f8d0b-8d32-7c42-9f1b-78328e0f9a1',
+                correlationId: 'corr-fulfillment-latest',
+                idempotencyKey: 'idem-fulfillment-latest',
+                createdAt: '2026-05-13T08:20:00Z',
+                updatedAt: '2026-05-13T08:20:00Z',
+              },
+            ],
+          }),
+          200,
+        );
+      }
+
+      return defaultRequestHandler(input, init);
+    });
+
+    render(<App />);
+    await user.click(screen.getByRole('tab', { name: 'Fulfillment' }));
+    await screen.findByText('출고 요청 이력');
+
+    await user.type(screen.getByLabelText('주문 ID'), 'ord_fulfillment_latest');
+    await user.click(screen.getByRole('button', { name: '출고 이력 조회' }));
+
+    expect(await screen.findByText('ord_fulfillment_latest')).toBeInTheDocument();
+    expect(initialRequestResolvers).toHaveLength(1);
+    initialRequestResolvers[0](
+      new Response(
+        JSON.stringify(
+          buildResponse(true, {
+            page: 0,
+            size: 50,
+            items: [
+              {
+                requestId: '018f8d0b-8d32-7c42-9f1b-78328e0f902',
+                orderId: 'ord_fulfillment_stale',
+                status: 'PREPARING',
+                requestedAt: '2026-05-13T08:22:00Z',
+                sourceEventId: '018f8d0b-8d32-7c42-9f1b-78328e0f9a2',
+                correlationId: 'corr-fulfillment-stale',
+                idempotencyKey: 'idem-fulfillment-stale',
+                createdAt: '2026-05-13T08:22:00Z',
+                updatedAt: '2026-05-13T08:22:00Z',
+              },
+            ],
+          }),
+        ),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ),
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('ord_fulfillment_latest')).toBeInTheDocument();
+      expect(screen.queryByText('ord_fulfillment_stale')).not.toBeInTheDocument();
+    });
   });
 
   it('keeps coupon usage list from the latest request when responses return out of order', async () => {

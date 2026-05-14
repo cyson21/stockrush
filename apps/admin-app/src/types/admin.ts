@@ -73,6 +73,24 @@ export type CouponUsagePage = {
   items: CouponUsageSummary[];
 };
 
+export type FulfillmentRequestSummary = {
+  requestId: string;
+  orderId: string;
+  status: string;
+  requestedAt: string;
+  sourceEventId: string;
+  correlationId: string;
+  idempotencyKey: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type FulfillmentRequestPage = {
+  page: number;
+  size: number;
+  items: FulfillmentRequestSummary[];
+};
+
 export type AdminOrderSaga = {
   orderId: string;
   orderStatus: string;

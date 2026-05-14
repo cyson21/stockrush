@@ -47,6 +47,11 @@ class OrderGatewayControllerIntegrationTest {
         "CouponUsageReserved",
         "stockrush.promotion.events.v1"
     );
+    private static final StubService STUB_FULFILLMENT_SERVICE = new StubService(
+        "fulfillment",
+        "FulfillmentRequestPrepared",
+        "stockrush.fulfillment.events.v1"
+    );
     private static final StubService STUB_READ_MODEL_SERVICE = new StubService(
         "read-model",
         "OrderSummaryProjected",
@@ -64,11 +69,13 @@ class OrderGatewayControllerIntegrationTest {
         STUB_INVENTORY_SERVICE.start();
         STUB_PAYMENT_SERVICE.start();
         STUB_PROMOTION_SERVICE.start();
+        STUB_FULFILLMENT_SERVICE.start();
         STUB_READ_MODEL_SERVICE.start();
         registry.add("stockrush.routes.order-service-url", STUB_ORDER_SERVICE::baseUrl);
         registry.add("stockrush.routes.inventory-service-url", STUB_INVENTORY_SERVICE::baseUrl);
         registry.add("stockrush.routes.payment-service-url", STUB_PAYMENT_SERVICE::baseUrl);
         registry.add("stockrush.routes.promotion-service-url", STUB_PROMOTION_SERVICE::baseUrl);
+        registry.add("stockrush.routes.fulfillment-service-url", STUB_FULFILLMENT_SERVICE::baseUrl);
         registry.add("stockrush.routes.read-model-service-url", STUB_READ_MODEL_SERVICE::baseUrl);
     }
 
@@ -78,6 +85,7 @@ class OrderGatewayControllerIntegrationTest {
         STUB_INVENTORY_SERVICE.reset();
         STUB_PAYMENT_SERVICE.reset();
         STUB_PROMOTION_SERVICE.reset();
+        STUB_FULFILLMENT_SERVICE.reset();
         STUB_READ_MODEL_SERVICE.reset();
     }
 
@@ -87,6 +95,7 @@ class OrderGatewayControllerIntegrationTest {
         STUB_INVENTORY_SERVICE.stop();
         STUB_PAYMENT_SERVICE.stop();
         STUB_PROMOTION_SERVICE.stop();
+        STUB_FULFILLMENT_SERVICE.stop();
         STUB_READ_MODEL_SERVICE.stop();
     }
 
@@ -433,6 +442,57 @@ class OrderGatewayControllerIntegrationTest {
     }
 
     @Test
+    void routes_admin_fulfillment_request_history_to_fulfillment_service() throws Exception {
+        HttpRequest request = HttpRequest.newBuilder(
+                gatewayUri("/api/admin/fulfillment-requests?orderId=ord_gateway_fulfillment_001&status=PREPARING&page=0&size=20")
+            )
+            .header("X-Correlation-Id", "corr-gateway-fulfillment-requests")
+            .GET()
+            .build();
+
+        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.headers().firstValue("X-Correlation-Id")).contains("corr-gateway-fulfillment-requests");
+        assertThat(response.body()).contains("\"orderId\":\"ord_gateway_fulfillment_001\"");
+        assertThat(response.body()).contains("\"status\":\"PREPARING\"");
+
+        RecordedRequest forwarded = STUB_FULFILLMENT_SERVICE.singleRequest();
+        assertThat(forwarded.method()).isEqualTo("GET");
+        assertThat(forwarded.path()).isEqualTo("/api/admin/fulfillment-requests");
+        assertThat(forwarded.query()).contains("orderId=ord_gateway_fulfillment_001&status=PREPARING&page=0&size=20");
+        assertThat(forwarded.firstHeader("X-Correlation-Id")).contains("corr-gateway-fulfillment-requests");
+        STUB_ORDER_SERVICE.assertNoRequests();
+        STUB_PROMOTION_SERVICE.assertNoRequests();
+        STUB_READ_MODEL_SERVICE.assertNoRequests();
+    }
+
+    @Test
+    void routes_admin_fulfillment_request_history_with_trailing_slash_to_fulfillment_service() throws Exception {
+        HttpRequest request = HttpRequest.newBuilder(
+                gatewayUri("/api/admin/fulfillment-requests/?status=PREPARING")
+            )
+            .header("X-Correlation-Id", "corr-gateway-fulfillment-requests-slash")
+            .GET()
+            .build();
+
+        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.headers().firstValue("X-Correlation-Id")).contains("corr-gateway-fulfillment-requests-slash");
+        assertThat(response.body()).contains("\"orderId\":\"ord_gateway_fulfillment_001\"");
+
+        RecordedRequest forwarded = STUB_FULFILLMENT_SERVICE.singleRequest();
+        assertThat(forwarded.method()).isEqualTo("GET");
+        assertThat(forwarded.path()).isEqualTo("/api/admin/fulfillment-requests");
+        assertThat(forwarded.query()).contains("status=PREPARING");
+        assertThat(forwarded.firstHeader("X-Correlation-Id")).contains("corr-gateway-fulfillment-requests-slash");
+        STUB_ORDER_SERVICE.assertNoRequests();
+        STUB_PROMOTION_SERVICE.assertNoRequests();
+        STUB_READ_MODEL_SERVICE.assertNoRequests();
+    }
+
+    @Test
     void routes_customer_order_history_to_read_model_service() throws Exception {
         HttpRequest request = HttpRequest.newBuilder(
                 gatewayUri("/api/read-model/orders?memberId=member-mobile&page=0&size=10")
@@ -573,6 +633,7 @@ class OrderGatewayControllerIntegrationTest {
             server.createContext("/api/admin/orders", this::handle);
             server.createContext("/api/admin/outbox-events", this::handle);
             server.createContext("/api/admin/coupon-usages", this::handle);
+            server.createContext("/api/admin/fulfillment-requests", this::handle);
             server.createContext("/api/coupons", this::handle);
             server.createContext("/api/read-model", this::handle);
             server.start();
@@ -669,6 +730,15 @@ class OrderGatewayControllerIntegrationTest {
             ) {
                 writeJson(exchange, 200, currentCorrelationId(exchange), null, """
                     {"success":true,"data":{"page":0,"size":20,"items":[{"orderId":"ord_coupon_gateway_001","memberId":"member-gateway","couponCode":"WELCOME10","status":"CONSUMED","orderAmount":80000.0,"discountAmount":5000.0,"payableAmount":75000.0,"reservedAt":"2026-05-13T04:30:00Z","consumedAt":"2026-05-13T04:31:00Z","releasedAt":null,"releaseReason":null,"updatedAt":"2026-05-13T04:31:00Z"}]},"error":null,"trace":{"correlationId":"%s"}}
+                    """.formatted(currentCorrelationId(exchange)));
+                return;
+            }
+            if (
+                "GET".equals(exchange.getRequestMethod())
+                    && ("/api/admin/fulfillment-requests".equals(path) || "/api/admin/fulfillment-requests/".equals(path))
+            ) {
+                writeJson(exchange, 200, currentCorrelationId(exchange), null, """
+                    {"success":true,"data":{"page":0,"size":20,"items":[{"requestId":"018f8d0b-8d32-7c42-9f1b-78328e0f801","orderId":"ord_gateway_fulfillment_001","status":"PREPARING","requestedAt":"2026-05-13T08:10:00Z","sourceEventId":"018f8d0b-8d32-7c42-9f1b-78328e0f7a1","correlationId":"corr-gateway-fulfillment-001","idempotencyKey":"idem-gateway-fulfillment-001","createdAt":"2026-05-13T08:10:00Z","updatedAt":"2026-05-13T08:10:00Z"}]},"error":null,"trace":{"correlationId":"%s"}}
                     """.formatted(currentCorrelationId(exchange)));
                 return;
             }

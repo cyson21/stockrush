@@ -247,8 +247,6 @@ The filter must:
 - return it in the response header
 - clear MDC in `finally`
 
-Fulfillment Service is excluded while it has no HTTP API.
-
 Suggested fix:
 
 ```text

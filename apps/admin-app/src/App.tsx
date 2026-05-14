@@ -6,6 +6,7 @@ import {
   getOrderSaga,
   listCatalogProducts,
   listCouponUsages,
+  listFulfillmentRequests,
   listOutbox,
   listReadModelAdminOrders,
   listRecentOrders,
@@ -21,6 +22,7 @@ import type {
   AdminOrderSummary,
   CatalogProduct,
   CouponUsageSummary,
+  FulfillmentRequestSummary,
   OutboxEvent,
   OutboxRequeueResult,
   OutboxRetryResult,
@@ -32,7 +34,7 @@ import type {
   StockSetPayload,
 } from './types/admin';
 
-type TabId = 'dashboard' | 'orders' | 'coupons' | 'outbox' | 'products';
+type TabId = 'dashboard' | 'orders' | 'coupons' | 'fulfillment' | 'outbox' | 'products';
 type LoadState = 'idle' | 'loading' | 'ready' | 'error';
 type SubmitState = 'idle' | 'loading' | 'ready' | 'error';
 type ProductSubmitMode = 'create' | 'update';
@@ -419,6 +421,138 @@ function CouponUsageTab() {
             </table>
             {usages.length === 0 && usageState === 'ready' ? (
               <p className="empty-message">조건에 맞는 쿠폰 사용 이력이 없습니다.</p>
+            ) : null}
+          </>
+        )}
+      </section>
+    </section>
+  );
+}
+
+function FulfillmentRequestTab() {
+  const [requests, setRequests] = useState<FulfillmentRequestSummary[]>([]);
+  const [requestState, setRequestState] = useState<LoadState>('idle');
+  const [requestError, setRequestError] = useState<string | null>(null);
+  const [orderIdInput, setOrderIdInput] = useState('');
+  const [statusInput, setStatusInput] = useState('');
+  const isMountedRef = useRef(true);
+  const fulfillmentRequestId = useRef(0);
+
+  const loadRequests = (filters = {
+    orderId: orderIdInput,
+    status: statusInput,
+  }) => {
+    const requestId = ++fulfillmentRequestId.current;
+    setRequestState('loading');
+    setRequestError(null);
+
+    listFulfillmentRequests(filters)
+      .then((response) => {
+        if (!isMountedRef.current || requestId !== fulfillmentRequestId.current) {
+          return;
+        }
+
+        setRequests(response.items);
+        setRequestState('ready');
+      })
+      .catch((error) => {
+        if (!isMountedRef.current || requestId !== fulfillmentRequestId.current) {
+          return;
+        }
+
+        setRequests([]);
+        setRequestState('error');
+        setRequestError(errorMessage(error));
+      });
+  };
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    loadRequests({ orderId: '', status: '' });
+
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
+  const onSubmitFilters = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    loadRequests();
+  };
+
+  return (
+    <section className="panel-shell">
+      <section className="panel">
+        <div className="panel-head">
+          <h2>출고 요청 이력</h2>
+          <p className="panel-meta">
+            {requestState === 'loading'
+              ? '출고 이력 조회 중'
+              : requestState === 'ready'
+                ? `최근 ${requests.length}건`
+                : '조회 대기'}
+          </p>
+        </div>
+
+        <form className="filter-grid fulfillment-filter-grid" onSubmit={onSubmitFilters}>
+          <label className="form-field">
+            <span>주문 ID</span>
+            <input
+              value={orderIdInput}
+              onChange={(event) => setOrderIdInput(event.target.value)}
+              placeholder="예: ord_..."
+            />
+          </label>
+          <label className="form-field">
+            <span>출고 상태</span>
+            <select value={statusInput} onChange={(event) => setStatusInput(event.target.value)}>
+              <option value="">전체</option>
+              <option value="PREPARING">PREPARING</option>
+            </select>
+          </label>
+          <button type="submit" className="action-btn">
+            출고 이력 조회
+          </button>
+        </form>
+
+        {requestError && (
+          <p className="error-banner" role="alert">
+            {requestError}
+          </p>
+        )}
+
+        {requestState === 'error' ? (
+          <p className="empty-message">출고 요청 이력을 불러오지 못했습니다.</p>
+        ) : (
+          <>
+            <table className="events-table">
+              <thead>
+                <tr>
+                  <th>요청 ID</th>
+                  <th>주문</th>
+                  <th>상태</th>
+                  <th>요청 시각</th>
+                  <th>원천 이벤트</th>
+                  <th>상관 ID</th>
+                </tr>
+              </thead>
+              <tbody>
+                {requests.map((request) => (
+                  <tr key={`${request.requestId}-${request.updatedAt}`}>
+                    <td>{request.requestId}</td>
+                    <td>{request.orderId}</td>
+                    <td>
+                      <span className={`status-pill ${statusClass(request.status)}`}>{request.status}</span>
+                    </td>
+                    <td>{formatTime(request.requestedAt)}</td>
+                    <td>{request.sourceEventId}</td>
+                    <td>{request.correlationId}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {requests.length === 0 && requestState === 'ready' ? (
+              <p className="empty-message">조건에 맞는 출고 요청 이력이 없습니다.</p>
             ) : null}
           </>
         )}
@@ -1449,7 +1583,7 @@ export default function App() {
           <p className="eyebrow">StockRush</p>
           <h1>포트폴리오 운영</h1>
         </div>
-        <p className="runtime-note">Dashboard / Orders / Coupons / Outbox / Products</p>
+        <p className="runtime-note">Dashboard / Orders / Coupons / Fulfillment / Outbox / Products</p>
       </header>
 
       <div className="segmented" role="tablist" aria-label="작업 영역">
@@ -1483,6 +1617,15 @@ export default function App() {
         <button
           type="button"
           role="tab"
+          aria-selected={tab === 'fulfillment'}
+          className={tab === 'fulfillment' ? 'segment selected' : 'segment'}
+          onClick={() => setTab('fulfillment')}
+        >
+          Fulfillment
+        </button>
+        <button
+          type="button"
+          role="tab"
           aria-selected={tab === 'outbox'}
           className={tab === 'outbox' ? 'segment selected' : 'segment'}
           onClick={() => setTab('outbox')}
@@ -1506,6 +1649,8 @@ export default function App() {
         <OrdersTab />
       ) : tab === 'coupons' ? (
         <CouponUsageTab />
+      ) : tab === 'fulfillment' ? (
+        <FulfillmentRequestTab />
       ) : tab === 'outbox' ? (
         <OutboxTab />
       ) : (

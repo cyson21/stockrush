@@ -13,6 +13,10 @@ export default defineConfig({
         target: 'http://localhost:18080',
         changeOrigin: true,
       },
+      '/api/admin/fulfillment-requests': {
+        target: 'http://localhost:18080',
+        changeOrigin: true,
+      },
       '/api/read-model': {
         target: 'http://localhost:18080',
         changeOrigin: true,

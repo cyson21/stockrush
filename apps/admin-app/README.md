@@ -1,7 +1,7 @@
 # StockRush Admin App
 
 관리자용 React/Vite 앱입니다.
-Read Model 기반 주문 Dashboard, 쿠폰 사용 이력, 상품 등록/수정, SKU 재고 설정, 최근 주문 조회, 지연 결제 취소 요청, 주문 Saga 상세 조회, 서비스별 outbox 이벤트 조회/재시도/requeue를 한 화면에서 처리할 수 있습니다.
+Read Model 기반 주문 Dashboard, 쿠폰 사용 이력, 출고 요청 이력, 상품 등록/수정, SKU 재고 설정, 최근 주문 조회, 지연 결제 취소 요청, 주문 Saga 상세 조회, 서비스별 outbox 이벤트 조회/재시도/requeue를 한 화면에서 처리할 수 있습니다.
 Outbox 운영 요청에는 `X-Operator-Id: admin-app`을 전달해 서비스별 감사 로그에 남깁니다.
 
 ## 실행
@@ -21,7 +21,7 @@ npm run dev
 | 환경 변수 | 설명 |
 |---|---|
 | `VITE_API_BASE_URL` | 서비스별 prefix 앞에 붙는 공통 기본 주소 |
-| `VITE_GATEWAY_API_BASE_URL` | Gateway 주소. Outbox 운영 API, 쿠폰 사용 이력 API, Read Model Dashboard API에 사용하며, 없으면 same-origin 경로를 사용 |
+| `VITE_GATEWAY_API_BASE_URL` | Gateway 주소. Outbox 운영 API, 쿠폰 사용 이력 API, 출고 요청 이력 API, Read Model Dashboard API에 사용하며, 없으면 same-origin 경로를 사용 |
 | `VITE_CATALOG_API_BASE_URL` | 상품 서비스 주소 (기본: `${VITE_API_BASE_URL}/catalog`) |
 | `VITE_ORDER_API_BASE_URL` | 주문 서비스 주소 (기본: `${VITE_API_BASE_URL}/orders`) |
 | `VITE_INVENTORY_API_BASE_URL` | 재고 서비스 주소 (기본: `${VITE_API_BASE_URL}/inventory`) |
@@ -37,6 +37,7 @@ npm run dev
 - `/payment` -> `http://localhost:18084`
 - `/api/admin/outbox-services` -> `http://localhost:18080`
 - `/api/admin/coupon-usages` -> `http://localhost:18080`
+- `/api/admin/fulfillment-requests` -> `http://localhost:18080`
 - `/api/read-model` -> `http://localhost:18080`
 
 Docker 데모 모드에서는 Nginx가 같은 prefix를 compose 내부 서비스와 Gateway로 프록시합니다. 실행법은 `infra/demo/README.md`를 기준으로 합니다.

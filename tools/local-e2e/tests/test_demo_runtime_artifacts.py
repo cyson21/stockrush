@@ -63,6 +63,7 @@ class DemoRuntimeArtifactsTest(unittest.TestCase):
             "INVENTORY_SERVICE_URL: http://inventory-service:18082",
             "PAYMENT_SERVICE_URL: http://payment-service:18084",
             "PROMOTION_SERVICE_URL: http://promotion-service:18085",
+            "FULFILLMENT_SERVICE_URL: http://fulfillment-service:18086",
             "READ_MODEL_SERVICE_URL: http://read-model-service:18087",
             "STOCKRUSH_KAFKA_LISTENERS_ENABLED: \"true\"",
         ]

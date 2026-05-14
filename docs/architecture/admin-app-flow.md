@@ -1,11 +1,12 @@
 # Admin App Flow
 
-Admin App은 StockRush 운영 시나리오를 시연하는 React/Vite 웹앱이다. Read Model 기반 운영 지표, 쿠폰 사용 이력, 상품/재고 운영, 주문 Saga 상태, 서비스별 outbox 상태를 같은 앱에서 확인하고, due 상태의 pending 이벤트 재시도와 failed 이벤트 재처리 준비를 수동으로 실행할 수 있게 한다. 모바일 확장은 고객 앱에 한정하고, 관리자 기능은 웹앱에 유지한다.
+Admin App은 StockRush 운영 시나리오를 시연하는 React/Vite 웹앱이다. Read Model 기반 운영 지표, 쿠폰 사용 이력, 출고 요청 이력, 상품/재고 운영, 주문 Saga 상태, 서비스별 outbox 상태를 같은 앱에서 확인하고, due 상태의 pending 이벤트 재시도와 failed 이벤트 재처리 준비를 수동으로 실행할 수 있게 한다. 모바일 확장은 고객 앱에 한정하고, 관리자 기능은 웹앱에 유지한다.
 
 ## Scope
 
 - Read Model 기반 주문 Dashboard
 - 쿠폰 사용 이력 조회와 상태 필터
+- Fulfillment 출고 요청 이력 조회와 상태 필터
 - 최근 주문 목록
 - 주문별 Saga 상세 조회
 - 지연 결제 주문 취소 요청
@@ -35,6 +36,11 @@ Coupons
   -> Usage State List
   -> Release Reason Check
 
+Fulfillment
+  -> Fulfillment Request Filters
+  -> Shipment Preparation State List
+  -> Source Event / Correlation Check
+
 Outbox
   -> Service Selection
   -> Pending/Failed Event List
@@ -55,6 +61,7 @@ Products
 |---|---|---|
 | Dashboard | `GET /api/read-model/admin/orders` | Read Model 기반 주문 수, 상태별 지표, 최근 주문, 취소 사유 요약 |
 | 쿠폰 사용 이력 | `GET /api/admin/coupon-usages` | 쿠폰 코드, 회원, 사용 상태별 주문 쿠폰 사용 이력 |
+| 출고 요청 이력 | `GET /api/admin/fulfillment-requests` | 주문 ID, 출고 상태별 출고 준비 요청 이력 |
 | 주문 목록 | `GET /api/admin/orders` | 최근 주문 상태와 Saga 상태 요약 |
 | Saga 상세 | `GET /api/admin/orders/{orderId}/saga` | 실패 시각, 마지막 이벤트, 비즈니스 실패 사유, 기술 오류 |
 | 지연 결제 취소 | `POST /api/admin/orders/{orderId}/cancel` | `PAYMENT_DELAYED` 주문의 결제 취소 command 발행 |
@@ -79,9 +86,10 @@ Vite 개발 서버는 서비스별 prefix를 backend service로 proxy한다.
 | `/payment` | `http://localhost:18084` |
 | `/api/admin/outbox-services` | `http://localhost:18080` |
 | `/api/admin/coupon-usages` | `http://localhost:18080` |
+| `/api/admin/fulfillment-requests` | `http://localhost:18080` |
 | `/api/read-model` | `http://localhost:18080` |
 
-배포 또는 gateway 환경에서는 서비스별 API는 `VITE_API_BASE_URL` 또는 서비스별 base URL 환경 변수로 주소를 바꾼다. Outbox 운영 API, 쿠폰 사용 이력 API, Read Model Gateway route는 `VITE_GATEWAY_API_BASE_URL`이 있으면 그 주소를 사용하고, 없으면 same-origin Gateway path를 사용한다.
+배포 또는 gateway 환경에서는 서비스별 API는 `VITE_API_BASE_URL` 또는 서비스별 base URL 환경 변수로 주소를 바꾼다. Outbox 운영 API, 쿠폰 사용 이력 API, 출고 요청 이력 API, Read Model Gateway route는 `VITE_GATEWAY_API_BASE_URL`이 있으면 그 주소를 사용하고, 없으면 same-origin Gateway path를 사용한다.
 
 ## Boundaries
 
@@ -89,6 +97,7 @@ Vite 개발 서버는 서비스별 prefix를 backend service로 proxy한다.
 - 한 서비스가 다른 서비스 DB schema를 직접 읽지 않는다.
 - Dashboard는 Read Model projection만 조회하고 주문 처리 명령을 실행하지 않는다.
 - 쿠폰 사용 이력은 Promotion Service가 기록한 사용 상태를 Gateway 경유로 조회한다.
+- 출고 요청 이력은 Fulfillment Service가 기록한 요청 상태를 Gateway 경유로 조회한다.
 - 상품 등록/수정 요청은 `Idempotency-Key`를 전달한다.
 - 지연 결제 취소 요청은 `Idempotency-Key`를 전달하고, `PAYMENT_DELAYED` 주문에만 노출한다.
 - 동일 상품 등록/수정 입력을 실패 후 재시도하면 같은 멱등 키를 재사용한다.

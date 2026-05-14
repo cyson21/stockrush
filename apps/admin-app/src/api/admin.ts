@@ -5,6 +5,7 @@ import type {
   AdminOrderSaga,
   CatalogProduct,
   CouponUsagePage,
+  FulfillmentRequestPage,
   OutboxEventPage,
   OutboxRequeueResult,
   OutboxRetryResult,
@@ -50,6 +51,24 @@ export function listCouponUsages(filters: {
   }
 
   return request<CouponUsagePage>(gatewayApiUrl('/api/admin/coupon-usages', params));
+}
+
+export function listFulfillmentRequests(filters: {
+  orderId?: string;
+  status?: string;
+} = {}): Promise<FulfillmentRequestPage> {
+  const params: Record<string, string> = {
+    page: '0',
+    size: '50',
+  };
+  if (filters.orderId?.trim()) {
+    params.orderId = filters.orderId.trim();
+  }
+  if (filters.status?.trim()) {
+    params.status = filters.status.trim();
+  }
+
+  return request<FulfillmentRequestPage>(gatewayApiUrl('/api/admin/fulfillment-requests', params));
 }
 
 export function getOrderSaga(orderId: string): Promise<AdminOrderSaga> {

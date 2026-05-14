@@ -110,7 +110,7 @@ Inventory Service consumes order result events from `stockrush.order.events.v1` 
 |---|---|
 | `OrderConfirmed` | Create one `PREPARING` fulfillment request for the order |
 
-Fulfillment Service consumes only successful order result events in this slice. Shipment tracking, carrier assignment, and label generation are future states.
+Fulfillment Service consumes only successful order result events in this slice and exposes the resulting request history through the admin API. Shipment tracking, carrier assignment, and label generation are future states.
 
 ## Phase 1 Read Model Notes
 

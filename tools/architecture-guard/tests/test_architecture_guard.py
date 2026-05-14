@@ -296,6 +296,32 @@ class ArchitectureGuardTest(unittest.TestCase):
 
             self.assertTrue(any(violation.rule_id == "ARCH-010" for violation in violations))
 
+    def test_detects_fulfillment_api_service_missing_correlation_id_filter(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            java_root = (
+                root
+                / "services"
+                / "fulfillment-service"
+                / "src"
+                / "main"
+                / "java"
+                / "com"
+                / "stockrush"
+                / "fulfillment"
+                / "api"
+            )
+            java_root.mkdir(parents=True)
+            (java_root / "FulfillmentAdminController.java").write_text(
+                "package com.stockrush.fulfillment.api;\n"
+                "@RestController class FulfillmentAdminController {}\n",
+                encoding="utf-8",
+            )
+
+            violations = architecture_guard.check(root)
+
+            self.assertTrue(any(violation.rule_id == "ARCH-010" for violation in violations))
+
     def test_allows_api_service_correlation_id_filter_with_mdc_and_request_wrapping(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

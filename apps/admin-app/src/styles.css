@@ -350,7 +350,8 @@ hr {
 }
 
 .status-pill.pending,
-.status-pill.failed {
+.status-pill.failed,
+.status-pill.preparing {
   background: #fee2e2;
   color: #991b1b;
 }
@@ -412,6 +413,10 @@ hr {
   gap: 10px;
   grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
   margin: 14px 0;
+}
+
+.fulfillment-filter-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr)) auto;
 }
 
 .form-field {

@@ -91,7 +91,7 @@ The web app containers serve Vite build output through Nginx. Nginx also proxies
 - `/orders` -> Order Service
 - `/payment` -> Payment Service
 - `/promotion` -> Promotion Service
-- `/api/admin/outbox-services` and `/api/read-model` -> Gateway
+- `/api/admin/outbox-services`, `/api/admin/coupon-usages`, `/api/admin/fulfillment-requests`, and `/api/read-model` -> Gateway
 
 ## Current Smoke Coverage
 
