@@ -59,6 +59,8 @@ class ScenarioConfig:
     idempotency_replays: int = 1
     relay_workers: int = 1
     stability_waves: int = 1
+    operator_id: str = "local-e2e"
+    requeue_failed: bool = True
 
 
 def expected_success_count(initial_stock: int, quantity_per_order: int, order_count: int) -> int:
@@ -101,6 +103,13 @@ def scenario_prefix(value: str) -> str:
         raise argparse.ArgumentTypeError("must not be blank")
     if len(normalized) > MAX_GENERATED_PREFIX_LENGTH:
         raise argparse.ArgumentTypeError(f"must be {MAX_GENERATED_PREFIX_LENGTH} characters or fewer")
+    return normalized
+
+
+def non_blank_text(value: str) -> str:
+    normalized = value.strip()
+    if not normalized:
+        raise argparse.ArgumentTypeError("must not be blank")
     return normalized
 
 
@@ -449,7 +458,15 @@ class ApiClient:
             except json.JSONDecodeError:
                 error_payload = {}
             raise ApiHttpError(error.code, method, url, error_payload, raw) from error
+        except urllib.error.URLError as error:
+            reason = getattr(error, "reason", error)
+            raise ApiConnectionError(method, url, str(reason)) from error
         return json.loads(raw) if raw else {}
+
+
+class ApiConnectionError(RuntimeError):
+    def __init__(self, method: str, url: str, reason: str) -> None:
+        super().__init__(f"{method} {url} failed: {reason}")
 
 
 class ApiHttpError(RuntimeError):
@@ -478,6 +495,87 @@ def response_data(payload: Mapping[str, Any]) -> Any:
     return payload.get("data", payload)
 
 
+def parse_utc_instant(value: str) -> datetime:
+    normalized = value.strip()
+    if normalized.endswith("Z"):
+        normalized = f"{normalized[:-1]}+00:00"
+    return datetime.fromisoformat(normalized).astimezone(timezone.utc)
+
+
+def retryable_pending_outbox_items(
+    items: Sequence[Mapping[str, Any]],
+    *,
+    now: datetime | None = None,
+) -> list[Mapping[str, Any]]:
+    reference_time = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
+    retryable: list[Mapping[str, Any]] = []
+    for item in items:
+        if item.get("status") != "PENDING":
+            continue
+        next_retry_at = item.get("nextRetryAt")
+        if not next_retry_at or parse_utc_instant(str(next_retry_at)) <= reference_time:
+            retryable.append(item)
+    return retryable
+
+
+def outbox_recovery_snapshot_from_items(
+    items_by_service: Mapping[str, Sequence[Mapping[str, Any]]],
+    *,
+    now: datetime | None = None,
+) -> dict[str, Any]:
+    pending_counts: dict[str, int] = {}
+    retryable_pending_counts: dict[str, int] = {}
+    deferred_pending_counts: dict[str, int] = {}
+    failed_counts: dict[str, int] = {}
+    retryable_pending_event_ids: dict[str, list[str]] = {}
+    deferred_pending_event_ids: dict[str, list[str]] = {}
+    failed_event_ids: dict[str, list[str]] = {}
+
+    for service in SERVICE_BASES:
+        items = list(items_by_service.get(service, []))
+        pending_items = [item for item in items if item.get("status") == "PENDING"]
+        failed_items = [item for item in items if item.get("status") == "FAILED"]
+        retryable_items = retryable_pending_outbox_items(pending_items, now=now)
+        retryable_ids = {id(item) for item in retryable_items}
+        deferred_items = [item for item in pending_items if id(item) not in retryable_ids]
+
+        pending_counts[service] = len(pending_items)
+        retryable_pending_counts[service] = len(retryable_items)
+        deferred_pending_counts[service] = len(deferred_items)
+        failed_counts[service] = len(failed_items)
+        retryable_pending_event_ids[service] = event_ids_from_items(retryable_items)
+        deferred_pending_event_ids[service] = event_ids_from_items(deferred_items)
+        failed_event_ids[service] = event_ids_from_items(failed_items)
+
+    return {
+        "pendingCounts": pending_counts,
+        "retryablePendingCounts": retryable_pending_counts,
+        "deferredPendingCounts": deferred_pending_counts,
+        "failedCounts": failed_counts,
+        "retryablePendingEventIds": retryable_pending_event_ids,
+        "deferredPendingEventIds": deferred_pending_event_ids,
+        "failedEventIds": failed_event_ids,
+    }
+
+
+def event_ids_from_items(items: Sequence[Mapping[str, Any]]) -> list[str]:
+    return sorted(str(item.get("eventId")) for item in items if item.get("eventId"))
+
+
+def validate_outbox_recovery_result(
+    before: Mapping[str, Any],
+    after: Mapping[str, Any],
+) -> list[str]:
+    errors: list[str] = []
+    retryable_pending = positive_pending_outbox_changes(after.get("retryablePendingCounts", {}))
+    failed = positive_pending_outbox_changes(after.get("failedCounts", {}))
+    if retryable_pending:
+        errors.append(f"retryable pending outbox remains: {retryable_pending}")
+    if failed:
+        errors.append(f"failed outbox remains: {failed}")
+    return errors
+
+
 def count_pending_outbox(client: ApiClient, config: ScenarioConfig) -> dict[str, int]:
     counts: dict[str, int] = {}
     for name in SERVICE_BASES:
@@ -494,16 +592,48 @@ def pending_outbox_event_ids(client: ApiClient, config: ScenarioConfig) -> dict[
     return event_ids
 
 
-def outbox_list_url(config: ScenarioConfig, service: str) -> str:
+def outbox_items(
+    client: ApiClient,
+    config: ScenarioConfig,
+    service: str,
+    *,
+    statuses: Sequence[str] = ("PENDING",),
+) -> list[Mapping[str, Any]]:
+    payload = response_data(client.get(outbox_list_url(config, service, statuses=statuses)))
+    return list(payload.get("items", []))
+
+
+def outbox_recovery_snapshot(client: ApiClient, config: ScenarioConfig) -> dict[str, Any]:
+    items_by_service = {
+        service: outbox_items(client, config, service, statuses=("PENDING", "FAILED"))
+        for service in SERVICE_BASES
+    }
+    return outbox_recovery_snapshot_from_items(items_by_service)
+
+
+def outbox_list_url(
+    config: ScenarioConfig,
+    service: str,
+    *,
+    statuses: Sequence[str] = ("PENDING",),
+) -> str:
+    status_param = ",".join(statuses)
     return (
         f"{config.outbox_api_url}/api/admin/outbox-services/{service}/events"
-        f"?status=PENDING&limit={OUTBOX_QUERY_LIMIT}"
+        f"?status={status_param}&limit={OUTBOX_QUERY_LIMIT}"
     )
 
 
 def outbox_retry_url(config: ScenarioConfig, service: str) -> str:
     return (
         f"{config.outbox_api_url}/api/admin/outbox-services/{service}/events/retry"
+        f"?batchSize={config.relay_batch_size}"
+    )
+
+
+def outbox_requeue_failed_url(config: ScenarioConfig, service: str) -> str:
+    return (
+        f"{config.outbox_api_url}/api/admin/outbox-services/{service}/events/failed/requeue"
         f"?batchSize={config.relay_batch_size}"
     )
 
@@ -530,6 +660,18 @@ def healthcheck(client: ApiClient, config: ScenarioConfig) -> None:
         config.outbox_api_url,
         config.payment_url,
         config.promotion_url,
+    ]):
+        payload = client.get(f"{base_url}/actuator/health")
+        if payload.get("status") != "UP":
+            raise RuntimeError(f"service is not healthy: {base_url} -> {payload}")
+
+
+def outbox_recovery_healthcheck(client: ApiClient, config: ScenarioConfig) -> None:
+    for base_url in dict.fromkeys([
+        config.outbox_api_url,
+        config.order_url,
+        config.inventory_url,
+        config.payment_url,
     ]):
         payload = client.get(f"{base_url}/actuator/health")
         if payload.get("status") != "UP":
@@ -792,6 +934,60 @@ def run_demo_order_flow_scenario(config: ScenarioConfig) -> Mapping[str, Any]:
         "pendingOutboxCounts": pending_after,
         "pendingOutboxDelta": pending_delta,
         "errors": errors,
+    }
+
+
+def run_outbox_recovery_scenario(config: ScenarioConfig) -> Mapping[str, Any]:
+    client = ApiClient(timeout_seconds=90.0)
+    correlation_id = f"corr-outbox-recovery-{uuid4().hex[:12]}"
+
+    outbox_recovery_healthcheck(client, config)
+    before = outbox_recovery_snapshot(client, config)
+    after = before
+    actions: list[Mapping[str, Any]] = []
+
+    for attempt in range(1, config.max_attempts + 1):
+        services: dict[str, dict[str, Any]] = {}
+        for service in SERVICE_BASES:
+            service_actions: dict[str, Any] = {}
+            headers = outbox_recovery_headers(config, correlation_id, attempt, service)
+            if config.requeue_failed:
+                service_actions["requeueFailed"] = response_data(
+                    client.post(outbox_requeue_failed_url(config, service), headers=headers)
+                )
+            service_actions["retryPending"] = response_data(
+                client.post(outbox_retry_url(config, service), headers=headers)
+            )
+            services[service] = service_actions
+        actions.append({"attempt": attempt, "services": services})
+
+        if config.wait_seconds:
+            time.sleep(config.wait_seconds)
+        after = outbox_recovery_snapshot(client, config)
+        if not validate_outbox_recovery_result(before, after):
+            break
+
+    errors = validate_outbox_recovery_result(before, after)
+    return {
+        "operatorId": config.operator_id,
+        "correlationId": correlation_id,
+        "requeueFailed": config.requeue_failed,
+        "attempts": actions,
+        "before": before,
+        "after": after,
+        "errors": errors,
+    }
+
+
+def outbox_recovery_headers(
+    config: ScenarioConfig,
+    correlation_id: str,
+    attempt: int,
+    service: str,
+) -> dict[str, str]:
+    return {
+        "X-Operator-Id": config.operator_id,
+        "X-Correlation-Id": f"{correlation_id}-{attempt:02d}-{service}",
     }
 
 
@@ -1095,6 +1291,38 @@ def add_runtime_arguments(
     )
 
 
+def add_outbox_recovery_arguments(command_parser: argparse.ArgumentParser) -> None:
+    command_parser.add_argument("--catalog-url", default=DEFAULT_CATALOG_URL)
+    command_parser.add_argument("--inventory-url", default=DEFAULT_INVENTORY_URL)
+    command_parser.add_argument("--order-url", default=DEFAULT_ORDER_URL, help="Order Service health URL")
+    command_parser.add_argument(
+        "--order-api-url",
+        default=DEFAULT_ORDER_API_URL,
+        help="Public order API health URL. Defaults to Gateway at http://localhost:18080.",
+    )
+    command_parser.add_argument(
+        "--outbox-api-url",
+        default=DEFAULT_OUTBOX_API_URL,
+        help="Outbox admin routing URL. Defaults to Gateway at http://localhost:18080.",
+    )
+    command_parser.add_argument("--payment-url", default=DEFAULT_PAYMENT_URL)
+    command_parser.add_argument("--promotion-url", default=DEFAULT_PROMOTION_URL)
+    command_parser.add_argument("--max-attempts", type=positive_int, default=3)
+    command_parser.add_argument("--relay-batch-size", type=relay_batch_size, default=100)
+    command_parser.add_argument("--wait-seconds", type=non_negative_float, default=1.0)
+    command_parser.add_argument(
+        "--operator-id",
+        type=non_blank_text,
+        default="local-e2e",
+        help="Operator id stored in outbox admin action audit rows.",
+    )
+    command_parser.add_argument(
+        "--skip-requeue-failed",
+        action="store_true",
+        help="Retry pending rows only. FAILED rows remain reported as recovery errors.",
+    )
+
+
 def parse_args(argv: Sequence[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="StockRush local E2E runner")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -1152,6 +1380,13 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
         default=2,
         help="Extra concurrent retry waves after the scenario has settled.",
     )
+
+    outbox_recovery = subparsers.add_parser(
+        "outbox-recovery",
+        aliases=["recover-outbox"],
+        help="Run manual retry/requeue waves for pending and failed outbox rows.",
+    )
+    add_outbox_recovery_arguments(outbox_recovery)
     return parser.parse_args(argv)
 
 
@@ -1165,37 +1400,47 @@ def config_from_args(args: argparse.Namespace) -> ScenarioConfig:
         outbox_api_url=args.outbox_api_url.rstrip("/"),
         payment_url=args.payment_url.rstrip("/"),
         promotion_url=args.promotion_url.rstrip("/"),
-        order_count=args.orders,
-        initial_stock=args.initial_stock,
-        quantity_per_order=args.quantity,
-        unit_price=args.unit_price,
-        prefix=args.prefix,
+        order_count=getattr(args, "orders", 1),
+        initial_stock=getattr(args, "initial_stock", 0),
+        quantity_per_order=getattr(args, "quantity", 1),
+        unit_price=getattr(args, "unit_price", 12000),
+        prefix=getattr(args, "prefix", "OUTBOX-E2E"),
         max_attempts=args.max_attempts,
         relay_batch_size=args.relay_batch_size,
         wait_seconds=args.wait_seconds,
-        fail_on_existing_pending=not args.allow_existing_pending,
-        relay_mode=args.relay_mode,
+        fail_on_existing_pending=not getattr(args, "allow_existing_pending", True),
+        relay_mode=getattr(args, "relay_mode", "manual"),
         idempotency_replays=getattr(args, "idempotency_replays", 1),
         relay_workers=getattr(args, "relay_workers", 1),
         stability_waves=getattr(args, "stability_waves", 1),
+        operator_id=getattr(args, "operator_id", "local-e2e"),
+        requeue_failed=not getattr(args, "skip_requeue_failed", False),
     )
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    args = parse_args(argv or sys.argv[1:])
-    if args.command in {"same-sku-concurrency", "concurrent-sku"}:
-        result = run_concurrent_sku_scenario(config_from_args(args))
-        print(json.dumps(result, ensure_ascii=False, indent=2))
-        return 1 if result["errors"] else 0
-    if args.command in {"demo-order-flow", "cards-smoke"}:
-        result = run_demo_order_flow_scenario(config_from_args(args))
-        print(json.dumps(result, ensure_ascii=False, indent=2))
-        return 1 if result["errors"] else 0
-    if args.command in {"burst-idempotency", "idempotent-burst", "outbox-idempotent-burst"}:
-        result = run_burst_idempotency_scenario(config_from_args(args))
-        print(json.dumps(result, ensure_ascii=False, indent=2))
-        return 1 if result["errors"] else 0
-    raise AssertionError(f"Unsupported command: {args.command}")
+    try:
+        args = parse_args(argv or sys.argv[1:])
+        if args.command in {"same-sku-concurrency", "concurrent-sku"}:
+            result = run_concurrent_sku_scenario(config_from_args(args))
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+            return 1 if result["errors"] else 0
+        if args.command in {"demo-order-flow", "cards-smoke"}:
+            result = run_demo_order_flow_scenario(config_from_args(args))
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+            return 1 if result["errors"] else 0
+        if args.command in {"burst-idempotency", "idempotent-burst", "outbox-idempotent-burst"}:
+            result = run_burst_idempotency_scenario(config_from_args(args))
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+            return 1 if result["errors"] else 0
+        if args.command in {"outbox-recovery", "recover-outbox"}:
+            result = run_outbox_recovery_scenario(config_from_args(args))
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+            return 1 if result["errors"] else 0
+        raise AssertionError(f"Unsupported command: {args.command}")
+    except RuntimeError as error:
+        print(json.dumps({"errors": [str(error)]}, ensure_ascii=False, indent=2), file=sys.stderr)
+        return 1
 
 
 if __name__ == "__main__":

@@ -137,3 +137,21 @@ Each producing service stores retry and requeue requests in `outbox_admin_action
 - Retry and requeue actions write an audit row after the service action succeeds.
 - Gateway rejects unknown service values before calling an upstream service.
 - Authentication is still out of scope and must be added before public deployment.
+
+## Local Recovery Runner
+
+로컬 운영 복구 점검은 Gateway route를 직접 호출하는 대신 runner를 우선 사용한다.
+
+```bash
+./tools/local-e2e/local-e2e outbox-recovery \
+  --operator-id local-runbook \
+  --max-attempts 3 \
+  --wait-seconds 1
+```
+
+Runner 기준:
+
+- `order`, `inventory`, `payment` 각각 `PENDING,FAILED` row를 조회한다.
+- 기본값은 `FAILED` requeue 후 `PENDING` retry를 실행한다.
+- `nextRetryAt`이 미래인 `PENDING` row는 deferred로 분류한다.
+- 성공 기준은 최종 `retryablePendingCounts`와 `failedCounts`가 모두 0인 상태다.

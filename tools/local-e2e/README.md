@@ -84,6 +84,26 @@
 - Order/Inventory/Payment `pendingOutboxDelta`와 `postReplayPendingOutboxDelta`는 모두 `0`이어야 한다.
 - `--allow-existing-pending` 사용 시에도 이번 실행 이후 새로 남은 pending outbox event ID가 없어야 한다.
 
+## outbox-recovery
+
+Order/Inventory/Payment outbox의 `PENDING`/`FAILED` 장기 체류 row를 운영 API로 복구한다.
+
+```bash
+./tools/local-e2e/local-e2e outbox-recovery \
+  --operator-id local-runbook \
+  --max-attempts 3 \
+  --wait-seconds 1
+```
+
+### 동작 기준
+
+- Gateway의 `/api/admin/outbox-services/{service}/events` route로 `PENDING,FAILED` row를 조회한다.
+- 기본값은 서비스별 failed requeue 후 pending retry를 실행한다.
+- `--skip-requeue-failed`를 지정하면 pending retry만 수행하고, 남은 `FAILED` row는 결과 오류로 보고한다.
+- `X-Operator-Id`와 `X-Correlation-Id`를 함께 전송해 서비스별 admin action audit row를 남긴다.
+- `nextRetryAt`이 미래인 `PENDING` row는 deferred로 분류하고 실패로 보지 않는다.
+- 최종 결과에서 `retryablePendingCounts`와 `failedCounts`가 모두 0이어야 성공이다.
+
 ## 주의 사항
 
 - 기본값은 실행 전 기존 `PENDING` outbox가 있으면 중단한다.

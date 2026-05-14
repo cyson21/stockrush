@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import io
+import json
 import sys
 import unittest
 from contextlib import redirect_stderr
@@ -399,6 +400,23 @@ class LocalE2ERunnerTest(unittest.TestCase):
             "http://gateway.local/api/admin/outbox-services/payment/events/retry?batchSize=100",
         )
 
+    def test_outbox_list_url_accepts_multiple_statuses_for_recovery(self) -> None:
+        args = local_e2e_runner.parse_args([
+            "outbox-recovery",
+            "--outbox-api-url",
+            "http://gateway.local/",
+        ])
+        config = local_e2e_runner.config_from_args(args)
+
+        self.assertEqual(
+            local_e2e_runner.outbox_list_url(config, "order", statuses=("PENDING", "FAILED")),
+            "http://gateway.local/api/admin/outbox-services/order/events?status=PENDING,FAILED&limit=200",
+        )
+        self.assertEqual(
+            local_e2e_runner.outbox_requeue_failed_url(config, "inventory"),
+            "http://gateway.local/api/admin/outbox-services/inventory/events/failed/requeue?batchSize=100",
+        )
+
     def test_cli_rejects_invalid_numeric_arguments(self) -> None:
         invalid_args = [
             ["same-sku-concurrency", "--orders", "0"],
@@ -413,6 +431,7 @@ class LocalE2ERunnerTest(unittest.TestCase):
             ["burst-idempotency", "--relay-workers", "0"],
             ["burst-idempotency", "--stability-waves", "0"],
             ["demo-order-flow", "--relay-mode", "external"],
+            ["outbox-recovery", "--operator-id", " "],
         ]
 
         for argv in invalid_args:
@@ -454,6 +473,137 @@ class LocalE2ERunnerTest(unittest.TestCase):
             local_e2e_runner.relay_wave = original
 
         self.assertEqual(calls, [])
+
+    def test_cli_accepts_outbox_recovery_command_name(self) -> None:
+        args = local_e2e_runner.parse_args(["outbox-recovery", "--operator-id", "qa-runner"])
+
+        self.assertEqual(args.command, "outbox-recovery")
+        self.assertEqual(args.outbox_api_url, "http://localhost:18080")
+        self.assertEqual(args.operator_id, "qa-runner")
+        self.assertFalse(args.skip_requeue_failed)
+
+    def test_retryable_pending_outbox_items_excludes_future_retry_rows(self) -> None:
+        now = local_e2e_runner.datetime(2031, 1, 2, 3, 4, 5, tzinfo=local_e2e_runner.timezone.utc)
+        items = [
+            {"eventId": "due-null", "status": "PENDING", "nextRetryAt": None},
+            {"eventId": "due-past", "status": "PENDING", "nextRetryAt": "2031-01-02T03:04:04Z"},
+            {"eventId": "future", "status": "PENDING", "nextRetryAt": "2031-01-02T03:05:05Z"},
+            {"eventId": "failed", "status": "FAILED", "nextRetryAt": None},
+        ]
+
+        retryable = local_e2e_runner.retryable_pending_outbox_items(items, now=now)
+
+        self.assertEqual([item["eventId"] for item in retryable], ["due-null", "due-past"])
+
+    def test_outbox_recovery_snapshot_counts_failed_retryable_and_deferred_rows(self) -> None:
+        now = local_e2e_runner.datetime(2031, 1, 2, 3, 4, 5, tzinfo=local_e2e_runner.timezone.utc)
+        snapshot = local_e2e_runner.outbox_recovery_snapshot_from_items(
+            {
+                "order": [
+                    {"eventId": "ord-1", "status": "PENDING", "nextRetryAt": None},
+                    {"eventId": "ord-2", "status": "PENDING", "nextRetryAt": "2031-01-02T03:05:05Z"},
+                    {"eventId": "ord-3", "status": "FAILED", "nextRetryAt": None},
+                ],
+                "inventory": [],
+                "payment": [
+                    {"eventId": "pay-1", "status": "FAILED", "nextRetryAt": None},
+                ],
+            },
+            now=now,
+        )
+
+        self.assertEqual(snapshot["pendingCounts"], {"order": 2, "inventory": 0, "payment": 0})
+        self.assertEqual(snapshot["retryablePendingCounts"], {"order": 1, "inventory": 0, "payment": 0})
+        self.assertEqual(snapshot["deferredPendingCounts"], {"order": 1, "inventory": 0, "payment": 0})
+        self.assertEqual(snapshot["failedCounts"], {"order": 1, "inventory": 0, "payment": 1})
+
+    def test_validate_outbox_recovery_result_accepts_no_failed_or_retryable_pending(self) -> None:
+        errors = local_e2e_runner.validate_outbox_recovery_result(
+            {
+                "retryablePendingCounts": {"order": 3, "inventory": 0, "payment": 0},
+                "failedCounts": {"order": 1, "inventory": 0, "payment": 0},
+            },
+            {
+                "retryablePendingCounts": {"order": 0, "inventory": 0, "payment": 0},
+                "failedCounts": {"order": 0, "inventory": 0, "payment": 0},
+            },
+        )
+
+        self.assertEqual(errors, [])
+
+    def test_validate_outbox_recovery_result_reports_unrecovered_rows(self) -> None:
+        errors = local_e2e_runner.validate_outbox_recovery_result(
+            {
+                "retryablePendingCounts": {"order": 0, "inventory": 0, "payment": 0},
+                "failedCounts": {"order": 0, "inventory": 0, "payment": 0},
+            },
+            {
+                "retryablePendingCounts": {"order": 1, "inventory": 0, "payment": 0},
+                "failedCounts": {"order": 0, "inventory": 2, "payment": 0},
+            },
+        )
+
+        self.assertTrue(any("retryable pending" in error for error in errors))
+        self.assertTrue(any("failed outbox" in error for error in errors))
+
+    def test_outbox_recovery_healthcheck_only_checks_required_services(self) -> None:
+        args = local_e2e_runner.parse_args([
+            "outbox-recovery",
+            "--catalog-url",
+            "http://catalog.local",
+            "--promotion-url",
+            "http://promotion.local",
+            "--outbox-api-url",
+            "http://gateway.local",
+            "--order-url",
+            "http://order.local",
+            "--inventory-url",
+            "http://inventory.local",
+            "--payment-url",
+            "http://payment.local",
+        ])
+        config = local_e2e_runner.config_from_args(args)
+
+        class FakeClient:
+            def __init__(self) -> None:
+                self.urls: list[str] = []
+
+            def get(self, url: str) -> dict[str, str]:
+                self.urls.append(url)
+                return {"status": "UP"}
+
+        client = FakeClient()
+
+        local_e2e_runner.outbox_recovery_healthcheck(client, config)
+
+        self.assertEqual(
+            client.urls,
+            [
+                "http://gateway.local/actuator/health",
+                "http://order.local/actuator/health",
+                "http://inventory.local/actuator/health",
+                "http://payment.local/actuator/health",
+            ],
+        )
+
+    def test_main_reports_runtime_error_as_json_without_traceback(self) -> None:
+        original = local_e2e_runner.run_outbox_recovery_scenario
+
+        def fail_recovery(_config: object) -> None:
+            raise RuntimeError("service unavailable")
+
+        local_e2e_runner.run_outbox_recovery_scenario = fail_recovery
+        try:
+            stderr = io.StringIO()
+            with redirect_stderr(stderr):
+                exit_code = local_e2e_runner.main(["outbox-recovery"])
+        finally:
+            local_e2e_runner.run_outbox_recovery_scenario = original
+
+        payload = json.loads(stderr.getvalue())
+        self.assertEqual(exit_code, 1)
+        self.assertEqual(payload["errors"], ["service unavailable"])
+        self.assertNotIn("Traceback", stderr.getvalue())
 
 
 if __name__ == "__main__":
