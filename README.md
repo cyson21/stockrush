@@ -134,7 +134,7 @@ Windows 11 PowerShell에서는 `.\scripts\demo-up.ps1`, `.\scripts\demo-smoke.ps
 
 - 백엔드는 서비스별 `mvn test`로 API, Outbox relay, Kafka smoke, Saga handler를 검증합니다.
 - 고객/관리자 앱은 Vitest와 production build로 API 호출 모양, 상태 렌더링, 재시도 키 재사용을 검증합니다.
-- 모바일 앱은 상품/SKU 재고, 쿠폰 견적, 주문 생성, 주문 상태 추적, Read Model 주문 내역 화면을 React Native Testing Library, Jest Expo, TypeScript typecheck, scaffold validation으로 검증했습니다. Android 또는 iOS smoke는 후속으로 진행합니다.
+- 모바일 앱은 상품/SKU 재고, 쿠폰 견적, 주문 생성, 주문 상태 추적, Read Model 주문 내역 화면을 React Native Testing Library, Jest Expo, TypeScript typecheck, scaffold validation으로 검증했습니다. `smoke:preflight`로 demo Gateway health와 iOS/Android 실행 도구 준비 상태를 점검하며, Android 또는 iOS live smoke는 의존성 설치와 simulator/emulator 준비 후 진행합니다.
 - `./tools/architecture-guard/architecture-guard check`로 schema ownership, Controller 반환 타입, 이벤트 envelope, Outbox table shape를 점검합니다.
 - 실제 로컬 E2E는 [Local E2E Runbook](docs/runbooks/local-e2e.md)의 `CARD`, `FAIL_CARD`, `DELAY_CARD`, 지연 결제 취소 시나리오를 기준으로 재현합니다.
 - 최근 지연 결제 취소 E2E 증거: `ord_20260513012031_8c06cd49` 주문이 `CREATED/PAYMENT_DELAYED` 도달 후 관리자 취소로 `CANCELLED/FAILED`가 됐고, SKU `DELAY-E2E-102029-S` 재고는 `available=20`, `reserved=0`으로 복구됐습니다.

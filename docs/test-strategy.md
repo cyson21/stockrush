@@ -55,6 +55,8 @@ Mobile verification runs inside `apps/mobile-app`.
 ```bash
 npm --prefix apps/mobile-app test
 npm --prefix apps/mobile-app run typecheck
+npm --prefix apps/mobile-app run test:scaffold
+npm --prefix apps/mobile-app run smoke:preflight -- --target all --api-base-url http://localhost:28080
 npx --prefix apps/mobile-app expo start
 ```
 
@@ -115,7 +117,7 @@ These are known gaps, not hidden assumptions.
 - Promotion Service currently covers coupon definition, quote, Customer App quote UI, Order Service discount application, and order-event-driven coupon usage state. Gateway route and admin usage screens remain future scope.
 - Fulfillment Service currently covers `OrderConfirmed` to `PREPARING` request creation and duplicate event handling. Carrier assignment, labels, tracking, Gateway route, and admin screens remain future scope.
 - Read Model Service currently covers order summary projection, service-local customer/admin APIs, late `OrderCreated` protection, and result-event retry rollback when the summary is missing. Gateway route, product search projection, dashboard metrics, and full Kafka retry/DLQ drills remain future scope.
-- Mobile customer app now has the Expo scaffold, Gateway-first API client, product/SKU stock screen tests, coupon quote tests, order creation payload/header tests, order status polling tests, and Read Model order history tests. Android/iOS smoke evidence and screenshots remain future scope.
+- Mobile customer app now has the Expo scaffold, Gateway-first API client, product/SKU stock screen tests, coupon quote tests, order creation payload/header tests, order status polling tests, Read Model order history tests, and a dependency-free smoke preflight. Android/iOS live smoke evidence and screenshots remain future scope until mobile dependencies and a simulator/emulator target are available.
 - Authentication and authorization tests are outside the current public slice.
 - Customer API documentation is now separated from runbook examples, but inventory customer query docs can still be expanded later.
 

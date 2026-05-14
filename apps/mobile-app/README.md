@@ -12,6 +12,14 @@ This app currently implements Gateway-based product browsing, stock lookup, coup
 | Android emulator | `http://10.0.2.2:18080` |
 | Physical device | set `EXPO_PUBLIC_API_BASE_URL=http://{host-lan-ip}:18080` |
 
+When the portable Docker demo stack is running, use the demo Gateway port instead:
+
+| Target | Demo stack API base URL |
+|---|---|
+| iOS simulator | `http://localhost:28080` |
+| Android emulator | `http://10.0.2.2:28080` |
+| Physical device | set `EXPO_PUBLIC_API_BASE_URL=http://{host-lan-ip}:28080` |
+
 ## Commands
 
 ```bash
@@ -26,18 +34,19 @@ Verification:
 npm test
 npm run typecheck
 npm run test:scaffold
+npm run smoke:preflight -- --api-base-url http://localhost:28080
 ```
 
 Android:
 
 ```bash
-npm run android
+EXPO_PUBLIC_API_BASE_URL=http://10.0.2.2:28080 npm run android
 ```
 
 iOS on macOS:
 
 ```bash
-npm run ios
+EXPO_PUBLIC_API_BASE_URL=http://localhost:28080 npm run ios
 ```
 
 Scaffold validation without network install:
@@ -45,6 +54,41 @@ Scaffold validation without network install:
 ```bash
 npm run test:scaffold
 ```
+
+Smoke preflight without network install:
+
+```bash
+npm run smoke:preflight -- --target all --api-base-url http://localhost:28080
+```
+
+The preflight checks whether mobile dependencies are installed, whether the Gateway health endpoint is reachable, and whether iOS `simctl` or Android emulator tooling is available. It reports blockers without installing packages.
+
+For Android emulator runs, the app should use `10.0.2.2`, but the preflight health check usually runs from the host shell. In that case pass both URLs:
+
+```bash
+npm run smoke:preflight -- --target android --api-base-url http://10.0.2.2:28080 --host-api-base-url http://localhost:28080
+```
+
+## Manual Smoke Flow
+
+1. Start the backend through either development mode or the portable demo stack.
+2. Run `npm install` in `apps/mobile-app` if `node_modules` is absent.
+3. Run the preflight command for the target environment.
+4. Start Expo with the target API base URL.
+5. In the app, select a product and SKU, enter a coupon, request quote, create a `CARD` order, wait for terminal status, then refresh order history.
+6. Capture the product screen, quote/order screen, final status, and order history screen.
+
+## Windows 11 Android
+
+Use Android first on Windows 11. Run Docker Desktop with WSL2 integration for the backend and use Android Emulator or a physical Android device for the mobile client.
+
+Recommended API base URLs:
+
+| Target | API base URL |
+|---|---|
+| Android emulator with demo stack | `http://10.0.2.2:28080` |
+| Android emulator with development backend | `http://10.0.2.2:18080` |
+| Physical Android device | `http://{host-lan-ip}:28080` or `http://{host-lan-ip}:18080` |
 
 ## Environment Variables
 

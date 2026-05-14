@@ -24,6 +24,7 @@ assert.equal(packageJson.main, 'index.js');
 assert.equal(packageJson.scripts.start, 'expo start');
 assert.equal(packageJson.scripts.android, 'expo start --android');
 assert.equal(packageJson.scripts.ios, 'expo start --ios');
+assert.equal(packageJson.scripts['smoke:preflight'], 'node scripts/smoke-preflight.mjs');
 assert.equal(packageJson.scripts['test:scaffold'], 'node scripts/validate-scaffold.mjs');
 assert.equal(packageJson.dependencies.expo, '~54.0.34');
 assert.equal(packageJson.dependencies.react, '19.1.0');
@@ -49,6 +50,7 @@ assert.equal(appConfig.expo.scheme, 'stockrush');
   'src/api/promotion.ts',
   'src/api/orders.ts',
   'src/api/readModel.ts',
+  'scripts/smoke-preflight.mjs',
 ].forEach(readText);
 
 const runtimeConfig = readText('src/config/runtime.ts');
@@ -66,5 +68,15 @@ const readme = readText('README.md');
 assert.ok(readme.includes('EXPO_PUBLIC_API_BASE_URL'));
 assert.ok(readme.includes('Android emulator'));
 assert.ok(readme.includes('10.0.2.2'));
+assert.ok(readme.includes('Demo stack'));
+assert.ok(readme.includes('28080'));
+assert.ok(readme.includes('Windows 11 Android'));
+
+const smokePreflight = readText('scripts/smoke-preflight.mjs');
+assert.ok(smokePreflight.includes('EXPO_PUBLIC_API_BASE_URL'));
+assert.ok(smokePreflight.includes('simctl'));
+assert.ok(smokePreflight.includes('emulator'));
+assert.ok(smokePreflight.includes('SUPPORTED_TARGETS'));
+assert.ok(smokePreflight.includes('unsupported target'));
 
 console.log('Mobile scaffold validation passed.');
