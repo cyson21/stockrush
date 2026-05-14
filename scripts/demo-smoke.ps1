@@ -37,16 +37,16 @@ function Test-Url($Name, $Url) {
   }
 }
 
-$GatewayPort = Get-PortValue "GATEWAY_HOST_PORT" "18080"
-$CatalogPort = Get-PortValue "CATALOG_HOST_PORT" "18081"
-$InventoryPort = Get-PortValue "INVENTORY_HOST_PORT" "18082"
-$OrderPort = Get-PortValue "ORDER_HOST_PORT" "18083"
-$PaymentPort = Get-PortValue "PAYMENT_HOST_PORT" "18084"
-$PromotionPort = Get-PortValue "PROMOTION_HOST_PORT" "18085"
-$FulfillmentPort = Get-PortValue "FULFILLMENT_HOST_PORT" "18086"
-$ReadModelPort = Get-PortValue "READ_MODEL_HOST_PORT" "18087"
-$CustomerAppPort = Get-PortValue "CUSTOMER_APP_HOST_PORT" "5173"
-$AdminAppPort = Get-PortValue "ADMIN_APP_HOST_PORT" "5174"
+$GatewayPort = Get-PortValue "GATEWAY_HOST_PORT" "28080"
+$CatalogPort = Get-PortValue "CATALOG_HOST_PORT" "28081"
+$InventoryPort = Get-PortValue "INVENTORY_HOST_PORT" "28082"
+$OrderPort = Get-PortValue "ORDER_HOST_PORT" "28083"
+$PaymentPort = Get-PortValue "PAYMENT_HOST_PORT" "28084"
+$PromotionPort = Get-PortValue "PROMOTION_HOST_PORT" "28085"
+$FulfillmentPort = Get-PortValue "FULFILLMENT_HOST_PORT" "28086"
+$ReadModelPort = Get-PortValue "READ_MODEL_HOST_PORT" "28087"
+$CustomerAppPort = Get-PortValue "CUSTOMER_APP_HOST_PORT" "15173"
+$AdminAppPort = Get-PortValue "ADMIN_APP_HOST_PORT" "15174"
 
 Test-Url "gateway-health" "http://localhost:$GatewayPort/actuator/health"
 Test-Url "catalog-health" "http://localhost:$CatalogPort/actuator/health"

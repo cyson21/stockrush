@@ -81,6 +81,38 @@ class DemoRuntimeArtifactsTest(unittest.TestCase):
                 self.assertIn("infra/demo/docker-compose.yml", powershell_script)
                 self.assertIn("infra/demo/.env.example", powershell_script)
 
+    def test_demo_uses_separate_host_ports_and_preflight(self) -> None:
+        env_template = (ROOT / "infra/demo/.env.example").read_text(encoding="utf-8")
+        compose = (ROOT / "infra/demo/docker-compose.yml").read_text(encoding="utf-8")
+        shell_up = (ROOT / "scripts/demo-up.sh").read_text(encoding="utf-8")
+        powershell_up = (ROOT / "scripts/demo-up.ps1").read_text(encoding="utf-8")
+
+        expected_ports = [
+            "POSTGRES_HOST_PORT=25432",
+            "REDIS_HOST_PORT=26379",
+            "KAFKA_HOST_PORT=29092",
+            "KAFKA_UI_PORT=29090",
+            "GATEWAY_HOST_PORT=28080",
+            "CATALOG_HOST_PORT=28081",
+            "CUSTOMER_APP_HOST_PORT=15173",
+            "ADMIN_APP_HOST_PORT=15174",
+        ]
+
+        self.assertIn("DEMO_ENV_REV=2026-05-14-demo-ports-v2", env_template)
+        for port_line in expected_ports:
+            with self.subTest(port=port_line):
+                self.assertIn(port_line, env_template)
+
+        self.assertIn("${POSTGRES_HOST_PORT:-25432}:5432", compose)
+        self.assertIn("${GATEWAY_HOST_PORT:-28080}:18080", compose)
+        self.assertIn("${CUSTOMER_APP_HOST_PORT:-15173}:8080", compose)
+        self.assertIn("--refresh-env", shell_up)
+        self.assertIn("--skip-port-check", shell_up)
+        self.assertIn("check_host_ports", shell_up)
+        self.assertIn("--refresh-env", powershell_up)
+        self.assertIn("--skip-port-check", powershell_up)
+        self.assertIn("Test-DemoPorts", powershell_up)
+
     def test_demo_smoke_runs_order_flow_runner(self) -> None:
         shell_script = (ROOT / "scripts/demo-smoke.sh").read_text(encoding="utf-8")
         powershell_script = (ROOT / "scripts/demo-smoke.ps1").read_text(encoding="utf-8")
