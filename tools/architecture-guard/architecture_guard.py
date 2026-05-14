@@ -32,6 +32,8 @@ OBSERVABLE_SERVICES = (
     "gateway",
 )
 ACTUATOR_REQUIRED_EXPOSURES = {"health", "info", "metrics"}
+CORRELATION_ID_HEADER = "X-Correlation-Id"
+CORRELATION_MDC_KEY = "correlationId"
 EVENT_REQUIRED_FIELDS = {
     "eventId",
     "eventType",
@@ -281,6 +283,50 @@ def check_actuator_observability(root: Path) -> list[Violation]:
     return violations
 
 
+def check_correlation_id_propagation(root: Path) -> list[Violation]:
+    violations: list[Violation] = []
+    gateway_root = root / "services" / "gateway"
+    if not gateway_root.exists():
+        return violations
+
+    gateway_java_files = [
+        path
+        for path in iter_source_files(root)
+        if path.suffix == ".java" and service_for_path(root, path) == "gateway"
+    ]
+    if any(is_gateway_correlation_filter(read_text(path)) for path in gateway_java_files):
+        return violations
+
+    violations.append(
+        Violation(
+            rule_id="ARCH-007",
+            severity="error",
+            file=display_path(root, gateway_root),
+            message="Gateway must create and propagate X-Correlation-Id at the HTTP boundary.",
+            suggested_fix="Add a OncePerRequestFilter that resolves X-Correlation-Id, stores it in MDC, and wraps request headers before proxy forwarding.",
+        )
+    )
+    return violations
+
+
+def is_gateway_correlation_filter(text: str) -> bool:
+    required_patterns = [
+        r"extends\s+OncePerRequestFilter\b",
+        r"\bdoFilterInternal\s*\(",
+        r"\bresponse\.setHeader\s*\(",
+        r"\bfilterChain\.doFilter\s*\(\s*new\s+[A-Za-z0-9_]*Correlation[A-Za-z0-9_]*Request\b",
+        r"extends\s+HttpServletRequestWrapper\b",
+        rf"{re.escape(CORRELATION_ID_HEADER)}",
+        rf"{re.escape(CORRELATION_MDC_KEY)}",
+        r"\bMDC\.put\s*\(",
+        r"\bfinally\s*\{.*?\bMDC\.remove\s*\(",
+        r"\bgetHeader\s*\(",
+        r"\bgetHeaders\s*\(",
+        r"\bgetHeaderNames\s*\(",
+    ]
+    return all(re.search(pattern, text, re.DOTALL) for pattern in required_patterns)
+
+
 def actuator_config_paths(service_root: Path) -> list[Path]:
     resource_root = service_root / "src" / "main" / "resources"
     return [path for path in [
@@ -351,6 +397,7 @@ def check(root: Path) -> list[Violation]:
     violations.extend(check_controller_entity_returns(root, entities))
     violations.extend(check_event_envelopes(root))
     violations.extend(check_outbox_tables(root))
+    violations.extend(check_correlation_id_propagation(root))
     violations.extend(check_actuator_observability(root))
     return violations
 

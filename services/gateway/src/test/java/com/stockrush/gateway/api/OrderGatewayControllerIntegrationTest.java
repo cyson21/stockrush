@@ -130,6 +130,44 @@ class OrderGatewayControllerIntegrationTest {
     }
 
     @Test
+    void creates_missing_correlation_id_for_command_routes() throws Exception {
+        String requestBody = """
+            {
+              "memberId": "member-gateway-generated",
+              "paymentMethod": "CARD",
+              "items": [
+                {
+                  "productCode": "LIMITED-GW-GENERATED",
+                  "skuId": "LIMITED-GW-GENERATED-S",
+                  "quantity": 1,
+                  "unitPrice": 12000
+                }
+              ]
+            }
+            """;
+
+        HttpRequest request = HttpRequest.newBuilder(gatewayUri("/api/orders"))
+            .header("Content-Type", "application/json")
+            .header("Idempotency-Key", "idem-gateway-generated")
+            .POST(HttpRequest.BodyPublishers.ofString(requestBody))
+            .build();
+
+        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+
+        assertThat(response.statusCode()).isEqualTo(201);
+        String generatedCorrelationId = response.headers()
+            .firstValue("X-Correlation-Id")
+            .orElseThrow();
+        assertThat(generatedCorrelationId).isNotBlank();
+        assertThat(response.body()).contains("\"correlationId\":\"" + generatedCorrelationId + "\"");
+
+        RecordedRequest forwarded = STUB_ORDER_SERVICE.singleRequest();
+        assertThat(forwarded.firstHeader("X-Correlation-Id")).contains(generatedCorrelationId);
+        assertThat(forwarded.firstHeader("Idempotency-Key")).contains("idem-gateway-generated");
+        assertThat(forwarded.body()).contains("\"memberId\": \"member-gateway-generated\"");
+    }
+
+    @Test
     void routes_order_detail_query_to_order_service() throws Exception {
         HttpRequest request = HttpRequest.newBuilder(gatewayUri("/api/orders/ord_gateway_001"))
             .header("X-Correlation-Id", "corr-gateway-query")
@@ -371,6 +409,50 @@ class OrderGatewayControllerIntegrationTest {
     }
 
     @Test
+    void creates_missing_correlation_id_once_and_forwards_it_to_upstream() throws Exception {
+        HttpRequest request = HttpRequest.newBuilder(
+                gatewayUri("/api/read-model/orders?memberId=member-generated&page=0&size=10")
+            )
+            .GET()
+            .build();
+
+        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        String generatedCorrelationId = response.headers()
+            .firstValue("X-Correlation-Id")
+            .orElseThrow();
+        assertThat(generatedCorrelationId).isNotBlank();
+        assertThat(generatedCorrelationId).isNotEqualTo("corr-gateway-outbox");
+        assertThat(response.body()).contains("\"correlationId\":\"" + generatedCorrelationId + "\"");
+
+        RecordedRequest forwarded = STUB_READ_MODEL_SERVICE.singleRequest();
+        assertThat(forwarded.firstHeader("X-Correlation-Id")).contains(generatedCorrelationId);
+        STUB_ORDER_SERVICE.assertNoRequests();
+        STUB_PROMOTION_SERVICE.assertNoRequests();
+    }
+
+    @Test
+    void keeps_gateway_correlation_header_when_upstream_response_header_differs() throws Exception {
+        HttpRequest request = HttpRequest.newBuilder(
+                gatewayUri("/api/read-model/orders?memberId=member-upstream-mutates-correlation&page=0&size=10")
+            )
+            .header("X-Correlation-Id", "corr-gateway-preserved")
+            .GET()
+            .build();
+
+        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.headers().firstValue("X-Correlation-Id")).contains("corr-gateway-preserved");
+
+        RecordedRequest forwarded = STUB_READ_MODEL_SERVICE.singleRequest();
+        assertThat(forwarded.firstHeader("X-Correlation-Id")).contains("corr-gateway-preserved");
+        STUB_ORDER_SERVICE.assertNoRequests();
+        STUB_PROMOTION_SERVICE.assertNoRequests();
+    }
+
+    @Test
     void routes_admin_order_summary_to_read_model_service() throws Exception {
         HttpRequest request = HttpRequest.newBuilder(
                 gatewayUri("/api/read-model/admin/orders?status=CONFIRMED&page=1&size=5")
@@ -496,9 +578,9 @@ class OrderGatewayControllerIntegrationTest {
                 return;
             }
             if ("POST".equals(exchange.getRequestMethod()) && "/api/orders".equals(path)) {
-                writeJson(exchange, 201, "corr-gateway-create", "/api/orders/ord_gateway_001", """
-                    {"success":true,"data":{"orderId":"ord_gateway_001","status":"CREATED","sagaStatus":"STARTED","paymentMethod":"CARD","totalAmount":12000.0},"error":null,"trace":{"correlationId":"corr-gateway-create"}}
-                    """);
+                writeJson(exchange, 201, currentCorrelationId(exchange), "/api/orders/ord_gateway_001", """
+                    {"success":true,"data":{"orderId":"ord_gateway_001","status":"CREATED","sagaStatus":"STARTED","paymentMethod":"CARD","totalAmount":12000.0},"error":null,"trace":{"correlationId":"%s"}}
+                    """.formatted(currentCorrelationId(exchange)));
                 return;
             }
             if ("GET".equals(exchange.getRequestMethod()) && "/api/orders/ord_gateway_001".equals(path)) {
@@ -532,6 +614,12 @@ class OrderGatewayControllerIntegrationTest {
                 return;
             }
             if ("GET".equals(exchange.getRequestMethod()) && "/api/read-model/orders".equals(path)) {
+                if (query != null && query.contains("member-upstream-mutates-correlation")) {
+                    writeJson(exchange, 200, "corr-upstream-mutated", null, """
+                        {"success":true,"data":{"page":0,"size":10,"items":[{"orderId":"ord_read_model_001","memberId":"member-upstream-mutates-correlation","status":"CONFIRMED","sagaStatus":"COMPLETED","couponCode":"WELCOME10","totalAmount":80000.0,"discountAmount":5000.0,"payableAmount":75000.0,"itemCount":1}]},"error":null,"trace":{"correlationId":"%s"}}
+                        """.formatted(currentCorrelationId(exchange)));
+                    return;
+                }
                 writeJson(exchange, 200, currentCorrelationId(exchange), null, """
                     {"success":true,"data":{"page":0,"size":10,"items":[{"orderId":"ord_read_model_001","memberId":"member-mobile","status":"CONFIRMED","sagaStatus":"COMPLETED","couponCode":"WELCOME10","totalAmount":80000.0,"discountAmount":5000.0,"payableAmount":75000.0,"itemCount":1}]},"error":null,"trace":{"correlationId":"%s"}}
                     """.formatted(currentCorrelationId(exchange)));

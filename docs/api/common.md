@@ -7,7 +7,7 @@
 | `X-Correlation-Id` | request/response | no | Trace one user action across HTTP and Kafka |
 | `Idempotency-Key` | command request | yes | Prevent duplicate command processing |
 
-If `X-Correlation-Id` is absent, the receiving service creates one and returns it in the response.
+If `X-Correlation-Id` is absent, the receiving service creates one and returns it in the response. Gateway also creates one before proxying so downstream services receive the same trace key for a single user action.
 
 ## Success Response
 

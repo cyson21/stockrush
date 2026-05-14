@@ -158,6 +158,121 @@ class ArchitectureGuardTest(unittest.TestCase):
 
             self.assertFalse(any(violation.rule_id == "ARCH-009" for violation in violations))
 
+    def test_detects_gateway_missing_correlation_id_filter(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            service_root = root / "services" / "gateway"
+            java_root = service_root / "src" / "main" / "java" / "com" / "stockrush" / "gateway"
+            resource_root = service_root / "src" / "main" / "resources"
+            java_root.mkdir(parents=True)
+            resource_root.mkdir(parents=True)
+            (service_root / "pom.xml").write_text(
+                "<project><dependencies>"
+                "<dependency><artifactId>spring-boot-starter-actuator</artifactId></dependency>"
+                "</dependencies></project>\n",
+                encoding="utf-8",
+            )
+            (resource_root / "application.yml").write_text(
+                "management:\n"
+                "  endpoints:\n"
+                "    web:\n"
+                "      exposure:\n"
+                "        include: health,info,metrics\n",
+                encoding="utf-8",
+            )
+            (java_root / "GatewayApplication.java").write_text(
+                "@SpringBootApplication\npublic class GatewayApplication {}\n",
+                encoding="utf-8",
+            )
+
+            violations = architecture_guard.check(root)
+
+            self.assertTrue(any(violation.rule_id == "ARCH-007" for violation in violations))
+
+    def test_allows_gateway_correlation_id_filter_with_mdc(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            service_root = root / "services" / "gateway"
+            java_root = service_root / "src" / "main" / "java" / "com" / "stockrush" / "gateway"
+            resource_root = service_root / "src" / "main" / "resources"
+            java_root.mkdir(parents=True)
+            resource_root.mkdir(parents=True)
+            (service_root / "pom.xml").write_text(
+                "<project><dependencies>"
+                "<dependency><artifactId>spring-boot-starter-actuator</artifactId></dependency>"
+                "</dependencies></project>\n",
+                encoding="utf-8",
+            )
+            (resource_root / "application.yml").write_text(
+                "management:\n"
+                "  endpoints:\n"
+                "    web:\n"
+                "      exposure:\n"
+                "        include: health,info,metrics\n",
+                encoding="utf-8",
+            )
+            (java_root / "CorrelationIdFilter.java").write_text(
+                "import jakarta.servlet.http.HttpServletRequestWrapper;\n"
+                "import org.slf4j.MDC;\n"
+                "import org.springframework.web.filter.OncePerRequestFilter;\n"
+                "public class CorrelationIdFilter extends OncePerRequestFilter {\n"
+                "  static final String HEADER = \"X-Correlation-Id\";\n"
+                "  protected void doFilterInternal(request, response, filterChain) {\n"
+                "    response.setHeader(HEADER, \"corr\");\n"
+                "    MDC.put(\"correlationId\", \"corr\");\n"
+                "    try { filterChain.doFilter(new CorrelationHeaderRequest(request), response); }\n"
+                "    finally { MDC.remove(\"correlationId\"); }\n"
+                "  }\n"
+                "  static class CorrelationHeaderRequest extends HttpServletRequestWrapper {\n"
+                "    String getHeader(String name) { return \"corr\"; }\n"
+                "    java.util.Enumeration<String> getHeaders(String name) { return null; }\n"
+                "    java.util.Enumeration<String> getHeaderNames() { return null; }\n"
+                "  }\n"
+                "}\n",
+                encoding="utf-8",
+            )
+
+            violations = architecture_guard.check(root)
+
+            self.assertFalse(any(violation.rule_id == "ARCH-007" for violation in violations))
+
+    def test_detects_gateway_correlation_filter_without_request_wrapping_behavior(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            service_root = root / "services" / "gateway"
+            java_root = service_root / "src" / "main" / "java" / "com" / "stockrush" / "gateway"
+            resource_root = service_root / "src" / "main" / "resources"
+            java_root.mkdir(parents=True)
+            resource_root.mkdir(parents=True)
+            (service_root / "pom.xml").write_text(
+                "<project><dependencies>"
+                "<dependency><artifactId>spring-boot-starter-actuator</artifactId></dependency>"
+                "</dependencies></project>\n",
+                encoding="utf-8",
+            )
+            (resource_root / "application.yml").write_text(
+                "management:\n"
+                "  endpoints:\n"
+                "    web:\n"
+                "      exposure:\n"
+                "        include: health,info,metrics\n",
+                encoding="utf-8",
+            )
+            (java_root / "CorrelationIdFilter.java").write_text(
+                "import jakarta.servlet.http.HttpServletRequestWrapper;\n"
+                "import org.slf4j.MDC;\n"
+                "import org.springframework.web.filter.OncePerRequestFilter;\n"
+                "public class CorrelationIdFilter extends OncePerRequestFilter {\n"
+                "  static final String HEADER = \"X-Correlation-Id\";\n"
+                "  void apply(String correlationId) { MDC.put(\"correlationId\", correlationId); MDC.remove(\"correlationId\"); }\n"
+                "}\n",
+                encoding="utf-8",
+            )
+
+            violations = architecture_guard.check(root)
+
+            self.assertTrue(any(violation.rule_id == "ARCH-007" for violation in violations))
+
     def test_allows_outbox_admin_action_table(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

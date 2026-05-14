@@ -36,7 +36,7 @@ info: useful design feedback
 | ARCH-004 Outbox Structure | Implemented |
 | ARCH-005 Consumer Idempotency | Planned |
 | ARCH-006 Synchronous Call Allow List | Planned |
-| ARCH-007 Correlation ID Propagation | Planned |
+| ARCH-007 Correlation ID Propagation | Implemented |
 | ARCH-008 Retry and DLQ Visibility | Planned |
 | ARCH-009 Actuator Operations Exposure | Implemented |
 
@@ -183,14 +183,22 @@ Use Kafka events for cross-service workflow steps unless the call is in the allo
 
 ### ARCH-007: Correlation ID Propagation
 
-Severity: warning
+Severity: error
 
 HTTP requests and Kafka events in the same user action must share a correlation ID.
+
+Gateway must resolve `X-Correlation-Id` at the HTTP boundary:
+
+- use the incoming header when present
+- create one when absent
+- expose it to downstream proxy handlers through request headers
+- store it in MDC under `correlationId` for request-scope logs
+- return it in the response header
 
 Suggested fix:
 
 ```text
-Read correlation ID from request headers or create one at the gateway, then pass it into events.
+Add a Gateway OncePerRequestFilter that resolves X-Correlation-Id, stores it in MDC, and wraps request headers before proxy forwarding.
 ```
 
 ### ARCH-008: Retry and DLQ Visibility

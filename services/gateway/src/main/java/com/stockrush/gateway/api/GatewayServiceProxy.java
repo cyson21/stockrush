@@ -55,6 +55,7 @@ class GatewayServiceProxy {
     ) {
         HttpRequest.Builder requestBuilder = HttpRequest.newBuilder(URI.create(routingProperties.serviceUrl(service) + path));
         copyRequestHeaders(requestHeaders, requestBuilder);
+        String correlationId = requestHeaders.getFirst("X-Correlation-Id");
 
         HttpRequest.BodyPublisher bodyPublisher = body == null
             ? HttpRequest.BodyPublishers.noBody()
@@ -63,7 +64,7 @@ class GatewayServiceProxy {
 
         try {
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-            return toResponseEntity(response);
+            return toResponseEntity(response, correlationId);
         } catch (IOException exception) {
             throw new IllegalStateException("Failed to route request to upstream service", exception);
         } catch (InterruptedException exception) {
@@ -82,13 +83,16 @@ class GatewayServiceProxy {
         });
     }
 
-    private ResponseEntity<String> toResponseEntity(HttpResponse<String> response) {
+    private ResponseEntity<String> toResponseEntity(HttpResponse<String> response, String correlationId) {
         HttpHeaders headers = new HttpHeaders();
         response.headers().map().forEach((name, values) -> {
             if (RESPONSE_HEADERS.contains(name.toLowerCase())) {
                 headers.put(name, List.copyOf(values));
             }
         });
+        if (correlationId != null && !correlationId.isBlank()) {
+            headers.set("X-Correlation-Id", correlationId);
+        }
         return new ResponseEntity<>(response.body(), headers, HttpStatus.valueOf(response.statusCode()));
     }
 }
