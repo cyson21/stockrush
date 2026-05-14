@@ -273,6 +273,216 @@ class ArchitectureGuardTest(unittest.TestCase):
 
             self.assertTrue(any(violation.rule_id == "ARCH-007" for violation in violations))
 
+    def test_detects_api_service_missing_correlation_id_filter(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            java_root = root / "services" / "order-service" / "src" / "main" / "java" / "com" / "stockrush" / "order" / "api"
+            java_root.mkdir(parents=True)
+            (java_root / "CorrelationIds.java").write_text(
+                "package com.stockrush.order.api;\n"
+                "final class CorrelationIds {\n"
+                "  static final String HEADER_NAME = \"X-Correlation-Id\";\n"
+                "  static String resolve(String value) { return value; }\n"
+                "}\n",
+                encoding="utf-8",
+            )
+            (java_root / "OrderController.java").write_text(
+                "package com.stockrush.order.api;\n"
+                "@RestController class OrderController {}\n",
+                encoding="utf-8",
+            )
+
+            violations = architecture_guard.check(root)
+
+            self.assertTrue(any(violation.rule_id == "ARCH-010" for violation in violations))
+
+    def test_allows_api_service_correlation_id_filter_with_mdc_and_request_wrapping(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            java_root = root / "services" / "order-service" / "src" / "main" / "java" / "com" / "stockrush" / "order" / "api"
+            java_root.mkdir(parents=True)
+            (java_root / "CorrelationIds.java").write_text(
+                "package com.stockrush.order.api;\n"
+                "final class CorrelationIds {\n"
+                "  static final String HEADER_NAME = \"X-Correlation-Id\";\n"
+                "  static String resolve(String value) { return value; }\n"
+                "}\n",
+                encoding="utf-8",
+            )
+            (java_root / "OrderController.java").write_text(
+                "package com.stockrush.order.api;\n"
+                "@RestController class OrderController {}\n",
+                encoding="utf-8",
+            )
+            (java_root / "CorrelationIdFilter.java").write_text(
+                "package com.stockrush.order.api;\n"
+                "import jakarta.servlet.http.HttpServletRequestWrapper;\n"
+                "import org.slf4j.MDC;\n"
+                "import org.springframework.core.Ordered;\n"
+                "import org.springframework.core.annotation.Order;\n"
+                "import org.springframework.stereotype.Component;\n"
+                "import org.springframework.web.filter.OncePerRequestFilter;\n"
+                "@Component\n"
+                "@Order(Ordered.HIGHEST_PRECEDENCE)\n"
+                "class CorrelationIdFilter extends OncePerRequestFilter {\n"
+                "  protected void doFilterInternal(request, response, filterChain) {\n"
+                "    String correlationId = CorrelationIds.resolve(request.getHeader(CorrelationIds.HEADER_NAME));\n"
+                "    response.setHeader(CorrelationIds.HEADER_NAME, correlationId);\n"
+                "    MDC.put(\"correlationId\", correlationId);\n"
+                "    try { filterChain.doFilter(new CorrelationHeaderRequest(request, correlationId), response); }\n"
+                "    finally { MDC.remove(\"correlationId\"); }\n"
+                "  }\n"
+                "  static class CorrelationHeaderRequest extends HttpServletRequestWrapper {\n"
+                "    String getHeader(String name) { return \"corr\"; }\n"
+                "    java.util.Enumeration<String> getHeaders(String name) { return null; }\n"
+                "    java.util.Enumeration<String> getHeaderNames() { return null; }\n"
+                "  }\n"
+                "}\n",
+                encoding="utf-8",
+            )
+
+            violations = architecture_guard.check(root)
+
+            self.assertFalse(any(violation.rule_id == "ARCH-010" for violation in violations))
+
+    def test_detects_api_service_correlation_filter_only_in_test_sources(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            java_root = root / "services" / "order-service" / "src" / "main" / "java" / "com" / "stockrush" / "order" / "api"
+            test_root = root / "services" / "order-service" / "src" / "test" / "java" / "com" / "stockrush" / "order" / "api"
+            java_root.mkdir(parents=True)
+            test_root.mkdir(parents=True)
+            (java_root / "CorrelationIds.java").write_text(
+                "package com.stockrush.order.api;\n"
+                "final class CorrelationIds {\n"
+                "  static final String HEADER_NAME = \"X-Correlation-Id\";\n"
+                "  static String resolve(String value) { return value; }\n"
+                "}\n",
+                encoding="utf-8",
+            )
+            (java_root / "OrderController.java").write_text(
+                "package com.stockrush.order.api;\n"
+                "@RestController class OrderController {}\n",
+                encoding="utf-8",
+            )
+            (test_root / "CorrelationIdFilter.java").write_text(
+                "package com.stockrush.order.api;\n"
+                "import jakarta.servlet.http.HttpServletRequestWrapper;\n"
+                "import org.slf4j.MDC;\n"
+                "import org.springframework.core.Ordered;\n"
+                "import org.springframework.core.annotation.Order;\n"
+                "import org.springframework.stereotype.Component;\n"
+                "import org.springframework.web.filter.OncePerRequestFilter;\n"
+                "@Component\n"
+                "@Order(Ordered.HIGHEST_PRECEDENCE)\n"
+                "class CorrelationIdFilter extends OncePerRequestFilter {\n"
+                "  protected void doFilterInternal(request, response, filterChain) {\n"
+                "    String correlationId = CorrelationIds.resolve(request.getHeader(CorrelationIds.HEADER_NAME));\n"
+                "    response.setHeader(CorrelationIds.HEADER_NAME, correlationId);\n"
+                "    MDC.put(\"correlationId\", correlationId);\n"
+                "    try { filterChain.doFilter(new CorrelationHeaderRequest(request, correlationId), response); }\n"
+                "    finally { MDC.remove(\"correlationId\"); }\n"
+                "  }\n"
+                "  static class CorrelationHeaderRequest extends HttpServletRequestWrapper {\n"
+                "    String getHeader(String name) { return \"corr\"; }\n"
+                "    java.util.Enumeration<String> getHeaders(String name) { return null; }\n"
+                "    java.util.Enumeration<String> getHeaderNames() { return null; }\n"
+                "  }\n"
+                "}\n",
+                encoding="utf-8",
+            )
+
+            violations = architecture_guard.check(root)
+
+            self.assertTrue(any(violation.rule_id == "ARCH-010" for violation in violations))
+
+    def test_detects_api_service_correlation_filter_without_component_registration(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            java_root = root / "services" / "order-service" / "src" / "main" / "java" / "com" / "stockrush" / "order" / "api"
+            java_root.mkdir(parents=True)
+            (java_root / "CorrelationIds.java").write_text(
+                "package com.stockrush.order.api;\n"
+                "final class CorrelationIds {\n"
+                "  static final String HEADER_NAME = \"X-Correlation-Id\";\n"
+                "  static String resolve(String value) { return value; }\n"
+                "}\n",
+                encoding="utf-8",
+            )
+            (java_root / "OrderController.java").write_text(
+                "package com.stockrush.order.api;\n"
+                "@RestController class OrderController {}\n",
+                encoding="utf-8",
+            )
+            (java_root / "CorrelationIdFilter.java").write_text(
+                "package com.stockrush.order.api;\n"
+                "import jakarta.servlet.http.HttpServletRequestWrapper;\n"
+                "import org.slf4j.MDC;\n"
+                "import org.springframework.web.filter.OncePerRequestFilter;\n"
+                "class CorrelationIdFilter extends OncePerRequestFilter {\n"
+                "  protected void doFilterInternal(request, response, filterChain) {\n"
+                "    String correlationId = CorrelationIds.resolve(request.getHeader(CorrelationIds.HEADER_NAME));\n"
+                "    response.setHeader(CorrelationIds.HEADER_NAME, correlationId);\n"
+                "    MDC.put(\"correlationId\", correlationId);\n"
+                "    try { filterChain.doFilter(new CorrelationHeaderRequest(request, correlationId), response); }\n"
+                "    finally { MDC.remove(\"correlationId\"); }\n"
+                "  }\n"
+                "  static class CorrelationHeaderRequest extends HttpServletRequestWrapper {\n"
+                "    String getHeader(String name) { return \"corr\"; }\n"
+                "    java.util.Enumeration<String> getHeaders(String name) { return null; }\n"
+                "    java.util.Enumeration<String> getHeaderNames() { return null; }\n"
+                "  }\n"
+                "}\n",
+                encoding="utf-8",
+            )
+
+            violations = architecture_guard.check(root)
+
+            self.assertTrue(any(violation.rule_id == "ARCH-010" for violation in violations))
+
+    def test_detects_api_service_correlation_filter_without_mdc_cleanup(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            java_root = root / "services" / "order-service" / "src" / "main" / "java" / "com" / "stockrush" / "order" / "api"
+            java_root.mkdir(parents=True)
+            (java_root / "CorrelationIds.java").write_text(
+                "package com.stockrush.order.api;\n"
+                "final class CorrelationIds {\n"
+                "  static final String HEADER_NAME = \"X-Correlation-Id\";\n"
+                "  static String resolve(String value) { return value; }\n"
+                "}\n",
+                encoding="utf-8",
+            )
+            (java_root / "OrderController.java").write_text(
+                "package com.stockrush.order.api;\n"
+                "@RestController class OrderController {}\n",
+                encoding="utf-8",
+            )
+            (java_root / "CorrelationIdFilter.java").write_text(
+                "package com.stockrush.order.api;\n"
+                "import jakarta.servlet.http.HttpServletRequestWrapper;\n"
+                "import org.slf4j.MDC;\n"
+                "import org.springframework.web.filter.OncePerRequestFilter;\n"
+                "class CorrelationIdFilter extends OncePerRequestFilter {\n"
+                "  protected void doFilterInternal(request, response, filterChain) {\n"
+                "    String correlationId = CorrelationIds.resolve(request.getHeader(CorrelationIds.HEADER_NAME));\n"
+                "    response.setHeader(CorrelationIds.HEADER_NAME, correlationId);\n"
+                "    MDC.put(\"correlationId\", correlationId);\n"
+                "    filterChain.doFilter(new CorrelationHeaderRequest(request, correlationId), response);\n"
+                "  }\n"
+                "  static class CorrelationHeaderRequest extends HttpServletRequestWrapper {\n"
+                "    String getHeader(String name) { return \"corr\"; }\n"
+                "    java.util.Enumeration<String> getHeaders(String name) { return null; }\n"
+                "    java.util.Enumeration<String> getHeaderNames() { return null; }\n"
+                "  }\n"
+                "}\n",
+                encoding="utf-8",
+            )
+
+            violations = architecture_guard.check(root)
+
+            self.assertTrue(any(violation.rule_id == "ARCH-010" for violation in violations))
+
     def test_allows_outbox_admin_action_table(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

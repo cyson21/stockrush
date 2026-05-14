@@ -31,6 +31,14 @@ OBSERVABLE_SERVICES = (
     "read-model-service",
     "gateway",
 )
+API_CORRELATION_SERVICES = (
+    "catalog-service",
+    "inventory-service",
+    "order-service",
+    "payment-service",
+    "promotion-service",
+    "read-model-service",
+)
 ACTUATOR_REQUIRED_EXPOSURES = {"health", "info", "metrics"}
 CORRELATION_ID_HEADER = "X-Correlation-Id"
 CORRELATION_MDC_KEY = "correlationId"
@@ -292,7 +300,7 @@ def check_correlation_id_propagation(root: Path) -> list[Violation]:
     gateway_java_files = [
         path
         for path in iter_source_files(root)
-        if path.suffix == ".java" and service_for_path(root, path) == "gateway"
+        if path.suffix == ".java" and service_for_path(root, path) == "gateway" and is_main_java_file(root, path)
     ]
     if any(is_gateway_correlation_filter(read_text(path)) for path in gateway_java_files):
         return violations
@@ -309,6 +317,39 @@ def check_correlation_id_propagation(root: Path) -> list[Violation]:
     return violations
 
 
+def check_api_service_correlation_mdc(root: Path) -> list[Violation]:
+    violations: list[Violation] = []
+    services_root = root / "services"
+    if not services_root.exists():
+        return violations
+
+    for service_name in API_CORRELATION_SERVICES:
+        service_root = services_root / service_name
+        if not service_root.exists():
+            continue
+
+        service_java_files = [
+            path
+            for path in iter_source_files(root)
+            if path.suffix == ".java" and service_for_path(root, path) == service_name and is_main_java_file(root, path)
+        ]
+        if not any("@RestController" in read_text(path) for path in service_java_files):
+            continue
+        if any(is_api_service_correlation_filter(read_text(path)) for path in service_java_files):
+            continue
+
+        violations.append(
+            Violation(
+                rule_id="ARCH-010",
+                severity="error",
+                file=display_path(root, service_root),
+                message=f"`{service_name}` must keep X-Correlation-Id in request-scope MDC.",
+                suggested_fix="Add a service-local OncePerRequestFilter that resolves X-Correlation-Id, stores it in MDC, wraps request headers, and clears MDC in finally.",
+            )
+        )
+    return violations
+
+
 def is_gateway_correlation_filter(text: str) -> bool:
     required_patterns = [
         r"extends\s+OncePerRequestFilter\b",
@@ -320,6 +361,27 @@ def is_gateway_correlation_filter(text: str) -> bool:
         rf"{re.escape(CORRELATION_MDC_KEY)}",
         r"\bMDC\.put\s*\(",
         r"\bfinally\s*\{.*?\bMDC\.remove\s*\(",
+        r"\bgetHeader\s*\(",
+        r"\bgetHeaders\s*\(",
+        r"\bgetHeaderNames\s*\(",
+    ]
+    return all(re.search(pattern, text, re.DOTALL) for pattern in required_patterns)
+
+
+def is_api_service_correlation_filter(text: str) -> bool:
+    required_patterns = [
+        r"@Component\b",
+        r"@Order\s*\(\s*Ordered\.HIGHEST_PRECEDENCE\s*\)",
+        r"extends\s+OncePerRequestFilter\b",
+        r"\bdoFilterInternal\s*\(",
+        r"\bCorrelationIds\.resolve\s*\(",
+        r"\bresponse\.setHeader\s*\(",
+        r"(?:CorrelationIds\.HEADER_NAME|X-Correlation-Id)",
+        rf"{re.escape(CORRELATION_MDC_KEY)}",
+        r"\bMDC\.put\s*\(",
+        r"\bfinally\s*\{.*?\bMDC\.remove\s*\(",
+        r"\bfilterChain\.doFilter\s*\(\s*new\s+[A-Za-z0-9_]*Correlation[A-Za-z0-9_]*Request\b",
+        r"extends\s+HttpServletRequestWrapper\b",
         r"\bgetHeader\s*\(",
         r"\bgetHeaders\s*\(",
         r"\bgetHeaderNames\s*\(",
@@ -390,6 +452,14 @@ def service_for_path(root: Path, path: Path) -> str | None:
     return None
 
 
+def is_main_java_file(root: Path, path: Path) -> bool:
+    try:
+        parts = path.resolve().relative_to(root.resolve()).parts
+    except ValueError:
+        return False
+    return "src" in parts and "main" in parts and "java" in parts
+
+
 def check(root: Path) -> list[Violation]:
     entities = discover_entities(root)
     violations: list[Violation] = []
@@ -398,6 +468,7 @@ def check(root: Path) -> list[Violation]:
     violations.extend(check_event_envelopes(root))
     violations.extend(check_outbox_tables(root))
     violations.extend(check_correlation_id_propagation(root))
+    violations.extend(check_api_service_correlation_mdc(root))
     violations.extend(check_actuator_observability(root))
     return violations
 

@@ -39,6 +39,7 @@ info: useful design feedback
 | ARCH-007 Correlation ID Propagation | Implemented |
 | ARCH-008 Retry and DLQ Visibility | Planned |
 | ARCH-009 Actuator Operations Exposure | Implemented |
+| ARCH-010 Service Correlation MDC | Implemented |
 
 ### ARCH-001: Service Schema Ownership
 
@@ -227,4 +228,29 @@ Suggested fix:
 
 ```text
 Add spring-boot-starter-actuator and expose health, info, and metrics through service configuration.
+```
+
+### ARCH-010: Service Correlation MDC
+
+Severity: error
+
+HTTP API services must resolve `X-Correlation-Id` at their own request boundary, even when traffic does not enter through Gateway.
+
+The filter must:
+
+- use the incoming header when present
+- create one when absent
+- be a `src/main/java` Spring component filter
+- run at `Ordered.HIGHEST_PRECEDENCE`
+- expose it to controllers and exception handlers through request headers
+- store it in MDC under `correlationId` for request-scope logs
+- return it in the response header
+- clear MDC in `finally`
+
+Fulfillment Service is excluded while it has no HTTP API.
+
+Suggested fix:
+
+```text
+Add a service-local OncePerRequestFilter that resolves X-Correlation-Id, stores it in MDC, wraps request headers, and clears MDC in finally.
 ```
