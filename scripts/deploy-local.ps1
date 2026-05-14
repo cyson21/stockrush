@@ -83,6 +83,11 @@ if ($Login) {
 Write-Host "[deploy] registry=$ImageRegistry owner=$ImageOwner tag=$ImageTag"
 
 if (-not $SkipPull) {
+  $ProbeImage = "$ImageRegistry/$ImageOwner/stockrush-gateway:$ImageTag"
+  docker manifest inspect $ProbeImage *> $null
+  if ($LASTEXITCODE -ne 0) {
+    throw "Cannot read GHCR image manifest: $ProbeImage. Check that the token has read:packages permission or that the package is public."
+  }
   docker compose --env-file $EnvFile -f $ComposeFile -f $ImageComposeFile pull
 }
 

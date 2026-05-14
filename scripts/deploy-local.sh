@@ -96,9 +96,22 @@ compose() {
   docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" -f "$IMAGE_COMPOSE_FILE" "$@"
 }
 
+verify_pull_permission() {
+  local probe_image="$image_registry/$image_owner/stockrush-gateway:$image_tag"
+
+  if docker manifest inspect "$probe_image" >/dev/null 2>&1; then
+    return
+  fi
+
+  printf 'Cannot read GHCR image manifest: %s\n' "$probe_image" >&2
+  printf 'Check that the token has read:packages permission or that the package is public.\n' >&2
+  exit 1
+}
+
 printf '[deploy] registry=%s owner=%s tag=%s\n' "$image_registry" "$image_owner" "$image_tag"
 
 if [[ "$skip_pull" != true ]]; then
+  verify_pull_permission
   compose pull
 fi
 

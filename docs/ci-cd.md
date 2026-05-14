@@ -57,6 +57,8 @@ GHCR image pull 권한이 필요하면 먼저 Docker에 로그인한다.
 docker login ghcr.io -u cyson21 --password-stdin < ~/.config/stockrush/github-token
 ```
 
+로컬 pull에 쓰는 개인 토큰에는 `read:packages` 권한이 필요하다. package visibility를 public으로 바꾸기 전까지 private GHCR image는 이 권한 없이는 `denied`가 반환된다.
+
 배포:
 
 ```bash
@@ -92,5 +94,6 @@ Windows 11 PowerShell:
 ## 운영상 주의
 
 - private repository의 GHCR package는 기본적으로 private일 수 있다. 외부 시연 전에 package visibility를 확인한다.
+- 로컬 배포 토큰에 `read:packages`가 없으면 `deploy-local`은 image manifest preflight에서 중단한다.
 - `latest-demo`는 편의 태그이므로 이력 추적과 문제 재현에는 `git-<short-sha>` 태그를 우선 사용한다.
 - self-hosted runner는 아직 사용하지 않는다. 추가할 경우 protected branch, 수동 dispatch, 전용 runner label을 먼저 설정한다.
