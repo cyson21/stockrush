@@ -15,12 +15,14 @@ flowchart LR
   Inventory --> InventoryOutbox["inventory.outbox_events"]
   InventoryOutbox --> Kafka
   Kafka --> Payment["payment-service"]
+  Kafka --> ReadModel["read-model-service"]
   Payment --> PaymentOutbox["payment.outbox_events"]
   PaymentOutbox --> Kafka
   Catalog --> CatalogDb["catalog schema"]
   Order --> OrdersDb["orders schema"]
   Inventory --> InventoryDb["inventory schema"]
   Payment --> PaymentDb["payment schema"]
+  ReadModel --> ReadModelDb["read_model schema"]
 ```
 
 ## Service Boundaries
@@ -32,6 +34,7 @@ flowchart LR
 | `inventory-service` | SKU stock, reservation, stock finalization/release | product master, order lifecycle, payment state |
 | `order-service` | customer order, order item, order status, Saga status, payment command outbox | stock mutation, payment authorization result |
 | `payment-service` | payment authorization, payment delay/cancel simulation, payment event outbox | order lifecycle, inventory reservation |
+| `read-model-service` | order summary projection for customer history and admin order list | order command handling, stock/payment mutation, product search projection |
 
 Each service uses only its own PostgreSQL schema. Cross-service workflow moves through Kafka events and commands, not direct schema access.
 
@@ -55,9 +58,11 @@ Customer App
   -> stockrush.order.events.v1 OrderConfirmed or OrderCancelled
   -> inventory-service reservation finalization or release
   -> fulfillment-service shipment preparation on OrderConfirmed
+  -> read-model-service order summary projection on OrderCreated/OrderConfirmed/OrderCancelled
 ```
 
 The customer app reads order status through `GET /api/orders/{orderId}`. The admin app reads order/Saga state and service-specific outbox rows through Gateway admin APIs.
+Read Model Service currently exposes service-local summary APIs and is not proxied by Gateway.
 
 ## First Demo Scenario
 
@@ -94,6 +99,7 @@ The customer app reads order status through `GET /api/orders/{orderId}`. The adm
 | order-service | `GET /api/orders/{orderId}` | customer order status and Saga progress tracking |
 | order-service | `GET /api/admin/orders`, `GET /api/admin/orders/{orderId}/saga` | admin order monitoring and Saga failure inspection |
 | order-service | `POST /api/admin/orders/{orderId}/cancel` | admin cancellation request for delayed payment orders |
+| read-model-service | `GET /api/read-model/orders`, `GET /api/read-model/admin/orders` | projection-backed customer order history and admin order summary |
 | gateway | `GET /api/admin/outbox-services/{service}/events`, `POST /api/admin/outbox-services/{service}/events/retry`, `POST /api/admin/outbox-services/{service}/events/failed/requeue` | service-specific outbox monitoring, manual relay trigger, and failed event requeue |
 
 ## Service Relay Coverage
@@ -104,6 +110,7 @@ The customer app reads order status through `GET /api/orders/{orderId}`. The adm
 | inventory-service | `stockrush.inventory.events.v1` | pending claim, publish success, retry, failed, envelope JSON |
 | payment-service | `stockrush.payment.events.v1` | pending claim, publish success, retry, failed, envelope JSON |
 | fulfillment-service | none in first slice | order event consumer, processed event idempotency |
+| read-model-service | none in first slice | order lifecycle projection, processed event idempotency, query API |
 
 ## Kafka Flow and Integration Smoke Coverage
 
@@ -113,6 +120,7 @@ The customer app reads order status through `GET /api/orders/{orderId}`. The adm
 | Inventory finalization | `OrderConfirmed` or `OrderCancelled` on `stockrush.order.events.v1` | inventory-service | `InventoryReservationConfirmed` or `InventoryReservationReleased` on `stockrush.inventory.events.v1` | reservation status, stock recovery/finalization, processed event, outbox row |
 | Coupon usage lifecycle | `OrderCreated`, `OrderConfirmed`, or `OrderCancelled` on `stockrush.order.events.v1` | promotion-service | none | coupon usage state, processed event |
 | Shipment preparation | `OrderConfirmed` on `stockrush.order.events.v1` | fulfillment-service | none | fulfillment request state, processed event |
+| Order summary projection | `OrderCreated`, `OrderConfirmed`, or `OrderCancelled` on `stockrush.order.events.v1` | read-model-service | none | order summary state, processed event, customer/admin query API |
 | Payment authorization | `PaymentAuthorizationRequested` on `stockrush.payment.commands.v1` | payment-service | `PaymentAuthorized` on `stockrush.payment.events.v1` | payment row, processed event, outbox row, Kafka event envelope |
 | Payment cancellation | `PaymentCancelRequested` on `stockrush.payment.commands.v1` | payment-service | `PaymentCanceled` on `stockrush.payment.events.v1` | delayed payment update, processed event, outbox row, Kafka event envelope |
 

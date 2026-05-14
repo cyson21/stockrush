@@ -17,7 +17,8 @@ StockRush 테스트 전략은 한정 판매 주문 흐름에서 서비스별 도
 | Domain unit | 입력 검증, 계산, 기본 이벤트 생성 로직을 빠르게 확인 | `services/order-service/src/test/java/com/stockrush/order/application/CreateOrderServiceTest.java` |
 | HTTP integration | Controller, validation, response shape, header propagation, DB persistence 확인 | `services/catalog-service/src/test/java/com/stockrush/catalog/api/CatalogProductControllerIntegrationTest.java`, `services/order-service/src/test/java/com/stockrush/order/api/CreateOrderControllerIntegrationTest.java`, `services/order-service/src/test/java/com/stockrush/order/api/AdminOrderCancelControllerIntegrationTest.java`, `services/order-service/src/test/java/com/stockrush/order/api/OutboxAdminControllerIntegrationTest.java` |
 | Saga handler integration | 소비 이벤트에 따른 주문 상태, 다음 command/event, 중복 처리 확인 | `services/order-service/src/test/java/com/stockrush/order/application/OrderSagaEventHandlerIntegrationTest.java`, `services/payment-service/src/test/java/com/stockrush/payment/application/PaymentAuthorizationHandlerIntegrationTest.java` |
-| Event-only service integration | 주문 완료 이벤트에 따른 후속 서비스 상태와 중복 처리 확인 | `services/fulfillment-service/src/test/java/com/stockrush/fulfillment/application/FulfillmentOrderEventHandlerIntegrationTest.java`, `services/fulfillment-service/src/test/java/com/stockrush/fulfillment/infra/kafka/FulfillmentOrderEventConsumerIntegrationTest.java` |
+| Event-only service integration | 주문 이벤트에 따른 후속 서비스 상태/projection과 중복 처리 확인 | `services/fulfillment-service/src/test/java/com/stockrush/fulfillment/application/FulfillmentOrderEventHandlerIntegrationTest.java`, `services/fulfillment-service/src/test/java/com/stockrush/fulfillment/infra/kafka/FulfillmentOrderEventConsumerIntegrationTest.java`, `services/read-model-service/src/test/java/com/stockrush/readmodel/application/OrderReadModelProjectionHandlerIntegrationTest.java`, `services/read-model-service/src/test/java/com/stockrush/readmodel/infra/kafka/ReadModelOrderEventConsumerIntegrationTest.java` |
+| Projection API integration | 조회용 projection table에서 고객/관리자 API 응답과 정렬/필터를 확인 | `services/read-model-service/src/test/java/com/stockrush/readmodel/api/OrderReadModelControllerIntegrationTest.java` |
 | Outbox relay | `PENDING` claim, Kafka publish, retry, `PUBLISHED`/`FAILED` 전이를 확인 | `services/order-service/src/test/java/com/stockrush/order/infra/outbox/OutboxRelayServiceIntegrationTest.java`, `services/inventory-service/src/test/java/com/stockrush/inventory/infra/outbox/InventoryOutboxRelayServiceIntegrationTest.java`, `services/payment-service/src/test/java/com/stockrush/payment/infra/outbox/PaymentOutboxRelayServiceIntegrationTest.java` |
 | Kafka smoke | 실제 로컬 Kafka에 publish/consume이 되는지 확인 | `services/inventory-service/src/test/java/com/stockrush/inventory/infra/kafka/InventoryKafkaSmokeIntegrationTest.java`, `services/payment-service/src/test/java/com/stockrush/payment/infra/kafka/PaymentKafkaSmokeIntegrationTest.java` |
 | UI behavior | 고객/관리자 앱의 API 호출, 쿠폰 견적 표시, 상태 렌더링, 재시도 키 재사용 확인 | `apps/customer-app/src/App.test.tsx`, `apps/admin-app/src/App.test.tsx` |
@@ -36,6 +37,7 @@ cd services/order-service && mvn test
 cd services/payment-service && mvn test
 cd services/promotion-service && mvn test
 cd services/fulfillment-service && mvn test
+cd services/read-model-service && mvn test
 ```
 
 Frontend verification runs both behavior tests and production build.
@@ -73,6 +75,7 @@ Local end-to-end verification follows [Local E2E Runbook](runbooks/local-e2e.md)
 | Outbox retry, requeue and relay | Service-local outbox relay/admin tests, Gateway outbox routing smoke | Admin App outbox operation checklist |
 | Coupon quote, order pricing, usage lifecycle | Promotion coupon controller, Promotion usage event handler/consumer, Order coupon pricing, Customer App quote UI tests | Direct customer app/API smoke |
 | Fulfillment request preparation | Fulfillment handler and consumer tests | Future local E2E with fulfillment-service enabled |
+| Order summary projection | Read Model projection handler, JSON consumer dispatch, customer/admin API tests | Future local E2E with read-model-service enabled |
 | Event duplicate handling | `processed_events` and replay tests in Order/Payment handlers | Outbox and Kafka UI checks |
 
 최근 로컬 E2E 증거:
@@ -102,6 +105,7 @@ These are known gaps, not hidden assumptions.
 - Kafka broker outage and long-lived `PENDING` recovery scenarios are documented but not fully automated. `FAILED` requeue is covered at API/UI/smoke level, but not as a full outage drill.
 - Promotion Service currently covers coupon definition, quote, Customer App quote UI, Order Service discount application, and order-event-driven coupon usage state. Gateway route and admin usage screens remain future scope.
 - Fulfillment Service currently covers `OrderConfirmed` to `PREPARING` request creation and duplicate event handling. Carrier assignment, labels, tracking, Gateway route, and admin screens remain future scope.
+- Read Model Service currently covers order summary projection, service-local customer/admin APIs, late `OrderCreated` protection, and result-event retry rollback when the summary is missing. Gateway route, product search projection, dashboard metrics, and full Kafka retry/DLQ drills remain future scope.
 - Authentication and authorization tests are outside the current public slice.
 - Customer API documentation is now separated from runbook examples, but inventory customer query docs can still be expanded later.
 

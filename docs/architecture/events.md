@@ -45,7 +45,7 @@ Kafka events use a common envelope with event-specific payloads.
 
 | Event | Topic | Producer | Consumer |
 |---|---|---|---|
-| `OrderCreated` | `stockrush.order.events.v1` | order-service | inventory-service, promotion-service |
+| `OrderCreated` | `stockrush.order.events.v1` | order-service | inventory-service, promotion-service, read-model-service |
 | `InventoryReserved` | `stockrush.inventory.events.v1` | inventory-service | order-service |
 | `InventoryReservationFailed` | `stockrush.inventory.events.v1` | inventory-service | order-service |
 | `PaymentAuthorizationRequested` | `stockrush.payment.commands.v1` | order-service | payment-service |
@@ -54,8 +54,8 @@ Kafka events use a common envelope with event-specific payloads.
 | `PaymentAuthorizationFailed` | `stockrush.payment.events.v1` | payment-service | order-service |
 | `PaymentAuthorizationDelayed` | `stockrush.payment.events.v1` | payment-service | order-service |
 | `PaymentCanceled` | `stockrush.payment.events.v1` | payment-service | order-service |
-| `OrderConfirmed` | `stockrush.order.events.v1` | order-service | inventory-service, promotion-service, fulfillment-service, read models |
-| `OrderCancelled` | `stockrush.order.events.v1` | order-service | inventory-service, promotion-service, read models |
+| `OrderConfirmed` | `stockrush.order.events.v1` | order-service | inventory-service, promotion-service, fulfillment-service, read-model-service |
+| `OrderCancelled` | `stockrush.order.events.v1` | order-service | inventory-service, promotion-service, read-model-service |
 | `InventoryReservationConfirmed` | `stockrush.inventory.events.v1` | inventory-service | operations/read models |
 | `InventoryReservationReleased` | `stockrush.inventory.events.v1` | inventory-service | operations/read models |
 
@@ -111,3 +111,14 @@ Inventory Service consumes order result events from `stockrush.order.events.v1` 
 | `OrderConfirmed` | Create one `PREPARING` fulfillment request for the order |
 
 Fulfillment Service consumes only successful order result events in this slice. Shipment tracking, carrier assignment, and label generation are future states.
+
+## Phase 1 Read Model Notes
+
+| Source event | Projection action |
+|---|---|
+| `OrderCreated` | Insert `read_model.order_summaries` with member, price snapshot, item count, `CREATED` / `STARTED` when absent |
+| `OrderConfirmed` | Update summary to `CONFIRMED` / `COMPLETED` |
+| `OrderCancelled` | Update summary to `CANCELLED` / `FAILED` and store cancellation reason |
+
+Read Model Service consumes order lifecycle events only and does not publish a downstream event in this slice. Customer order history and admin order summary APIs read from the projection table instead of querying the Order Service schema.
+If a result event arrives before its creation summary, the consumer rolls back the processed marker and lets Kafka retry deliver it after the summary is present. A later duplicate `OrderCreated` event does not overwrite a final `CONFIRMED` or `CANCELLED` summary.

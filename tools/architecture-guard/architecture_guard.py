@@ -19,6 +19,7 @@ SERVICE_SCHEMAS = {
     "payment-service": "payment",
     "promotion-service": "promotion",
     "fulfillment-service": "fulfillment",
+    "read-model-service": "read_model",
 }
 EVENT_REQUIRED_FIELDS = {
     "eventId",

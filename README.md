@@ -11,6 +11,7 @@ StockRush는 한정 판매 주문 흐름에서 Kafka, Outbox, Saga를 묶은 엔
 - Catalog / Inventory / Order / Payment API 체인
 - Promotion Service 쿠폰 등록/목록/할인 견적 API와 주문 이벤트 기반 사용 상태 기록
 - Fulfillment Service 주문 완료 이벤트 기반 출고 준비 요청 기록
+- Read Model Service 주문 이벤트 기반 고객/관리자 주문 요약 projection
 - 고객 앱 쿠폰 견적 UI와 Order Service 주문 할인 반영
 - Kafka + 서비스 로컬 Outbox + Saga 상태 전이
 - `CARD` 성공, `FAIL_CARD` 실패/재고 복구, `DELAY_CARD` 지연 결제와 관리자 취소 흐름
@@ -29,6 +30,7 @@ StockRush는 한정 판매 주문 흐름에서 Kafka, Outbox, Saga를 묶은 엔
 2. gateway, catalog-service, inventory-service, order-service, payment-service를 각각 기동합니다.
    - 쿠폰 API를 확인할 때는 promotion-service도 함께 기동합니다.
    - 출고 준비 요청을 확인할 때는 fulfillment-service도 함께 기동합니다.
+   - 주문 요약 projection을 확인할 때는 read-model-service도 함께 기동합니다.
 3. customer-app과 admin-app을 실행합니다.
 4. [Local E2E Runbook](docs/runbooks/local-e2e.md)에 따라 `CARD`, `FAIL_CARD`, `DELAY_CARD`, 지연 결제 취소 시나리오를 확인합니다.
 
@@ -55,6 +57,7 @@ docker compose up -d
 - [Customer Order API](docs/api/customer-orders.md)
 - [Catalog Admin API](docs/api/catalog-admin.md)
 - [Promotion API](docs/api/promotion.md)
+- [Read Model API](docs/api/read-model.md)
 - [Admin Order API](docs/api/admin-orders.md)
 - [Outbox Admin API](docs/api/outbox-admin.md)
 - [Kafka 기반 MSA 선택 ADR](docs/adr/0001-kafka-based-msa.md)
@@ -65,7 +68,7 @@ docker compose up -d
 
 | 영역 | 선택 |
 |---|---|
-| 서비스 구조 | gateway, catalog-service, inventory-service, order-service, payment-service, promotion-service, fulfillment-service |
+| 서비스 구조 | gateway, catalog-service, inventory-service, order-service, payment-service, promotion-service, fulfillment-service, read-model-service |
 | 비동기 메시징 | Apache Kafka topic 기반 event/command 흐름 |
 | 일관성 처리 | Order Service 중심 Saga Orchestration |
 | 발행 안정성 | 서비스별 Outbox relay와 retry/failed 상태 |
@@ -91,6 +94,7 @@ docker compose up -d
 - Outbox 운영 액션은 `X-Operator-Id`, `X-Correlation-Id`, batch size, 처리 건수를 서비스별 감사 테이블에 남깁니다.
 - Promotion Service는 쿠폰 등록/목록과 주문 전 할인 견적 계산을 제공하고, 주문 이벤트를 소비해 쿠폰 사용 상태를 기록합니다. Order Service는 주문 생성 시 할인 가격 snapshot을 저장해 결제 예정 금액을 Payment command로 전달합니다.
 - Fulfillment Service는 `OrderConfirmed`를 소비해 주문별 출고 준비 요청을 `PREPARING` 상태로 기록합니다.
+- Read Model Service는 주문 생성/완료/취소 이벤트를 소비해 `read_model.order_summaries`를 갱신하고 고객 주문 내역과 관리자 주문 요약 API를 제공합니다.
 
 ## 대표 시나리오
 
@@ -104,6 +108,7 @@ docker compose up -d
 | 쿠폰 견적/주문 할인 | 쿠폰 코드와 주문 금액으로 할인액을 산출하고, 주문 생성 후 결제 예정 금액으로 결제 요청 |
 | 쿠폰 사용 복구 | `OrderCreated` 쿠폰 사용 기록 후 `OrderConfirmed`는 사용 완료, `OrderCancelled`는 사용 해제 |
 | 출고 준비 요청 | `OrderConfirmed` 이후 Fulfillment Service가 주문별 출고 준비 요청 기록 |
+| 주문 요약 projection | `OrderCreated` 이후 요약 생성, `OrderConfirmed`/`OrderCancelled` 이후 상태 갱신 |
 
 ## 검증 요약
 
@@ -119,10 +124,12 @@ docker compose up -d
 - 쿠폰 주문 반영 검증: Order Service 테스트로 quote 실패/타임아웃/금액 일관성, 주문 저장 가격 snapshot, Payment command 결제 예정 금액을 확인하고 Customer App Vitest/build로 쿠폰 UI를 확인했습니다.
 - 쿠폰 사용 이벤트 검증: Promotion Service 테스트로 `OrderCreated` 사용 기록, `OrderConfirmed` 사용 완료, `OrderCancelled` 사용 해제와 중복 이벤트 무해 처리를 확인했습니다.
 - 출고 준비 이벤트 검증: Fulfillment Service 테스트로 `OrderConfirmed` 출고 준비 요청 생성과 중복 이벤트 무해 처리를 확인했습니다.
+- 주문 요약 projection 검증: Read Model Service 테스트로 주문 생성/완료/취소 이벤트 처리, JSON consumer dispatch, 고객/관리자 조회 API를 확인했습니다.
 
 ## 현재 한계
 
 - Gateway는 주문 생성/조회, 관리자 주문 조회/취소, Outbox 조회/재시도/requeue 라우팅 smoke와 동일 SKU runner/runbook의 Gateway 경유 경로까지 검증 범위를 넓혔습니다.
 - Promotion Service는 주문 이벤트 기반 쿠폰 사용 상태까지 연결했습니다. Gateway route와 관리자 사용 이력 화면은 후속 확장 범위입니다.
 - Fulfillment Service는 출고 준비 요청 기록까지 연결했습니다. carrier/label/tracking 상태와 관리자 화면은 후속 확장 범위입니다.
+- Read Model Service는 주문 요약 projection과 서비스-local 조회 API까지 연결했습니다. Gateway route, 상품 검색 projection, 관리자 대시보드는 후속 확장 범위입니다.
 - 인증/권한, 부하 벤치마크, Kafka consumer 병렬성 검증, Kafka 장애 복구 자동화는 후속 확장 범위입니다.

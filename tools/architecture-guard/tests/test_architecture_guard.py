@@ -101,6 +101,22 @@ class ArchitectureGuardTest(unittest.TestCase):
 
             self.assertTrue(any(violation.rule_id == "ARCH-001" for violation in violations))
 
+    def test_detects_direct_read_model_access_from_owner_service(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            java_root = root / "services" / "order-service" / "src" / "main" / "java"
+            java_root.mkdir(parents=True)
+            (java_root / "OrderSummaryQuery.java").write_text(
+                'public class OrderSummaryQuery {\n'
+                '  String sql = "select * from read_model.order_summaries";\n'
+                '}\n',
+                encoding="utf-8",
+            )
+
+            violations = architecture_guard.check(root)
+
+            self.assertTrue(any(violation.rule_id == "ARCH-001" for violation in violations))
+
     def test_allows_kafka_payment_inventory_names_in_order_service(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
