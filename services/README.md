@@ -38,7 +38,7 @@ Windows 11 WSL2:
 export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
 ```
 
-Adjust the paths to the installed JDK location. The portable demo runtime will later avoid host Java setup by running backend services in containers.
+Adjust the paths to the installed JDK location. The portable demo runtime avoids host Java setup by running backend services in containers.
 
 ## Service Run Shape
 
@@ -58,8 +58,10 @@ cd services/fulfillment-service && FULFILLMENT_KAFKA_LISTENERS_ENABLED=true mvn 
 cd services/read-model-service && READ_MODEL_KAFKA_LISTENERS_ENABLED=true mvn spring-boot:run
 ```
 
-Promotion Service is currently service-local and is not proxied by Gateway. Order Service calls it through `PROMOTION_SERVICE_URL`, Customer App local development reaches it through the `/promotion` Vite proxy, and Kafka listeners consume order events for coupon usage state.
+Promotion Service is proxied by Gateway for coupon quote and is also reachable through the Customer App `/promotion` development proxy. Order Service calls it through `PROMOTION_SERVICE_URL`, and Kafka listeners consume order events for coupon usage state.
 Fulfillment Service is currently event-only and is not proxied by Gateway.
-Read Model Service is currently service-local and is not proxied by Gateway. It consumes order lifecycle events and exposes projection-backed order summary APIs.
+Read Model Service is proxied by Gateway for customer/admin order summaries. It consumes order lifecycle events and exposes projection-backed order summary APIs.
+
+For a Docker-based full-stack run, use [`../infra/demo`](../infra/demo/README.md).
 
 First run may download Maven dependencies.

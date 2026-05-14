@@ -21,6 +21,7 @@ StockRush는 한정 판매 주문 흐름에서 Kafka, Outbox, Saga를 묶은 엔
 
 - [로컬 E2E 실행 가이드](docs/runbooks/local-e2e.md)
 - [로컬 인프라 실행 가이드](infra/local/README.md)
+- [이식형 데모 런타임 실행 가이드](infra/demo/README.md)
 - [고객 앱 가이드](apps/customer-app/README.md)
 - [관리자 앱 가이드](apps/admin-app/README.md)
 - [모바일 앱 가이드](apps/mobile-app/README.md)
@@ -50,6 +51,15 @@ docker compose up -d
 
 서비스와 앱 기동 명령은 [Local E2E Runbook](docs/runbooks/local-e2e.md)과 [서비스 실행 가이드](services/README.md)를 기준으로 실행합니다.
 
+데모 모드는 `infra/demo` Docker Compose로 인프라, 백엔드 서비스, 웹앱을 함께 실행해 macOS와 Windows 11에서 재현 가능하게 구성합니다.
+
+```bash
+./scripts/demo-up.sh
+./scripts/demo-smoke.sh
+./scripts/demo-down.sh
+```
+
+Windows 11 PowerShell에서는 `.\scripts\demo-up.ps1`, `.\scripts\demo-smoke.ps1`, `.\scripts\demo-down.ps1`을 사용합니다. 자세한 내용은 [Demo Runtime Guide](infra/demo/README.md)에 둡니다.
 
 ## 핵심 공개 문서
 

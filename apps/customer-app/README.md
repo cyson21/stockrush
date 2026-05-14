@@ -37,6 +37,8 @@ Vite 개발 서버는 아래 프록시를 사용합니다.
 | `/orders` | `http://localhost:18083` |
 | `/promotion` | `http://localhost:18085` |
 
+Docker 데모 모드에서는 Nginx가 같은 prefix를 compose 내부 서비스로 프록시합니다. 실행법은 `infra/demo/README.md`를 기준으로 합니다.
+
 ## 화면 흐름
 
 1. `GET /api/products?status=ON_SALE`로 판매 중 상품을 조회한다.

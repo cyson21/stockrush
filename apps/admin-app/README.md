@@ -37,6 +37,8 @@ npm run dev
 - `/payment` -> `http://localhost:18084`
 - `/api/admin/outbox-services` -> `http://localhost:18080`
 
+Docker 데모 모드에서는 Nginx가 같은 prefix를 compose 내부 서비스와 Gateway로 프록시합니다. 실행법은 `infra/demo/README.md`를 기준으로 합니다.
+
 ## 검증
 
 ```bash

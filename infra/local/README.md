@@ -2,7 +2,9 @@
 
 This directory defines the local StockRush infrastructure for developer runtime.
 
-`infra/local` intentionally runs infrastructure only. Spring Boot services, React/Vite web apps, and the Expo mobile app run on the host runtime for faster debugging. The later portable demo runtime will live under `infra/demo` and run the full backend/web stack with Docker Compose.
+`infra/local` intentionally runs infrastructure only. Spring Boot services, React/Vite web apps, and the Expo mobile app run on the host runtime for faster debugging.
+
+Use [`infra/demo`](../demo/README.md) when you want the portable full-stack runtime that starts infrastructure, backend services, and web apps together with Docker Compose.
 
 ## Services
 
