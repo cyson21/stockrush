@@ -134,6 +134,60 @@ describe('admin app operations', () => {
         return toJsonResponse(buildResponse(true, { limit: 50, offset: 0, items: [] }), 200);
       }
 
+      if (request.pathname === '/api/read-model/admin/orders' && method === 'GET') {
+        return toJsonResponse(
+          buildResponse(true, {
+            page: 0,
+            size: 50,
+            items: [
+              {
+                orderId: 'ord_read_admin_001',
+                memberId: 'member-a',
+                status: 'CONFIRMED',
+                sagaStatus: 'COMPLETED',
+                couponCode: 'WELCOME10',
+                totalAmount: 12000,
+                discountAmount: 1000,
+                payableAmount: 11000,
+                itemCount: 1,
+                cancellationReason: null,
+                createdAt: '2026-05-13T00:00:00Z',
+                updatedAt: '2026-05-13T00:02:00Z',
+              },
+              {
+                orderId: 'ord_read_admin_002',
+                memberId: 'member-b',
+                status: 'CANCELLED',
+                sagaStatus: 'FAILED',
+                couponCode: null,
+                totalAmount: 8800,
+                discountAmount: 0,
+                payableAmount: 8800,
+                itemCount: 2,
+                cancellationReason: 'PAYMENT_DECLINED',
+                createdAt: '2026-05-13T00:03:00Z',
+                updatedAt: '2026-05-13T00:04:00Z',
+              },
+              {
+                orderId: 'ord_read_admin_003',
+                memberId: 'member-c',
+                status: 'CREATED',
+                sagaStatus: 'PAYMENT_DELAYED',
+                couponCode: null,
+                totalAmount: 5000,
+                discountAmount: 0,
+                payableAmount: 5000,
+                itemCount: 1,
+                cancellationReason: null,
+                createdAt: '2026-05-13T00:05:00Z',
+                updatedAt: '2026-05-13T00:06:00Z',
+              },
+            ],
+          }),
+          200,
+        );
+      }
+
       if (request.pathname === '/api/admin/outbox-services/inventory/events' && method === 'GET') {
         return toJsonResponse(
           buildResponse(true, {
@@ -286,6 +340,45 @@ describe('admin app operations', () => {
 
     expect(await screen.findByText('PAYMENT_DECLINED')).toBeInTheDocument();
     expect(screen.getByText('OrderCancelled')).toBeInTheDocument();
+  });
+
+  it('loads dashboard metrics from read model summaries', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(screen.getByRole('tab', { name: 'Dashboard' }));
+
+    expect(await screen.findByText('주문 대시보드')).toBeInTheDocument();
+    expect(screen.getByText('총 주문')).toBeInTheDocument();
+    expect(screen.getByText('3건')).toBeInTheDocument();
+    expect(screen.getByText('확정 주문')).toBeInTheDocument();
+    expect(screen.getByText('취소 주문')).toBeInTheDocument();
+    expect(screen.getByText('지연 결제')).toBeInTheDocument();
+    expect(screen.getByText('쿠폰 사용')).toBeInTheDocument();
+    expect(screen.getByText('₩24,800')).toBeInTheDocument();
+    expect(screen.getByText('₩1,000')).toBeInTheDocument();
+    expect(screen.getByText('ord_read_admin_003')).toBeInTheDocument();
+    expect(screen.getByText('PAYMENT_DECLINED')).toBeInTheDocument();
+  });
+
+  it('shows dashboard error when read model request fails', async () => {
+    const user = userEvent.setup();
+    fetchMock.mockImplementation((input, init) => {
+      const request = new URL(String(input), 'http://localhost:5173');
+      const method = init?.method ?? 'GET';
+
+      if (request.pathname === '/api/read-model/admin/orders' && method === 'GET') {
+        return buildErrorResponse('READ_MODEL_FAIL', '대시보드 조회 실패');
+      }
+
+      return defaultRequestHandler(input, init);
+    });
+
+    render(<App />);
+    await user.click(screen.getByRole('tab', { name: 'Dashboard' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('READ_MODEL_FAIL: 대시보드 조회 실패');
+    expect(screen.getByText('대시보드 데이터를 불러오지 못했습니다.')).toBeInTheDocument();
   });
 
   it('requests cancel for a payment delayed order', async () => {

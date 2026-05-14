@@ -31,6 +31,27 @@ export type AdminOrderPage = {
   items: AdminOrderSummary[];
 };
 
+export type ReadModelOrderSummary = {
+  orderId: string;
+  memberId: string;
+  status: string;
+  sagaStatus: string;
+  couponCode: string | null;
+  totalAmount: number;
+  discountAmount: number;
+  payableAmount: number;
+  itemCount: number;
+  cancellationReason: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type ReadModelOrderPage = {
+  page: number;
+  size: number;
+  items: ReadModelOrderSummary[];
+};
+
 export type AdminOrderSaga = {
   orderId: string;
   orderStatus: string;

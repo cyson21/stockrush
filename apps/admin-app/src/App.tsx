@@ -6,6 +6,7 @@ import {
   getOrderSaga,
   listCatalogProducts,
   listOutbox,
+  listReadModelAdminOrders,
   listRecentOrders,
   listStocksByProductCode,
   requeueFailedOutbox,
@@ -23,12 +24,13 @@ import type {
   OutboxRetryResult,
   ProductCreatePayload,
   ProductUpdatePayload,
+  ReadModelOrderSummary,
   SalesStatus,
   StockItem,
   StockSetPayload,
 } from './types/admin';
 
-type TabId = 'orders' | 'outbox' | 'products';
+type TabId = 'dashboard' | 'orders' | 'outbox' | 'products';
 type LoadState = 'idle' | 'loading' | 'ready' | 'error';
 type SubmitState = 'idle' | 'loading' | 'ready' | 'error';
 type ProductSubmitMode = 'create' | 'update';
@@ -102,6 +104,172 @@ function EventRow({ event }: { event: OutboxEvent }) {
       <td>{formatTime(event.createdAt)}</td>
       <td>{event.publishedAt ? formatTime(event.publishedAt) : '-'}</td>
     </tr>
+  );
+}
+
+function DashboardTab() {
+  const [orders, setOrders] = useState<ReadModelOrderSummary[]>([]);
+  const [dashboardState, setDashboardState] = useState<LoadState>('idle');
+  const [dashboardError, setDashboardError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setDashboardState('loading');
+    setDashboardError(null);
+
+    listReadModelAdminOrders()
+      .then((response) => {
+        if (cancelled) {
+          return;
+        }
+
+        setOrders(response.items);
+        setDashboardState('ready');
+      })
+      .catch((error) => {
+        if (cancelled) {
+          return;
+        }
+
+        setDashboardState('error');
+        setDashboardError(errorMessage(error));
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const metrics = useMemo(() => {
+    const confirmed = orders.filter((order) => order.status === 'CONFIRMED').length;
+    const cancelled = orders.filter((order) => order.status === 'CANCELLED').length;
+    const delayed = orders.filter((order) => order.sagaStatus === 'PAYMENT_DELAYED').length;
+    const couponUsed = orders.filter((order) => Boolean(order.couponCode)).length;
+    const payableAmount = orders.reduce((sum, order) => sum + Number(order.payableAmount), 0);
+    const discountAmount = orders.reduce((sum, order) => sum + Number(order.discountAmount), 0);
+
+    return {
+      confirmed,
+      cancelled,
+      delayed,
+      couponUsed,
+      payableAmount,
+      discountAmount,
+    };
+  }, [orders]);
+
+  const recentOrders = orders.slice(0, 6);
+  const failedReasons = orders.filter((order) => order.cancellationReason).slice(0, 4);
+
+  return (
+    <section className="panel-shell">
+      <section className="panel">
+        <div className="panel-head">
+          <h2>주문 대시보드</h2>
+          <p className="panel-meta">
+            {dashboardState === 'loading'
+              ? 'Read Model 조회 중'
+              : dashboardState === 'ready'
+                ? `Read Model 기준 최근 ${orders.length}건`
+                : '대시보드 대기'}
+          </p>
+        </div>
+
+        {dashboardError && (
+          <p className="error-banner" role="alert">
+            {dashboardError}
+          </p>
+        )}
+
+        {dashboardState === 'error' ? (
+          <p className="empty-message">대시보드 데이터를 불러오지 못했습니다.</p>
+        ) : (
+          <>
+            <dl className="metric-grid" aria-label="주문 운영 지표">
+              <div>
+                <dt>총 주문</dt>
+                <dd>{orders.length}건</dd>
+              </div>
+              <div>
+                <dt>확정 주문</dt>
+                <dd>{metrics.confirmed}건</dd>
+              </div>
+              <div>
+                <dt>취소 주문</dt>
+                <dd>{metrics.cancelled}건</dd>
+              </div>
+              <div>
+                <dt>지연 결제</dt>
+                <dd>{metrics.delayed}건</dd>
+              </div>
+              <div>
+                <dt>쿠폰 사용</dt>
+                <dd>{metrics.couponUsed}건</dd>
+              </div>
+              <div>
+                <dt>결제 예정 합계</dt>
+                <dd>{moneyValue(metrics.payableAmount)}</dd>
+              </div>
+              <div>
+                <dt>할인 합계</dt>
+                <dd>{moneyValue(metrics.discountAmount)}</dd>
+              </div>
+            </dl>
+
+            <div className="dashboard-grid">
+              <section aria-label="최근 주문 요약">
+                <h3>최근 주문 요약</h3>
+                <table className="events-table">
+                  <thead>
+                    <tr>
+                      <th>주문</th>
+                      <th>회원</th>
+                      <th>상태</th>
+                      <th>Saga</th>
+                      <th>결제 예정</th>
+                      <th>쿠폰</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {recentOrders.map((order) => (
+                      <tr key={order.orderId}>
+                        <td>{order.orderId}</td>
+                        <td>{order.memberId}</td>
+                        <td>
+                          <span className={`status-pill ${statusClass(order.status)}`}>{order.status}</span>
+                        </td>
+                        <td>{order.sagaStatus}</td>
+                        <td>{moneyValue(Number(order.payableAmount))}</td>
+                        <td>{emptyIfNull(order.couponCode)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {recentOrders.length === 0 && dashboardState === 'ready' ? (
+                  <p className="empty-message">최근 주문 projection이 없습니다.</p>
+                ) : null}
+              </section>
+
+              <section aria-label="취소 사유 요약">
+                <h3>취소 사유</h3>
+                {failedReasons.length > 0 ? (
+                  <div className="reason-list">
+                    {failedReasons.map((order) => (
+                      <div key={order.orderId}>
+                        <span>{order.orderId}</span>
+                        <strong>{order.cancellationReason}</strong>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="empty-message">최근 취소 사유가 없습니다.</p>
+                )}
+              </section>
+            </div>
+          </>
+        )}
+      </section>
+    </section>
   );
 }
 
@@ -1127,10 +1295,19 @@ export default function App() {
           <p className="eyebrow">StockRush</p>
           <h1>포트폴리오 운영</h1>
         </div>
-        <p className="runtime-note">Orders / Outbox / Products</p>
+        <p className="runtime-note">Dashboard / Orders / Outbox / Products</p>
       </header>
 
       <div className="segmented" role="tablist" aria-label="작업 영역">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={tab === 'dashboard'}
+          className={tab === 'dashboard' ? 'segment selected' : 'segment'}
+          onClick={() => setTab('dashboard')}
+        >
+          Dashboard
+        </button>
         <button
           type="button"
           role="tab"
@@ -1160,7 +1337,9 @@ export default function App() {
         </button>
       </div>
 
-      {tab === 'orders' ? (
+      {tab === 'dashboard' ? (
+        <DashboardTab />
+      ) : tab === 'orders' ? (
         <OrdersTab />
       ) : tab === 'outbox' ? (
         <OutboxTab />

@@ -9,6 +9,7 @@ import type {
   OutboxRetryResult,
   ProductCreatePayload,
   ProductUpdatePayload,
+  ReadModelOrderPage,
   StockItem,
   StockSetPayload,
 } from '../types/admin';
@@ -17,6 +18,15 @@ export type ServiceDomain = 'order' | 'inventory' | 'payment';
 
 export function listRecentOrders(): Promise<AdminOrderPage> {
   return request<AdminOrderPage>(apiUrl('order', '/api/admin/orders', { page: '0', size: '20' }));
+}
+
+export function listReadModelAdminOrders(): Promise<ReadModelOrderPage> {
+  return request<ReadModelOrderPage>(
+    gatewayApiUrl('/api/read-model/admin/orders', {
+      page: '0',
+      size: '50',
+    }),
+  );
 }
 
 export function getOrderSaga(orderId: string): Promise<AdminOrderSaga> {
