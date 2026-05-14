@@ -87,6 +87,7 @@ Windows 11 PowerShell:
 - 로컬 배포 스크립트는 `~/.aws`와 환경 변수 `AWS_*`를 읽지 않는다.
 - 이미지는 GHCR에만 발행한다.
 - 배포 대상은 현재 PC의 Docker Compose runtime이다.
+- `./scripts/check-no-aws-usage.sh`가 workflow, script, demo compose에서 AWS 관련 참조를 검사한다.
 
 ## 운영상 주의
 

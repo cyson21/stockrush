@@ -132,3 +132,6 @@ jobs:
 
       - name: Run architecture guard
         run: ./tools/architecture-guard/architecture-guard check
+
+      - name: Ensure CI/CD stays cloud-neutral
+        run: ./scripts/check-no-aws-usage.sh
