@@ -27,7 +27,7 @@
 
 직접 Order Service 포트로 주문 생성/조회를 검증해야 하면 `--order-api-url http://localhost:18083`을 지정한다. Outbox 검증은 Gateway route shape를 기준으로 한다.
 
-## 검증 기준
+### 검증 기준
 
 - 주문 생성 요청 6건을 같은 SKU로 병렬 호출한다.
 - 초기 재고 3개 기준으로 `CONFIRMED/COMPLETED` 3건, `CANCELLED/FAILED` 3건을 기대한다.
@@ -36,8 +36,29 @@
 
 이 도구는 로컬 최종 상태 회귀 검증용이다. Kafka consumer 병렬성, broker 장애, 외부 부하 벤치마크까지 증명하는 테스트는 아니다.
 
+## demo-order-flow
+
+`CARD`, `FAIL_CARD`, `DELAY_CARD` 주문을 같은 데모 상품/SKU로 생성하고, 지연 결제 주문은 관리자 취소까지 진행한다.
+
+```bash
+./tools/local-e2e/local-e2e demo-order-flow \
+  --initial-stock 20 \
+  --quantity 1 \
+  --max-attempts 12
+```
+
+`scripts/demo-smoke.sh`와 `scripts/demo-smoke.ps1`은 이 명령을 호출해 Docker 데모 스택의 주문 흐름을 확인한다.
+
+### 검증 기준
+
+- `CARD` 주문은 `CONFIRMED/COMPLETED`가 된다.
+- `FAIL_CARD` 주문은 `CANCELLED/FAILED`가 되고 재고가 복구된다.
+- `DELAY_CARD` 주문은 `PAYMENT_DELAYED` 도달 후 관리자 취소로 `CANCELLED/FAILED`가 된다.
+- 기본 초기 재고 20개, 수량 1개 기준 최종 재고는 `availableQuantity=19`, `reservedQuantity=0`이다.
+- 이번 실행으로 증가한 Order/Inventory/Payment `PENDING` outbox가 없어야 한다.
+
 ## 주의 사항
 
 - 기본값은 실행 전 기존 `PENDING` outbox가 있으면 중단한다.
 - `--allow-existing-pending`은 기존 대기 row를 허용하되, 실행 전후 증가분을 기준으로 실패 여부를 판단한다.
-- product code와 sku id는 실행마다 `CONC-E2E-YYYYMMDDHHMMSS-xxxxxxxx` 형태로 생성한다.
+- product code와 sku id는 실행마다 `{prefix}-YYYYMMDDHHMMSS-xxxxxxxx` 형태로 생성한다.

@@ -81,6 +81,15 @@ class DemoRuntimeArtifactsTest(unittest.TestCase):
                 self.assertIn("infra/demo/docker-compose.yml", powershell_script)
                 self.assertIn("infra/demo/.env.example", powershell_script)
 
+    def test_demo_smoke_runs_order_flow_runner(self) -> None:
+        shell_script = (ROOT / "scripts/demo-smoke.sh").read_text(encoding="utf-8")
+        powershell_script = (ROOT / "scripts/demo-smoke.ps1").read_text(encoding="utf-8")
+
+        self.assertIn("tools/local-e2e/local-e2e", shell_script)
+        self.assertIn("demo-order-flow", shell_script)
+        self.assertIn("tools/local-e2e/local-e2e", powershell_script)
+        self.assertIn("demo-order-flow", powershell_script)
+
 
 if __name__ == "__main__":
     unittest.main()

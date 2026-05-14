@@ -85,6 +85,39 @@ class LocalE2ERunnerTest(unittest.TestCase):
 
         self.assertEqual(delta, {"order": 0, "inventory": 2, "payment": 0})
 
+    def test_validate_demo_order_flow_result_accepts_expected_states(self) -> None:
+        pending = {"order": 0, "inventory": 0, "payment": 0}
+
+        errors = local_e2e_runner.validate_demo_order_flow_result(
+            card_order={"orderId": "ord-card", "status": "CONFIRMED", "sagaStatus": "COMPLETED"},
+            fail_order={"orderId": "ord-fail", "status": "CANCELLED", "sagaStatus": "FAILED"},
+            delay_order={"orderId": "ord-delay", "status": "CANCELLED", "sagaStatus": "FAILED"},
+            stock={"availableQuantity": 19, "reservedQuantity": 0},
+            initial_stock=20,
+            quantity_per_order=1,
+            pending_outbox_counts=pending,
+        )
+
+        self.assertEqual(errors, [])
+
+    def test_validate_demo_order_flow_result_reports_unfinished_flow(self) -> None:
+        pending = {"order": 0, "inventory": 1, "payment": 0}
+
+        errors = local_e2e_runner.validate_demo_order_flow_result(
+            card_order={"orderId": "ord-card", "status": "CREATED", "sagaStatus": "PAYMENT_REQUESTED"},
+            fail_order={"orderId": "ord-fail", "status": "CANCELLED", "sagaStatus": "FAILED"},
+            delay_order={"orderId": "ord-delay", "status": "CREATED", "sagaStatus": "PAYMENT_DELAYED"},
+            stock={"availableQuantity": 18, "reservedQuantity": 1},
+            initial_stock=20,
+            quantity_per_order=1,
+            pending_outbox_counts=pending,
+        )
+
+        self.assertTrue(any("CARD" in error for error in errors))
+        self.assertTrue(any("DELAY_CARD" in error for error in errors))
+        self.assertTrue(any("stock" in error for error in errors))
+        self.assertTrue(any("pending outbox" in error for error in errors))
+
     def test_cli_accepts_same_sku_concurrency_command_name(self) -> None:
         args = local_e2e_runner.parse_args(["same-sku-concurrency"])
 
@@ -92,6 +125,14 @@ class LocalE2ERunnerTest(unittest.TestCase):
         self.assertEqual(args.order_url, "http://localhost:18083")
         self.assertEqual(args.order_api_url, "http://localhost:18080")
         self.assertEqual(args.outbox_api_url, "http://localhost:18080")
+
+    def test_cli_accepts_demo_order_flow_command_name(self) -> None:
+        args = local_e2e_runner.parse_args(["demo-order-flow"])
+
+        self.assertEqual(args.command, "demo-order-flow")
+        self.assertEqual(args.orders, 3)
+        self.assertEqual(args.initial_stock, 20)
+        self.assertEqual(args.prefix, "DEMO-E2E")
 
     def test_config_from_args_separates_order_admin_public_and_outbox_api_urls(self) -> None:
         args = local_e2e_runner.parse_args([

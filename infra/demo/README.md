@@ -71,4 +71,6 @@ The web app containers serve Vite build output through Nginx. Nginx also proxies
 
 ## Current Smoke Coverage
 
-`demo-smoke` checks service health, web app roots, direct Catalog/Inventory read endpoints, and Gateway Read Model routing. Full order-flow seeding is the next Phase 5 slice.
+`demo-smoke` checks service health, web app roots, direct Catalog/Inventory read endpoints, Gateway Read Model routing, and the `demo-order-flow` E2E runner.
+
+The order-flow runner seeds a unique demo product/SKU, creates `CARD`, `FAIL_CARD`, and `DELAY_CARD` orders through Gateway, cancels the delayed order through the admin API, relays service outboxes, and checks final order/stock/outbox state.

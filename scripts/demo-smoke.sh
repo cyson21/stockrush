@@ -42,3 +42,15 @@ check_url "admin-app" "http://localhost:${ADMIN_APP_HOST_PORT:-5174}/"
 check_url "catalog-products" "http://localhost:${CATALOG_HOST_PORT:-18081}/api/products?status=ON_SALE"
 check_url "inventory-stocks" "http://localhost:${INVENTORY_HOST_PORT:-18082}/api/stocks"
 check_url "gateway-read-model" "http://localhost:${GATEWAY_HOST_PORT:-18080}/api/read-model/admin/orders?page=0&size=1"
+
+"$ROOT_DIR/tools/local-e2e/local-e2e" demo-order-flow \
+  --catalog-url "http://localhost:${CATALOG_HOST_PORT:-18081}" \
+  --inventory-url "http://localhost:${INVENTORY_HOST_PORT:-18082}" \
+  --order-url "http://localhost:${ORDER_HOST_PORT:-18083}" \
+  --order-api-url "http://localhost:${GATEWAY_HOST_PORT:-18080}" \
+  --outbox-api-url "http://localhost:${GATEWAY_HOST_PORT:-18080}" \
+  --payment-url "http://localhost:${PAYMENT_HOST_PORT:-18084}" \
+  --orders 3 \
+  --initial-stock 20 \
+  --quantity 1 \
+  --max-attempts 12

@@ -61,3 +61,19 @@ Test-Url "admin-app" "http://localhost:$AdminAppPort/"
 Test-Url "catalog-products" "http://localhost:$CatalogPort/api/products?status=ON_SALE"
 Test-Url "inventory-stocks" "http://localhost:$InventoryPort/api/stocks"
 Test-Url "gateway-read-model" "http://localhost:$GatewayPort/api/read-model/admin/orders?page=0&size=1"
+
+python (Join-Path $RootDir "tools/local-e2e/local-e2e") demo-order-flow `
+  --catalog-url "http://localhost:$CatalogPort" `
+  --inventory-url "http://localhost:$InventoryPort" `
+  --order-url "http://localhost:$OrderPort" `
+  --order-api-url "http://localhost:$GatewayPort" `
+  --outbox-api-url "http://localhost:$GatewayPort" `
+  --payment-url "http://localhost:$PaymentPort" `
+  --orders 3 `
+  --initial-stock 20 `
+  --quantity 1 `
+  --max-attempts 12
+
+if ($LASTEXITCODE -ne 0) {
+  exit $LASTEXITCODE
+}

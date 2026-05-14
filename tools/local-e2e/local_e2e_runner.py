@@ -154,6 +154,52 @@ def validate_concurrent_sku_result(
     return errors
 
 
+def validate_demo_order_flow_result(
+    *,
+    card_order: Mapping[str, Any],
+    fail_order: Mapping[str, Any],
+    delay_order: Mapping[str, Any],
+    stock: Mapping[str, Any],
+    initial_stock: int,
+    quantity_per_order: int,
+    pending_outbox_counts: Mapping[str, int],
+) -> list[str]:
+    errors: list[str] = []
+    expected_available = initial_stock - quantity_per_order
+
+    if not is_order_state(card_order, "CONFIRMED", "COMPLETED"):
+        errors.append(
+            "CARD order expected CONFIRMED/COMPLETED; "
+            f"got {card_order.get('status')}/{card_order.get('sagaStatus')}"
+        )
+    if not is_order_state(fail_order, "CANCELLED", "FAILED"):
+        errors.append(
+            "FAIL_CARD order expected CANCELLED/FAILED; "
+            f"got {fail_order.get('status')}/{fail_order.get('sagaStatus')}"
+        )
+    if not is_order_state(delay_order, "CANCELLED", "FAILED"):
+        errors.append(
+            "DELAY_CARD order expected CANCELLED/FAILED after admin cancel; "
+            f"got {delay_order.get('status')}/{delay_order.get('sagaStatus')}"
+        )
+    if stock.get("availableQuantity") != expected_available or stock.get("reservedQuantity") != 0:
+        errors.append(
+            "stock expected "
+            f"availableQuantity={expected_available}, reservedQuantity=0; "
+            f"got availableQuantity={stock.get('availableQuantity')}, "
+            f"reservedQuantity={stock.get('reservedQuantity')}"
+        )
+
+    pending = {name: count for name, count in pending_outbox_counts.items() if count}
+    if pending:
+        errors.append(f"pending outbox remains: {pending}")
+    return errors
+
+
+def is_order_state(order: Mapping[str, Any], status: str, saga_status: str) -> bool:
+    return order.get("status") == status and order.get("sagaStatus") == saga_status
+
+
 class ApiClient:
     def __init__(self, timeout_seconds: float = 30.0) -> None:
         self.timeout_seconds = timeout_seconds
@@ -292,6 +338,92 @@ def run_concurrent_sku_scenario(config: ScenarioConfig) -> Mapping[str, Any]:
     }
 
 
+def run_demo_order_flow_scenario(config: ScenarioConfig) -> Mapping[str, Any]:
+    client = ApiClient(timeout_seconds=90.0)
+    product_code, sku_id = scenario_ids(config.prefix)
+
+    healthcheck(client, config)
+    ensure_no_pending_outbox(client, config)
+    pending_before = count_pending_outbox(client, config)
+    seed_product(client, config, product_code)
+    seed_stock(client, config, product_code, sku_id)
+
+    card_order = create_order(client, config, product_code, sku_id, "CARD", "member-demo-card", 1)
+    fail_order = create_order(client, config, product_code, sku_id, "FAIL_CARD", "member-demo-fail", 2)
+    delay_order = create_order(client, config, product_code, sku_id, "DELAY_CARD", "member-demo-delay", 3)
+
+    orders = {
+        "card": card_order,
+        "fail": fail_order,
+        "delay": delay_order,
+    }
+    pending_after = pending_before
+    for _ in range(config.max_attempts):
+        relay_wave(client, config)
+        orders = {
+            "card": get_order(client, config, str(card_order["orderId"])),
+            "fail": get_order(client, config, str(fail_order["orderId"])),
+            "delay": get_order(client, config, str(delay_order["orderId"])),
+        }
+        pending_after = count_pending_outbox(client, config)
+        if (
+            is_order_state(orders["card"], "CONFIRMED", "COMPLETED")
+            and is_order_state(orders["fail"], "CANCELLED", "FAILED")
+            and is_order_state(orders["delay"], "CREATED", "PAYMENT_DELAYED")
+        ):
+            break
+        time.sleep(config.wait_seconds)
+
+    if is_order_state(orders["delay"], "CREATED", "PAYMENT_DELAYED"):
+        cancel_delayed_order(client, config, str(delay_order["orderId"]), product_code)
+
+    final_stock: Mapping[str, Any] = {}
+    for _ in range(config.max_attempts):
+        relay_wave(client, config)
+        orders = {
+            "card": get_order(client, config, str(card_order["orderId"])),
+            "fail": get_order(client, config, str(fail_order["orderId"])),
+            "delay": get_order(client, config, str(delay_order["orderId"])),
+        }
+        final_stock = get_stock(client, config, sku_id)
+        pending_after = count_pending_outbox(client, config)
+        pending_delta = pending_outbox_delta(pending_before, pending_after)
+        if (
+            is_order_state(orders["card"], "CONFIRMED", "COMPLETED")
+            and is_order_state(orders["fail"], "CANCELLED", "FAILED")
+            and is_order_state(orders["delay"], "CANCELLED", "FAILED")
+            and final_stock.get("reservedQuantity") == 0
+            and not any(pending_delta.values())
+        ):
+            break
+        time.sleep(config.wait_seconds)
+    else:
+        final_stock = get_stock(client, config, sku_id)
+        pending_after = count_pending_outbox(client, config)
+        pending_delta = pending_outbox_delta(pending_before, pending_after)
+
+    errors = validate_demo_order_flow_result(
+        card_order=orders["card"],
+        fail_order=orders["fail"],
+        delay_order=orders["delay"],
+        stock=final_stock,
+        initial_stock=config.initial_stock,
+        quantity_per_order=config.quantity_per_order,
+        pending_outbox_counts=pending_delta,
+    )
+
+    return {
+        "productCode": product_code,
+        "skuId": sku_id,
+        "orders": orders,
+        "stock": final_stock,
+        "pendingOutboxBaseline": pending_before,
+        "pendingOutboxCounts": pending_after,
+        "pendingOutboxDelta": pending_delta,
+        "errors": errors,
+    }
+
+
 def seed_product(client: ApiClient, config: ScenarioConfig, product_code: str) -> None:
     client.post(
         f"{config.catalog_url}/api/admin/products",
@@ -313,13 +445,49 @@ def seed_stock(client: ApiClient, config: ScenarioConfig, product_code: str, sku
     )
 
 
+def create_order(
+    client: ApiClient,
+    config: ScenarioConfig,
+    product_code: str,
+    sku_id: str,
+    payment_method: str,
+    member_id: str,
+    index: int,
+) -> Mapping[str, Any]:
+    return response_data(
+        client.post(
+            f"{config.order_api_url}/api/orders",
+            {
+                "memberId": member_id,
+                "paymentMethod": payment_method,
+                "items": [
+                    {
+                        "productCode": product_code,
+                        "skuId": sku_id,
+                        "quantity": config.quantity_per_order,
+                        "unitPrice": config.unit_price,
+                    }
+                ],
+            },
+            headers={"Idempotency-Key": f"idem-order-{product_code}-{index:02d}-{payment_method}"},
+        )
+    )
+
+
+def cancel_delayed_order(client: ApiClient, config: ScenarioConfig, order_id: str, product_code: str) -> None:
+    client.post(
+        f"{config.order_api_url}/api/admin/orders/{order_id}/cancel",
+        headers={"Idempotency-Key": f"idem-admin-cancel-{product_code}-{order_id}"},
+    )
+
+
 def create_orders_concurrently(
     client: ApiClient,
     config: ScenarioConfig,
     product_code: str,
     sku_id: str,
 ) -> list[Mapping[str, Any]]:
-    def create_order(index: int) -> Mapping[str, Any]:
+    def create_concurrent_order(index: int) -> Mapping[str, Any]:
         payload = response_data(
             client.post(
                 f"{config.order_api_url}/api/orders",
@@ -342,7 +510,7 @@ def create_orders_concurrently(
 
     results: list[Mapping[str, Any]] = []
     with ThreadPoolExecutor(max_workers=config.order_count) as executor:
-        futures = [executor.submit(create_order, index) for index in range(1, config.order_count + 1)]
+        futures = [executor.submit(create_concurrent_order, index) for index in range(1, config.order_count + 1)]
         for future in as_completed(futures):
             results.append(future.result())
     return sorted(results, key=lambda order: str(order["orderId"]))
@@ -363,6 +531,42 @@ def get_stock(client: ApiClient, config: ScenarioConfig, sku_id: str) -> Mapping
     return response_data(client.get(f"{config.inventory_url}/api/stocks/{sku_id}"))
 
 
+def add_runtime_arguments(
+    command_parser: argparse.ArgumentParser,
+    *,
+    default_orders: int,
+    default_initial_stock: int,
+    default_prefix: str,
+) -> None:
+    command_parser.add_argument("--catalog-url", default=DEFAULT_CATALOG_URL)
+    command_parser.add_argument("--inventory-url", default=DEFAULT_INVENTORY_URL)
+    command_parser.add_argument("--order-url", default=DEFAULT_ORDER_URL, help="Order Service health URL")
+    command_parser.add_argument(
+        "--order-api-url",
+        default=DEFAULT_ORDER_API_URL,
+        help="Public order create/query URL. Defaults to Gateway at http://localhost:18080.",
+    )
+    command_parser.add_argument(
+        "--outbox-api-url",
+        default=DEFAULT_OUTBOX_API_URL,
+        help="Outbox admin routing URL. Defaults to Gateway at http://localhost:18080.",
+    )
+    command_parser.add_argument("--payment-url", default=DEFAULT_PAYMENT_URL)
+    command_parser.add_argument("--orders", type=positive_int, default=default_orders)
+    command_parser.add_argument("--initial-stock", type=non_negative_int, default=default_initial_stock)
+    command_parser.add_argument("--quantity", type=positive_int, default=1)
+    command_parser.add_argument("--unit-price", type=positive_int, default=12000)
+    command_parser.add_argument("--prefix", type=scenario_prefix, default=default_prefix)
+    command_parser.add_argument("--max-attempts", type=positive_int, default=12)
+    command_parser.add_argument("--relay-batch-size", type=relay_batch_size, default=100)
+    command_parser.add_argument("--wait-seconds", type=non_negative_float, default=0.5)
+    command_parser.add_argument(
+        "--allow-existing-pending",
+        action="store_true",
+        help="Skip the preflight failure when existing PENDING outbox rows are present.",
+    )
+
+
 def parse_args(argv: Sequence[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="StockRush local E2E runner")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -372,32 +576,23 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
         aliases=["concurrent-sku"],
         help="Run same-SKU concurrent order final-state E2E",
     )
-    concurrent.add_argument("--catalog-url", default=DEFAULT_CATALOG_URL)
-    concurrent.add_argument("--inventory-url", default=DEFAULT_INVENTORY_URL)
-    concurrent.add_argument("--order-url", default=DEFAULT_ORDER_URL, help="Order Service health URL")
-    concurrent.add_argument(
-        "--order-api-url",
-        default=DEFAULT_ORDER_API_URL,
-        help="Public order create/query URL. Defaults to Gateway at http://localhost:18080.",
+    add_runtime_arguments(
+        concurrent,
+        default_orders=6,
+        default_initial_stock=3,
+        default_prefix="CONC-E2E",
     )
-    concurrent.add_argument(
-        "--outbox-api-url",
-        default=DEFAULT_OUTBOX_API_URL,
-        help="Outbox admin routing URL. Defaults to Gateway at http://localhost:18080.",
+
+    demo_order_flow = subparsers.add_parser(
+        "demo-order-flow",
+        aliases=["cards-smoke"],
+        help="Run CARD, FAIL_CARD, and DELAY_CARD demo order flow E2E",
     )
-    concurrent.add_argument("--payment-url", default=DEFAULT_PAYMENT_URL)
-    concurrent.add_argument("--orders", type=positive_int, default=6)
-    concurrent.add_argument("--initial-stock", type=non_negative_int, default=3)
-    concurrent.add_argument("--quantity", type=positive_int, default=1)
-    concurrent.add_argument("--unit-price", type=positive_int, default=12000)
-    concurrent.add_argument("--prefix", type=scenario_prefix, default="CONC-E2E")
-    concurrent.add_argument("--max-attempts", type=positive_int, default=12)
-    concurrent.add_argument("--relay-batch-size", type=relay_batch_size, default=100)
-    concurrent.add_argument("--wait-seconds", type=non_negative_float, default=0.5)
-    concurrent.add_argument(
-        "--allow-existing-pending",
-        action="store_true",
-        help="Skip the preflight failure when existing PENDING outbox rows are present.",
+    add_runtime_arguments(
+        demo_order_flow,
+        default_orders=3,
+        default_initial_stock=20,
+        default_prefix="DEMO-E2E",
     )
     return parser.parse_args(argv)
 
@@ -427,6 +622,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parse_args(argv or sys.argv[1:])
     if args.command in {"same-sku-concurrency", "concurrent-sku"}:
         result = run_concurrent_sku_scenario(config_from_args(args))
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return 1 if result["errors"] else 0
+    if args.command in {"demo-order-flow", "cards-smoke"}:
+        result = run_demo_order_flow_scenario(config_from_args(args))
         print(json.dumps(result, ensure_ascii=False, indent=2))
         return 1 if result["errors"] else 0
     raise AssertionError(f"Unsupported command: {args.command}")
