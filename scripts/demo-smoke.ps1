@@ -4,6 +4,34 @@ $RootDir = Resolve-Path (Join-Path $PSScriptRoot "..")
 $ComposeFile = Join-Path $RootDir "infra/demo/docker-compose.yml"
 $EnvFile = Join-Path $RootDir "infra/demo/.env"
 $EnvExample = Join-Path $RootDir "infra/demo/.env.example"
+$SkipBurst = $false
+
+function Show-Usage {
+  Write-Host "Usage: .\scripts\demo-smoke.ps1 [options]"
+  Write-Host ""
+  Write-Host "Options:"
+  Write-Host "  --skip-burst  Run only health checks and demo-order-flow"
+  Write-Host "  -h, --help    Show this help"
+}
+
+foreach ($Arg in $args) {
+  switch ($Arg) {
+    "--skip-burst" { $SkipBurst = $true }
+    "-h" {
+      Show-Usage
+      exit 0
+    }
+    "--help" {
+      Show-Usage
+      exit 0
+    }
+    default {
+      Write-Error "Unknown option: $Arg"
+      Show-Usage
+      exit 2
+    }
+  }
+}
 
 if (-not (Test-Path $EnvFile)) {
   Copy-Item $EnvExample $EnvFile
@@ -37,6 +65,12 @@ function Test-Url($Name, $Url) {
   }
 }
 
+function Test-ActuatorEndpoints($Name, $BaseUrl) {
+  Test-Url "$Name-health" "$BaseUrl/actuator/health"
+  Test-Url "$Name-info" "$BaseUrl/actuator/info"
+  Test-Url "$Name-metrics" "$BaseUrl/actuator/metrics"
+}
+
 $GatewayPort = Get-PortValue "GATEWAY_HOST_PORT" "28080"
 $CatalogPort = Get-PortValue "CATALOG_HOST_PORT" "28081"
 $InventoryPort = Get-PortValue "INVENTORY_HOST_PORT" "28082"
@@ -48,14 +82,14 @@ $ReadModelPort = Get-PortValue "READ_MODEL_HOST_PORT" "28087"
 $CustomerAppPort = Get-PortValue "CUSTOMER_APP_HOST_PORT" "15173"
 $AdminAppPort = Get-PortValue "ADMIN_APP_HOST_PORT" "15174"
 
-Test-Url "gateway-health" "http://localhost:$GatewayPort/actuator/health"
-Test-Url "catalog-health" "http://localhost:$CatalogPort/actuator/health"
-Test-Url "inventory-health" "http://localhost:$InventoryPort/actuator/health"
-Test-Url "order-health" "http://localhost:$OrderPort/actuator/health"
-Test-Url "payment-health" "http://localhost:$PaymentPort/actuator/health"
-Test-Url "promotion-health" "http://localhost:$PromotionPort/actuator/health"
-Test-Url "fulfillment-health" "http://localhost:$FulfillmentPort/actuator/health"
-Test-Url "read-model-health" "http://localhost:$ReadModelPort/actuator/health"
+Test-ActuatorEndpoints "gateway" "http://localhost:$GatewayPort"
+Test-ActuatorEndpoints "catalog" "http://localhost:$CatalogPort"
+Test-ActuatorEndpoints "inventory" "http://localhost:$InventoryPort"
+Test-ActuatorEndpoints "order" "http://localhost:$OrderPort"
+Test-ActuatorEndpoints "payment" "http://localhost:$PaymentPort"
+Test-ActuatorEndpoints "promotion" "http://localhost:$PromotionPort"
+Test-ActuatorEndpoints "fulfillment" "http://localhost:$FulfillmentPort"
+Test-ActuatorEndpoints "read-model" "http://localhost:$ReadModelPort"
 Test-Url "customer-app" "http://localhost:$CustomerAppPort/"
 Test-Url "admin-app" "http://localhost:$AdminAppPort/"
 Test-Url "catalog-products" "http://localhost:$CatalogPort/api/products?status=ON_SALE"
@@ -79,4 +113,28 @@ python (Join-Path $RootDir "tools/local-e2e/local-e2e") demo-order-flow `
 
 if ($LASTEXITCODE -ne 0) {
   exit $LASTEXITCODE
+}
+
+if (-not $SkipBurst) {
+  python (Join-Path $RootDir "tools/local-e2e/local-e2e") burst-idempotency `
+    --catalog-url "http://localhost:$CatalogPort" `
+    --inventory-url "http://localhost:$InventoryPort" `
+    --order-url "http://localhost:$OrderPort" `
+    --order-api-url "http://localhost:$GatewayPort" `
+    --outbox-api-url "http://localhost:$GatewayPort" `
+    --payment-url "http://localhost:$PaymentPort" `
+    --promotion-url "http://localhost:$PromotionPort" `
+    --relay-mode automatic `
+    --orders 12 `
+    --initial-stock 4 `
+    --quantity 1 `
+    --idempotency-replays 3 `
+    --relay-workers 4 `
+    --stability-waves 2 `
+    --max-attempts 30 `
+    --wait-seconds 1
+
+  if ($LASTEXITCODE -ne 0) {
+    exit $LASTEXITCODE
+  }
 }

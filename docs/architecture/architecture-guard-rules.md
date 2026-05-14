@@ -38,6 +38,7 @@ info: useful design feedback
 | ARCH-006 Synchronous Call Allow List | Planned |
 | ARCH-007 Correlation ID Propagation | Planned |
 | ARCH-008 Retry and DLQ Visibility | Planned |
+| ARCH-009 Actuator Operations Exposure | Implemented |
 
 ### ARCH-001: Service Schema Ownership
 
@@ -202,4 +203,20 @@ Suggested fix:
 
 ```text
 Store failed event metadata and expose it through an admin endpoint or read model.
+```
+
+### ARCH-009: Actuator Operations Exposure
+
+Severity: error
+
+Every backend service and Gateway must include Spring Boot Actuator and expose the baseline operations endpoints:
+
+- `health`
+- `info`
+- `metrics`
+
+Suggested fix:
+
+```text
+Add spring-boot-starter-actuator and expose health, info, and metrics through service configuration.
 ```

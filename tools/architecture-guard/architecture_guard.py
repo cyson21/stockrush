@@ -21,6 +21,17 @@ SERVICE_SCHEMAS = {
     "fulfillment-service": "fulfillment",
     "read-model-service": "read_model",
 }
+OBSERVABLE_SERVICES = (
+    "catalog-service",
+    "inventory-service",
+    "order-service",
+    "payment-service",
+    "promotion-service",
+    "fulfillment-service",
+    "read-model-service",
+    "gateway",
+)
+ACTUATOR_REQUIRED_EXPOSURES = {"health", "info", "metrics"}
 EVENT_REQUIRED_FIELDS = {
     "eventId",
     "eventType",
@@ -221,6 +232,99 @@ def check_schema_ownership(root: Path) -> list[Violation]:
     return violations
 
 
+def check_actuator_observability(root: Path) -> list[Violation]:
+    violations: list[Violation] = []
+    services_root = root / "services"
+    if not services_root.exists():
+        return violations
+
+    for service_name in OBSERVABLE_SERVICES:
+        service_root = services_root / service_name
+        if not service_root.exists():
+            continue
+
+        pom_path = service_root / "pom.xml"
+        if not pom_path.exists() or "spring-boot-starter-actuator" not in read_text(pom_path):
+            violations.append(
+                Violation(
+                    rule_id="ARCH-009",
+                    severity="error",
+                    file=display_path(root, pom_path),
+                    message=f"`{service_name}` must include Spring Boot Actuator.",
+                    suggested_fix="Add spring-boot-starter-actuator to the service dependencies.",
+                )
+            )
+
+        config_paths = actuator_config_paths(service_root)
+        if not config_paths:
+            violations.append(
+                Violation(
+                    rule_id="ARCH-009",
+                    severity="error",
+                    file=display_path(root, service_root),
+                    message=f"`{service_name}` must define Actuator endpoint exposure.",
+                    suggested_fix="Expose health, info, and metrics through application.yml or application.properties.",
+                )
+            )
+            continue
+
+        if not any(exposes_required_actuator_endpoints(read_text(path)) for path in config_paths):
+            violations.append(
+                Violation(
+                    rule_id="ARCH-009",
+                    severity="error",
+                    file=display_path(root, config_paths[0]),
+                    message=f"`{service_name}` Actuator exposure must include health, info, and metrics.",
+                    suggested_fix="Set management.endpoints.web.exposure.include to health,info,metrics.",
+                )
+            )
+    return violations
+
+
+def actuator_config_paths(service_root: Path) -> list[Path]:
+    resource_root = service_root / "src" / "main" / "resources"
+    return [path for path in [
+        resource_root / "application.yml",
+        resource_root / "application.yaml",
+        resource_root / "application.properties",
+    ] if path.exists()]
+
+
+def exposes_required_actuator_endpoints(text: str) -> bool:
+    values: list[str] = []
+    lines = text.splitlines()
+    for index, line in enumerate(lines):
+        include_match = re.match(r"^(\s*)include\s*:\s*([^\n#]*)", line)
+        if not include_match:
+            continue
+        inline_value = include_match.group(2).strip()
+        if inline_value:
+            values.extend(split_exposure_values(inline_value))
+            continue
+
+        include_indent = len(include_match.group(1))
+        for child_line in lines[index + 1:]:
+            child_without_comment = child_line.split("#", 1)[0]
+            if not child_without_comment.strip():
+                continue
+            child_indent = len(child_without_comment) - len(child_without_comment.lstrip())
+            if child_indent <= include_indent:
+                break
+            list_item = re.match(r"^\s*-\s*(.+?)\s*$", child_without_comment)
+            if list_item:
+                values.extend(split_exposure_values(list_item.group(1)))
+    for match in re.finditer(r"(?m)^\s*management\.endpoints\.web\.exposure\.include\s*=\s*([^\n#]+)", text):
+        values.extend(split_exposure_values(match.group(1)))
+
+    normalized = {value.lower() for value in values}
+    return "*" in normalized or ACTUATOR_REQUIRED_EXPOSURES.issubset(normalized)
+
+
+def split_exposure_values(raw: str) -> list[str]:
+    cleaned = raw.strip().strip("'\"[]")
+    return [part.strip().strip("'\"") for part in cleaned.split(",") if part.strip()]
+
+
 def has_schema_qualified_sql_reference(text: str, schema: str) -> bool:
     prefixes = "|".join(SQL_SCHEMA_REFERENCE_PREFIXES)
     pattern = re.compile(
@@ -247,6 +351,7 @@ def check(root: Path) -> list[Violation]:
     violations.extend(check_controller_entity_returns(root, entities))
     violations.extend(check_event_envelopes(root))
     violations.extend(check_outbox_tables(root))
+    violations.extend(check_actuator_observability(root))
     return violations
 
 

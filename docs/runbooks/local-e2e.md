@@ -97,6 +97,8 @@ curl -sSf http://localhost:18086/actuator/health
 curl -sSf http://localhost:18087/actuator/health
 ```
 
+Actuator 운영 기준은 모든 backend service와 Gateway가 `health`, `info`, `metrics` endpoint를 노출하는 것이다. Architecture Guard가 이 기준을 검사하므로 서비스 추가 시 `application.yml`과 `pom.xml`을 함께 갱신한다.
+
 4. (옵션) 브라우저로 확인:
 
 - Customer App: `http://localhost:5173`
@@ -386,6 +388,8 @@ Admin App에서 아래 화면을 순차적으로 확인한다.
 
 - [ ] Docker 컨테이너가 모두 실행 중이며 Postgres, Kafka, Kafka UI가 정상 기동
 - [ ] 18080~18087 모든 서비스 `actuator/health` 응답 200
+- [ ] 18080~18087 모든 서비스 `actuator/info` 응답 200
+- [ ] 18080~18087 모든 서비스 `actuator/metrics` 응답 200
 - [ ] Customer App / Admin App 접속 가능
 - [ ] `CARD` 주문에서 주문이 `CONFIRMED`/`COMPLETED` 전환
 - [ ] `FAIL_CARD` 주문에서 주문이 `CANCELLED`/`FAILED` 전환

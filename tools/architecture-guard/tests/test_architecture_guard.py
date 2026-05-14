@@ -66,6 +66,98 @@ class ArchitectureGuardTest(unittest.TestCase):
 
             self.assertTrue(any(violation.rule_id == "ARCH-004" for violation in violations))
 
+    def test_detects_service_missing_actuator_dependency(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            service_root = root / "services" / "order-service"
+            service_root.mkdir(parents=True)
+            (service_root / "pom.xml").write_text(
+                "<project><dependencies></dependencies></project>\n",
+                encoding="utf-8",
+            )
+
+            violations = architecture_guard.check(root)
+
+            self.assertTrue(any(violation.rule_id == "ARCH-009" for violation in violations))
+
+    def test_detects_service_missing_actuator_metrics_exposure(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            service_root = root / "services" / "order-service"
+            resource_root = service_root / "src" / "main" / "resources"
+            resource_root.mkdir(parents=True)
+            (service_root / "pom.xml").write_text(
+                "<project><dependencies>"
+                "<dependency><artifactId>spring-boot-starter-actuator</artifactId></dependency>"
+                "</dependencies></project>\n",
+                encoding="utf-8",
+            )
+            (resource_root / "application.yml").write_text(
+                "management:\n"
+                "  endpoints:\n"
+                "    web:\n"
+                "      exposure:\n"
+                "        include: health,info\n",
+                encoding="utf-8",
+            )
+
+            violations = architecture_guard.check(root)
+
+            self.assertTrue(any(violation.rule_id == "ARCH-009" for violation in violations))
+
+    def test_allows_service_with_actuator_health_info_metrics_exposure(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            service_root = root / "services" / "order-service"
+            resource_root = service_root / "src" / "main" / "resources"
+            resource_root.mkdir(parents=True)
+            (service_root / "pom.xml").write_text(
+                "<project><dependencies>"
+                "<dependency><artifactId>spring-boot-starter-actuator</artifactId></dependency>"
+                "</dependencies></project>\n",
+                encoding="utf-8",
+            )
+            (resource_root / "application.yml").write_text(
+                "management:\n"
+                "  endpoints:\n"
+                "    web:\n"
+                "      exposure:\n"
+                "        include: health,info,metrics\n",
+                encoding="utf-8",
+            )
+
+            violations = architecture_guard.check(root)
+
+            self.assertFalse(any(violation.rule_id == "ARCH-009" for violation in violations))
+
+    def test_allows_service_with_actuator_yaml_list_exposure(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            service_root = root / "services" / "order-service"
+            resource_root = service_root / "src" / "main" / "resources"
+            resource_root.mkdir(parents=True)
+            (service_root / "pom.xml").write_text(
+                "<project><dependencies>"
+                "<dependency><artifactId>spring-boot-starter-actuator</artifactId></dependency>"
+                "</dependencies></project>\n",
+                encoding="utf-8",
+            )
+            (resource_root / "application.yml").write_text(
+                "management:\n"
+                "  endpoints:\n"
+                "    web:\n"
+                "      exposure:\n"
+                "        include:\n"
+                "          - health\n"
+                "          - info\n"
+                "          - metrics\n",
+                encoding="utf-8",
+            )
+
+            violations = architecture_guard.check(root)
+
+            self.assertFalse(any(violation.rule_id == "ARCH-009" for violation in violations))
+
     def test_allows_outbox_admin_action_table(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

@@ -95,8 +95,8 @@ The web app containers serve Vite build output through Nginx. Nginx also proxies
 
 ## Current Smoke Coverage
 
-`demo-smoke` checks service health, web app roots, direct Catalog/Inventory read endpoints, Gateway Read Model routing, and the `demo-order-flow` E2E runner.
+`demo-smoke` checks service Actuator `health`, `info`, and `metrics`, web app roots, direct Catalog/Inventory read endpoints, Gateway Read Model routing, the `demo-order-flow` E2E runner, and the high-volume `burst-idempotency` runner. Use `--skip-burst` for a quicker local check when the burst scenario is not needed.
 
 The order-flow runner seeds a unique demo product/SKU and coupon, verifies coupon quote through Gateway, creates `CARD`, `FAIL_CARD`, and `DELAY_CARD` orders through Gateway, cancels the delayed order through the admin API, relays service outboxes, and checks final order/stock/outbox state. The `CARD` order must keep the expected `couponCode`, `discountAmount`, and `payableAmount`.
 
-Latest local verification: `./scripts/demo-smoke.sh` passed for product `DEMO-E2E-20260514160718-21840dc6` and coupon `DEMO-E2E-20260514160718-21840dc6-C`. The quote returned `discountAmount=1000`, `payAmount=11000`, the `CARD` order kept the same discount snapshot, final stock was `available=19`, `reserved=0`, and `pendingOutboxDelta=0` for Order, Inventory, and Payment. Customer/Admin App containers also report healthy after the IPv4 healthcheck adjustment.
+Latest local verification: after rebuilding the demo stack, `./scripts/demo-smoke.sh` passed for product `DEMO-E2E-20260514200918-a2fced8f` and burst product `BURST-E2E-20260514200937-7717b3c7`. The smoke confirmed all service Actuator `health/info/metrics` endpoints, `CARD` coupon discount `1000`, final demo stock `available=19/reserved=0`, burst convergence `confirmed=4/cancelled=8`, and `pendingOutboxDelta=0` for Order, Inventory, and Payment.

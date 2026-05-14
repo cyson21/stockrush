@@ -48,7 +48,7 @@
   --max-attempts 12
 ```
 
-`scripts/demo-smoke.sh`와 `scripts/demo-smoke.ps1`은 이 명령을 호출해 Docker 데모 스택의 주문 흐름을 확인한다.
+`scripts/demo-smoke.sh`와 `scripts/demo-smoke.ps1`은 이 명령을 호출한 뒤 `burst-idempotency`를 이어서 실행해 Docker 데모 스택의 주문 흐름과 멱등 재시도 수렴을 함께 확인한다. 빠른 로컬 확인만 필요하면 smoke 스크립트에 `--skip-burst`를 지정한다.
 
 ### 검증 기준
 
