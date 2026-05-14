@@ -83,6 +83,7 @@ Local end-to-end verification follows [Local E2E Runbook](runbooks/local-e2e.md)
 | `DELAY_CARD` delayed payment | Payment delay, Order `PAYMENT_DELAYED`, Customer App delayed state tests | 로컬 서비스 E2E 증거: `ord_20260513012031_8c06cd49` |
 | Admin delayed payment cancellation | Admin cancel API, `PaymentCancelRequested`, `PaymentCanceled`, Admin App retry key tests | 로컬 서비스 E2E 증거: `CANCELLED/FAILED`, 재고 복구 |
 | Concurrent same-SKU reservation | Inventory handler PostgreSQL integration race test | `tools/local-e2e/local-e2e same-sku-concurrency`로 Gateway 주문 생성/조회, Gateway Outbox route, 서비스 최종 상태 확인 |
+| Burst idempotency replay under stock pressure | Idempotency replay and 재처리 경로 회귀 커버리지 | `tools/local-e2e/local-e2e burst-idempotency`로 대량 요청 후 멱등성 수렴 및 outbox 잔여분 0 확인 |
 | Outbox retry, requeue and relay | Service-local outbox relay/admin tests, Gateway outbox routing smoke | Admin App outbox operation checklist |
 | Coupon quote, order pricing, usage lifecycle | Promotion coupon controller, Promotion usage event handler/consumer, Order coupon pricing, Customer App quote UI tests | Direct customer app/API smoke |
 | Fulfillment request preparation | Fulfillment handler and consumer tests | Future local E2E with fulfillment-service enabled |
@@ -93,6 +94,7 @@ Local end-to-end verification follows [Local E2E Runbook](runbooks/local-e2e.md)
 
 - `ord_20260513012031_8c06cd49` 주문이 `CREATED/PAYMENT_DELAYED`에 도달한 뒤 관리자 취소로 `CANCELLED/FAILED`가 됐고, SKU `DELAY-E2E-102029-S`는 `availableQuantity=20`, `reservedQuantity=0`으로 복구됐다. Order/Inventory/Payment `PENDING` outbox 목록은 모두 비어 있었다.
 - `tools/local-e2e/local-e2e same-sku-concurrency --orders 6 --initial-stock 3 --quantity 1 --max-attempts 12` 실행에서 productCode `CONC-E2E-20260513110249-07e052f0`, SKU `CONC-E2E-20260513110249-07e052f0-S` 기준 주문 생성/조회는 Gateway 기본 URL(`http://localhost:18080`)을 경유했다. 주문 6건 중 3건은 `CONFIRMED/COMPLETED`, 3건은 `CANCELLED/FAILED`가 됐다. 최종 재고는 `availableQuantity=0`, `reservedQuantity=0`이고 Order/Inventory/Payment `pendingOutboxDelta`는 모두 0이었다.
+- `tools/local-e2e/local-e2e burst-idempotency --orders 30 --initial-stock 10 --idempotency-replays 2 --relay-workers 4 --stability-waves 2` 실행에서 productCode `BURST-E2E-20260514175639-9f933e0f` 기준 requestAttemptCount `60`에서 unique orderIds `30`이 생성됐고, 최종 `CONFIRMED/COMPLETED` 10건 / `CANCELLED/FAILED` 20건 / `unresolved` 0건으로 수렴했다. 재고 `availableQuantity=0`, `reservedQuantity=0`, Order/Inventory/Payment `pendingOutboxDelta`와 `postReplayPendingOutboxDelta`가 모두 `0`이었고 신규 pending outbox event ID도 남지 않았다.
 - Gateway(`http://localhost:18080`) 기준 주문 생성/조회/취소 E2E에서 productCode `GW-E2E-20260513111940-332ba0dc`, SKU `GW-E2E-20260513111940-332ba0dc-S`를 사용했다. `CARD` 주문 `ord_20260513021940_57874d04`는 `CONFIRMED/COMPLETED`, `FAIL_CARD` 주문 `ord_20260513021940_5ea74236`은 `CANCELLED/FAILED`, `DELAY_CARD` 주문 `ord_20260513021940_8c5b95cf`는 `PAYMENT_DELAYED` 확인 후 Gateway 관리자 취소로 `CANCELLED/FAILED`가 됐다. 최종 재고는 `availableQuantity=19`, `reservedQuantity=0`이고 Order/Inventory/Payment `pendingOutboxDelta`는 모두 0이었다.
 
 ## Stability Rules

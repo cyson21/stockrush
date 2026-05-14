@@ -3,6 +3,7 @@ package com.stockrush.order.api;
 import com.stockrush.order.application.CouponNotApplicableException;
 import com.stockrush.order.application.CouponQuoteUnavailableException;
 import com.stockrush.order.application.OrderDataIntegrityException;
+import com.stockrush.order.application.OrderIdempotencyReplayUnavailableException;
 import com.stockrush.order.application.OrderNotFoundException;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
@@ -63,6 +64,18 @@ class OrderApiExceptionHandler {
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
             .header(CorrelationIds.HEADER_NAME, correlationId)
             .body(ApiResponse.failure("ORDER_DATA_INTEGRITY_ERROR", exception.getMessage(), correlationId));
+    }
+
+    @ExceptionHandler(OrderIdempotencyReplayUnavailableException.class)
+    ResponseEntity<ApiResponse<Void>> handleOrderIdempotencyReplayUnavailable(
+        OrderIdempotencyReplayUnavailableException exception,
+        HttpServletRequest request
+    ) {
+        String correlationId = CorrelationIds.resolve(request.getHeader(CorrelationIds.HEADER_NAME));
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+            .header(CorrelationIds.HEADER_NAME, correlationId)
+            .header("Retry-After", "1")
+            .body(ApiResponse.failure("ORDER_IDEMPOTENCY_REPLAY_PENDING", exception.getMessage(), correlationId));
     }
 
     @ExceptionHandler(CouponNotApplicableException.class)

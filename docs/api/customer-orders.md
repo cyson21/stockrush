@@ -15,6 +15,12 @@ Customer Order API는 고객 앱에서 상품과 SKU를 선택한 뒤 주문을 
 | `Idempotency-Key` | yes | 중복 주문 생성 요청 방지 기준 |
 | `X-Correlation-Id` | no | HTTP/Kafka 흐름 추적 기준 |
 
+### Idempotency Replay Behavior
+
+- 동일 `Idempotency-Key` + 동일 요청 본문은 재요청이 있어도 멱등하게 처리되어야 한다.
+- 첫 생성은 `201 Created`, 이미 저장된 주문에 대한 동일 키 재요청은 기존 주문 응답과 함께 `200 OK`를 반환한다.
+- 로컬 `burst-idempotency` 검증에서 `--orders 30 --idempotency-replays 2`로 총 60회 요청했을 때 고유 `orderId`는 30개(`BURST-E2E-20260514175639-9f933e0f`)로만 생성되고, `CONFIRMED/COMPLETED` 10건 / `CANCELLED/FAILED` 20건 / `unresolved` 0건으로 수렴됐다.
+
 ### Request
 
 ```json
@@ -66,7 +72,7 @@ When `couponCode` is present, Order Service calls Promotion Service `POST /api/c
 
 ### Response
 
-`201 Created`
+`201 Created` for first acceptance. `200 OK` for same-key replay after the order already exists.
 
 Response header:
 
@@ -170,6 +176,7 @@ The response means the order row and `OrderCreated` outbox row were stored. Inve
 | 400 | `COMMON_MISSING_IDEMPOTENCY_KEY` | command request is missing `Idempotency-Key` |
 | 400 | `ORDER_INVALID_REQUEST` | request body is invalid |
 | 400 | `ORDER_COUPON_NOT_APPLICABLE` | coupon code cannot be applied to this order |
+| 409 | `ORDER_IDEMPOTENCY_REPLAY_PENDING` | same-key replay row is still becoming visible; retry the same request |
 | 404 | `ORDER_NOT_FOUND` | target order does not exist |
 | 502 | `ORDER_COUPON_QUOTE_UNAVAILABLE` | coupon quote service failed or returned inconsistent pricing |
 | 500 | `ORDER_DATA_INTEGRITY_ERROR` | unexpected order data integrity failure |

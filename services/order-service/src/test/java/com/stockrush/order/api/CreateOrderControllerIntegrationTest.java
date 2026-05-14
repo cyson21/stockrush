@@ -81,6 +81,48 @@ class CreateOrderControllerIntegrationTest {
     }
 
     @Test
+    void replays_same_idempotency_key_with_existing_order_response() throws Exception {
+        String requestBody = """
+            {
+              "memberId": "member-1",
+              "items": [
+                {
+                  "productCode": "LIMITED-001",
+                  "skuId": "SKU-001",
+                  "quantity": 2,
+                  "unitPrice": 12000.00
+                }
+              ]
+            }
+            """;
+
+        mockMvc.perform(post("/api/orders")
+                .header("Idempotency-Key", "idem-http-replay")
+                .header("X-Correlation-Id", "corr-http-replay-first")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(requestBody))
+            .andExpect(status().isCreated())
+            .andExpect(jsonPath("$.data.orderId", is("ord_http_001")));
+
+        mockMvc.perform(post("/api/orders")
+                .header("Idempotency-Key", "idem-http-replay")
+                .header("X-Correlation-Id", "corr-http-replay-second")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(requestBody))
+            .andExpect(status().isOk())
+            .andExpect(header().string("X-Correlation-Id", "corr-http-replay-second"))
+            .andExpect(jsonPath("$.success", is(true)))
+            .andExpect(jsonPath("$.data.orderId", is("ord_http_001")))
+            .andExpect(jsonPath("$.data.status", is("CREATED")))
+            .andExpect(jsonPath("$.data.sagaStatus", is("STARTED")))
+            .andExpect(jsonPath("$.trace.correlationId", is("corr-http-replay-second")));
+
+        org.junit.jupiter.api.Assertions.assertEquals(1, count("customer_orders"));
+        org.junit.jupiter.api.Assertions.assertEquals(1, count("order_items"));
+        org.junit.jupiter.api.Assertions.assertEquals(1, count("outbox_events"));
+    }
+
+    @Test
     void creates_order_with_payment_method() throws Exception {
         mockMvc.perform(post("/api/orders")
                 .header("Idempotency-Key", "idem-http-payment-method")
@@ -335,5 +377,9 @@ class CreateOrderControllerIntegrationTest {
         org.junit.jupiter.api.Assertions.assertEquals(couponCode, actualCouponCode);
         org.junit.jupiter.api.Assertions.assertEquals(new BigDecimal(discountAmount), actualDiscountAmount);
         org.junit.jupiter.api.Assertions.assertEquals(new BigDecimal(payableAmount), actualPayableAmount);
+    }
+
+    private int count(String tableName) {
+        return jdbcClient.sql("select count(*) from " + tableName).query(Integer.class).single();
     }
 }

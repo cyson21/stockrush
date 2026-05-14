@@ -40,7 +40,11 @@ class CreateOrderController {
         CreateOrderResult result = createOrderService.create(request.toCommand(idempotencyKey, resolvedCorrelationId));
         CreateOrderResponse response = CreateOrderResponse.from(result);
 
-        return ResponseEntity.created(URI.create("/api/orders/" + response.orderId()))
+        ResponseEntity.BodyBuilder responseBuilder = result.replayed()
+            ? ResponseEntity.ok()
+            : ResponseEntity.created(URI.create("/api/orders/" + response.orderId()));
+
+        return responseBuilder
             .header(CorrelationIds.HEADER_NAME, resolvedCorrelationId)
             .body(ApiResponse.success(response, resolvedCorrelationId));
     }

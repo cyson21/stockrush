@@ -61,6 +61,29 @@
 - 기본 초기 재고 20개, 수량 1개 기준 최종 재고는 `availableQuantity=19`, `reservedQuantity=0`이다.
 - 이번 실행으로 증가한 Order/Inventory/Payment `PENDING` outbox가 없어야 한다.
 
+## burst-idempotency
+
+고부하 주문 요청에서 멱등 재시도 동작을 검증한다.
+
+```bash
+./tools/local-e2e/local-e2e burst-idempotency \
+  --orders 30 \
+  --initial-stock 10 \
+  --idempotency-replays 2 \
+  --relay-workers 4 \
+  --stability-waves 2
+```
+
+### 검증 기준
+
+- productCode는 실행마다 생성되는 값을 결과 증거로 기록한다.
+- requestAttemptCount: `60`
+- unique orderIds: `30`
+- 주문 상태: `CONFIRMED/COMPLETED` 10건, `CANCELLED/FAILED` 20건, `unresolved` 0건
+- 최종 재고는 `availableQuantity=0`, `reservedQuantity=0`이어야 한다.
+- Order/Inventory/Payment `pendingOutboxDelta`와 `postReplayPendingOutboxDelta`는 모두 `0`이어야 한다.
+- `--allow-existing-pending` 사용 시에도 이번 실행 이후 새로 남은 pending outbox event ID가 없어야 한다.
+
 ## 주의 사항
 
 - 기본값은 실행 전 기존 `PENDING` outbox가 있으면 중단한다.

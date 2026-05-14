@@ -1,6 +1,7 @@
 package com.stockrush.order.infra.persistence;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.stockrush.order.application.CouponQuoteClient;
 import com.stockrush.order.application.CouponQuoteResult;
@@ -12,6 +13,9 @@ import com.stockrush.order.application.PersistentCreateOrderService;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.Callable;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.function.Supplier;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -120,12 +124,67 @@ class PersistentCreateOrderServiceIntegrationTest {
         );
     }
 
+    @Test
+    void replays_same_idempotency_key_without_extra_rows() {
+        CreateOrderCommand command = new CreateOrderCommand(
+            "member-1",
+            "idem-replay-001",
+            "corr-replay-001",
+            "CARD",
+            List.of(new CreateOrderItemCommand("LIMITED-001", "SKU-001", 1, new BigDecimal("12000.00")))
+        );
+
+        CreateOrderResult first = service.create(command);
+        CreateOrderResult replay = service.create(command);
+
+        assertEquals(first.order().orderId(), replay.order().orderId());
+        assertTrue(replay.replayed());
+        assertEquals(1, count("customer_orders"));
+        assertEquals(1, count("order_items"));
+        assertEquals(1, count("outbox_events"));
+    }
+
+    @Test
+    void creates_single_order_when_same_idempotency_key_arrives_concurrently() throws Exception {
+        CreateOrderCommand command = new CreateOrderCommand(
+            "member-1",
+            "idem-concurrent-replay-001",
+            "corr-concurrent-replay-001",
+            "CARD",
+            List.of(new CreateOrderItemCommand("LIMITED-001", "SKU-001", 1, new BigDecimal("12000.00")))
+        );
+        Callable<CreateOrderResult> create = () -> service.create(command);
+        var executor = Executors.newFixedThreadPool(2);
+        try {
+            List<Future<CreateOrderResult>> futures = executor.invokeAll(List.of(create, create));
+            List<CreateOrderResult> results = futures.stream()
+                .map(this::join)
+                .toList();
+
+            assertEquals(1, results.stream().map(result -> result.order().orderId()).distinct().count());
+            assertTrue(results.stream().anyMatch(CreateOrderResult::replayed));
+            assertEquals(1, count("customer_orders"));
+            assertEquals(1, count("order_items"));
+            assertEquals(1, count("outbox_events"));
+        } finally {
+            executor.shutdownNow();
+        }
+    }
+
     private int count(String tableName) {
         return jdbcClient.sql("select count(*) from " + tableName).query(Integer.class).single();
     }
 
     private String queryString(String sql, String orderId) {
         return jdbcClient.sql(sql).param("orderId", orderId).query(String.class).single();
+    }
+
+    private CreateOrderResult join(Future<CreateOrderResult> future) {
+        try {
+            return future.get();
+        } catch (Exception exception) {
+            throw new AssertionError(exception);
+        }
     }
 
     @TestConfiguration

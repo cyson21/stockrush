@@ -77,13 +77,139 @@ class LocalE2ERunnerTest(unittest.TestCase):
         self.assertTrue(any("stock" in error for error in errors))
         self.assertTrue(any("pending outbox" in error for error in errors))
 
-    def test_pending_outbox_delta_ignores_pre_existing_rows(self) -> None:
+    def test_order_ids_by_request_index_groups_idempotency_replays(self) -> None:
+        attempts = [
+            {"index": 1, "replay": 1, "orderId": "ord-1"},
+            {"index": 1, "replay": 2, "orderId": "ord-1"},
+            {"index": 2, "replay": 1, "orderId": "ord-2"},
+        ]
+
+        grouped = local_e2e_runner.order_ids_by_request_index(attempts)
+
+        self.assertEqual(grouped, {1: ["ord-1", "ord-1"], 2: ["ord-2"]})
+
+    def test_unique_orders_from_attempts_keeps_one_order_per_request_index(self) -> None:
+        attempts = [
+            {"index": 2, "replay": 2, "order": {"orderId": "ord-2"}},
+            {"index": 1, "replay": 1, "order": {"orderId": "ord-1"}},
+            {"index": 2, "replay": 1, "order": {"orderId": "ord-2"}},
+        ]
+
+        orders = local_e2e_runner.unique_orders_from_attempts(attempts)
+
+        self.assertEqual([order["orderId"] for order in orders], ["ord-1", "ord-2"])
+
+    def test_validate_burst_idempotency_result_accepts_expected_stable_state(self) -> None:
+        orders = [
+            {"orderId": "ord-1", "status": "CONFIRMED", "sagaStatus": "COMPLETED"},
+            {"orderId": "ord-2", "status": "CONFIRMED", "sagaStatus": "COMPLETED"},
+            {"orderId": "ord-3", "status": "CANCELLED", "sagaStatus": "FAILED"},
+            {"orderId": "ord-4", "status": "CANCELLED", "sagaStatus": "FAILED"},
+        ]
+        stock = {"availableQuantity": 0, "reservedQuantity": 0}
+        pending = {"order": 0, "inventory": 0, "payment": 0}
+
+        errors = local_e2e_runner.validate_burst_idempotency_result(
+            orders=orders,
+            stock=stock,
+            initial_stock=2,
+            quantity_per_order=1,
+            order_count=4,
+            pending_outbox_counts=pending,
+            replay_order_ids_by_index={
+                1: ["ord-1", "ord-1"],
+                2: ["ord-2", "ord-2"],
+                3: ["ord-3", "ord-3"],
+                4: ["ord-4", "ord-4"],
+            },
+            request_attempt_count=8,
+            idempotency_replays=2,
+            post_replay_orders=orders,
+            post_replay_stock=stock,
+            post_replay_pending_outbox_counts=pending,
+        )
+
+        self.assertEqual(errors, [])
+
+    def test_validate_burst_idempotency_result_reports_replay_and_post_relay_drift(self) -> None:
+        orders = [
+            {"orderId": "ord-1", "status": "CONFIRMED", "sagaStatus": "COMPLETED"},
+            {"orderId": "ord-2", "status": "CANCELLED", "sagaStatus": "FAILED"},
+        ]
+        post_replay_orders = [
+            {"orderId": "ord-1", "status": "CONFIRMED", "sagaStatus": "COMPLETED"},
+            {"orderId": "ord-2", "status": "CONFIRMED", "sagaStatus": "COMPLETED"},
+        ]
+
+        errors = local_e2e_runner.validate_burst_idempotency_result(
+            orders=orders,
+            stock={"availableQuantity": 0, "reservedQuantity": 0},
+            initial_stock=1,
+            quantity_per_order=1,
+            order_count=2,
+            pending_outbox_counts={"order": 0, "inventory": 0, "payment": 0},
+            replay_order_ids_by_index={1: ["ord-1", "ord-1b"], 2: ["ord-2", "ord-2"]},
+            request_attempt_count=3,
+            idempotency_replays=2,
+            post_replay_orders=post_replay_orders,
+            post_replay_stock={"availableQuantity": -1, "reservedQuantity": 0},
+            post_replay_pending_outbox_counts={"order": 1, "inventory": 0, "payment": 0},
+        )
+
+        self.assertTrue(any("idempotency replay" in error for error in errors))
+        self.assertTrue(any("request attempt count" in error for error in errors))
+        self.assertTrue(any("post-replay summary drift" in error for error in errors))
+        self.assertTrue(any("post-replay stock drift" in error for error in errors))
+        self.assertTrue(any("post-replay pending outbox" in error for error in errors))
+
+    def test_pending_outbox_delta_reports_signed_changes(self) -> None:
         before = {"order": 2, "inventory": 1, "payment": 0}
-        after = {"order": 2, "inventory": 3, "payment": 0}
+        after = {"order": 1, "inventory": 3, "payment": 0}
 
         delta = local_e2e_runner.pending_outbox_delta(before, after)
 
-        self.assertEqual(delta, {"order": 0, "inventory": 2, "payment": 0})
+        self.assertEqual(delta, {"order": -1, "inventory": 2, "payment": 0})
+
+    def test_positive_pending_outbox_changes_ignores_decreases_for_failure_check(self) -> None:
+        changes = {"order": -1, "inventory": 2, "payment": 0}
+
+        pending = local_e2e_runner.positive_pending_outbox_changes(changes)
+
+        self.assertEqual(pending, {"inventory": 2})
+
+    def test_new_pending_outbox_event_ids_reports_after_only_ids(self) -> None:
+        before = {"order": {"old-order"}, "inventory": set(), "payment": {"old-payment"}}
+        after = {"order": {"old-order", "new-order"}, "inventory": {"new-inventory"}}
+
+        new_event_ids = local_e2e_runner.new_pending_outbox_event_ids(before, after)
+
+        self.assertEqual(new_event_ids, {"order": ["new-order"], "inventory": ["new-inventory"]})
+
+    def test_validate_burst_idempotency_result_reports_new_pending_outbox_ids(self) -> None:
+        orders = [
+            {"orderId": "ord-1", "status": "CONFIRMED", "sagaStatus": "COMPLETED"},
+            {"orderId": "ord-2", "status": "CANCELLED", "sagaStatus": "FAILED"},
+        ]
+
+        errors = local_e2e_runner.validate_burst_idempotency_result(
+            orders=orders,
+            stock={"availableQuantity": 0, "reservedQuantity": 0},
+            initial_stock=1,
+            quantity_per_order=1,
+            order_count=2,
+            pending_outbox_counts={"order": 0, "inventory": 0, "payment": 0},
+            new_pending_outbox_event_ids={"order": ["new-order-event"]},
+            replay_order_ids_by_index={1: ["ord-1", "ord-1"], 2: ["ord-2", "ord-2"]},
+            request_attempt_count=4,
+            idempotency_replays=2,
+            post_replay_orders=orders,
+            post_replay_stock={"availableQuantity": 0, "reservedQuantity": 0},
+            post_replay_pending_outbox_counts={"order": 0, "inventory": 0, "payment": 0},
+            post_replay_new_pending_outbox_event_ids={"payment": ["new-payment-event"]},
+        )
+
+        self.assertTrue(any("new pending outbox events" in error for error in errors))
+        self.assertTrue(any("post-replay new pending outbox events" in error for error in errors))
 
     def test_demo_coupon_amounts_account_for_quantity(self) -> None:
         args = local_e2e_runner.parse_args(["demo-order-flow", "--unit-price", "12000", "--quantity", "2"])
@@ -226,6 +352,17 @@ class LocalE2ERunnerTest(unittest.TestCase):
         self.assertEqual(args.prefix, "DEMO-E2E")
         self.assertEqual(args.promotion_url, "http://localhost:18085")
 
+    def test_cli_accepts_burst_idempotency_command_name(self) -> None:
+        args = local_e2e_runner.parse_args(["burst-idempotency"])
+
+        self.assertEqual(args.command, "burst-idempotency")
+        self.assertEqual(args.orders, 30)
+        self.assertEqual(args.initial_stock, 10)
+        self.assertEqual(args.prefix, "BURST-E2E")
+        self.assertEqual(args.idempotency_replays, 2)
+        self.assertEqual(args.relay_workers, 4)
+        self.assertEqual(args.stability_waves, 2)
+
     def test_config_from_args_separates_order_admin_public_and_outbox_api_urls(self) -> None:
         args = local_e2e_runner.parse_args([
             "same-sku-concurrency",
@@ -270,6 +407,9 @@ class LocalE2ERunnerTest(unittest.TestCase):
             ["same-sku-concurrency", "--wait-seconds", "-0.1"],
             ["same-sku-concurrency", "--prefix", " "],
             ["same-sku-concurrency", "--prefix", "X" * 49],
+            ["burst-idempotency", "--idempotency-replays", "0"],
+            ["burst-idempotency", "--relay-workers", "0"],
+            ["burst-idempotency", "--stability-waves", "0"],
         ]
 
         for argv in invalid_args:

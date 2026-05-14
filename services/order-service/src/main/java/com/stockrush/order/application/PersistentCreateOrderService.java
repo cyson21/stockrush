@@ -22,10 +22,25 @@ public class PersistentCreateOrderService {
 
     @Transactional
     public CreateOrderResult create(CreateOrderCommand command) {
+        var existingOrder = orderRepository.findByIdempotencyKey(command.idempotencyKey());
+        if (existingOrder.isPresent()) {
+            return CreateOrderResult.replayed(existingOrder.get());
+        }
+
         CreateOrderResult result = createOrderService.create(command);
-        orderRepository.save(result.order(), command.idempotencyKey());
+        boolean saved = orderRepository.saveIfAbsent(result.order(), command.idempotencyKey());
+        if (!saved) {
+            return CreateOrderResult.replayed(replayOrder(command.idempotencyKey()));
+        }
         outboxEventRepository.save(result.outboxEvent());
         return result;
     }
-}
 
+    private OrderSnapshot replayOrder(String idempotencyKey) {
+        var existingOrder = orderRepository.findByIdempotencyKey(idempotencyKey);
+        if (existingOrder.isPresent()) {
+            return existingOrder.get();
+        }
+        throw new OrderIdempotencyReplayUnavailableException("Idempotent order replay is not available yet.");
+    }
+}

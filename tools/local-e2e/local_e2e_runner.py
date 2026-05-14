@@ -25,6 +25,7 @@ DEFAULT_PROMOTION_URL = "http://localhost:18085"
 SERVICE_BASES = ("order", "inventory", "payment")
 MAX_GENERATED_PREFIX_LENGTH = 48
 MAX_RELAY_BATCH_SIZE = 100
+MAX_BURST_WORKERS = 64
 OUTBOX_QUERY_LIMIT = 200
 DEMO_COUPON_DISCOUNT_AMOUNT = 1000
 
@@ -54,6 +55,9 @@ class ScenarioConfig:
     relay_batch_size: int
     wait_seconds: float
     fail_on_existing_pending: bool
+    idempotency_replays: int = 1
+    relay_workers: int = 1
+    stability_waves: int = 1
 
 
 def expected_success_count(initial_stock: int, quantity_per_order: int, order_count: int) -> int:
@@ -178,10 +182,141 @@ def validate_concurrent_sku_result(
             f"reservedQuantity={stock.get('reservedQuantity')}"
         )
 
-    pending = {name: count for name, count in pending_outbox_counts.items() if count}
+    pending = positive_pending_outbox_changes(pending_outbox_counts)
     if pending:
         errors.append(f"pending outbox remains: {pending}")
     return errors
+
+
+def order_ids_by_request_index(attempts: Sequence[Mapping[str, Any]]) -> dict[int, list[str]]:
+    grouped: dict[int, list[str]] = {}
+    for attempt in attempts:
+        index = int(attempt["index"])
+        grouped.setdefault(index, []).append(str(attempt.get("orderId", "<missing>")))
+    return {index: grouped[index] for index in sorted(grouped)}
+
+
+def unique_orders_from_attempts(attempts: Sequence[Mapping[str, Any]]) -> list[Mapping[str, Any]]:
+    orders_by_index: dict[int, Mapping[str, Any]] = {}
+    for attempt in attempts:
+        index = int(attempt["index"])
+        if index not in orders_by_index:
+            orders_by_index[index] = attempt["order"]  # type: ignore[assignment]
+    return [orders_by_index[index] for index in sorted(orders_by_index)]
+
+
+def validate_burst_idempotency_result(
+    *,
+    orders: Sequence[Mapping[str, Any]],
+    stock: Mapping[str, Any],
+    initial_stock: int,
+    quantity_per_order: int,
+    order_count: int,
+    pending_outbox_counts: Mapping[str, int],
+    new_pending_outbox_event_ids: Mapping[str, Sequence[str]] | None = None,
+    replay_order_ids_by_index: Mapping[int, Sequence[str]],
+    request_attempt_count: int,
+    idempotency_replays: int,
+    post_replay_orders: Sequence[Mapping[str, Any]],
+    post_replay_stock: Mapping[str, Any],
+    post_replay_pending_outbox_counts: Mapping[str, int],
+    post_replay_new_pending_outbox_event_ids: Mapping[str, Sequence[str]] | None = None,
+) -> list[str]:
+    errors = validate_concurrent_sku_result(
+        orders=orders,
+        stock=stock,
+        initial_stock=initial_stock,
+        quantity_per_order=quantity_per_order,
+        order_count=order_count,
+        pending_outbox_counts=pending_outbox_counts,
+    )
+    new_pending = {name: list(ids) for name, ids in (new_pending_outbox_event_ids or {}).items() if ids}
+    if new_pending:
+        errors.append(f"new pending outbox events remain: {new_pending}")
+
+    if len(orders) != order_count:
+        errors.append(f"unique order count expected {order_count}, got {len(orders)}")
+    expected_attempt_count = order_count * idempotency_replays
+    if request_attempt_count != expected_attempt_count:
+        errors.append(f"request attempt count expected {expected_attempt_count}, got {request_attempt_count}")
+
+    order_ids = [str(order.get("orderId", "<missing>")) for order in orders]
+    duplicated_order_ids = sorted({order_id for order_id in order_ids if order_ids.count(order_id) > 1})
+    if duplicated_order_ids:
+        errors.append(f"duplicate order ids in final orders: {duplicated_order_ids}")
+
+    for index in range(1, order_count + 1):
+        replay_order_ids = [str(order_id) for order_id in replay_order_ids_by_index.get(index, [])]
+        unique_replay_order_ids = sorted(set(replay_order_ids))
+        if not replay_order_ids:
+            errors.append(f"idempotency replay index {index} has no order response")
+        elif len(replay_order_ids) != idempotency_replays:
+            errors.append(
+                "idempotency replay index "
+                f"{index} expected {idempotency_replays} attempts, got {len(replay_order_ids)}"
+            )
+        elif len(unique_replay_order_ids) != 1:
+            errors.append(
+                f"idempotency replay index {index} returned multiple orderIds: {unique_replay_order_ids}"
+            )
+
+    summary = summarize_orders(orders)
+    post_replay_summary = summarize_orders(post_replay_orders)
+    if post_replay_summary != summary:
+        errors.append(
+            "post-replay summary drift expected "
+            f"{summary.__dict__}, got {post_replay_summary.__dict__}"
+        )
+
+    if order_state_snapshot(post_replay_orders) != order_state_snapshot(orders):
+        errors.append(
+            "post-replay order state drift expected "
+            f"{order_state_snapshot(orders)}, got {order_state_snapshot(post_replay_orders)}"
+        )
+
+    if stock_quantity_snapshot(post_replay_stock) != stock_quantity_snapshot(stock):
+        errors.append(
+            "post-replay stock drift expected "
+            f"{stock_quantity_snapshot(stock)}, got {stock_quantity_snapshot(post_replay_stock)}"
+        )
+
+    pending = positive_pending_outbox_changes(post_replay_pending_outbox_counts)
+    if pending:
+        errors.append(f"post-replay pending outbox remains: {pending}")
+    post_replay_new_pending = {
+        name: list(ids)
+        for name, ids in (post_replay_new_pending_outbox_event_ids or {}).items()
+        if ids
+    }
+    if post_replay_new_pending:
+        errors.append(f"post-replay new pending outbox events remain: {post_replay_new_pending}")
+    return errors
+
+
+def positive_pending_outbox_changes(changes: Mapping[str, int]) -> dict[str, int]:
+    return {name: count for name, count in changes.items() if count > 0}
+
+
+def new_pending_outbox_event_ids(
+    before: Mapping[str, set[str]],
+    after: Mapping[str, set[str]],
+) -> dict[str, list[str]]:
+    return {
+        name: sorted(after.get(name, set()) - before.get(name, set()))
+        for name in SERVICE_BASES
+        if after.get(name, set()) - before.get(name, set())
+    }
+
+
+def order_state_snapshot(orders: Sequence[Mapping[str, Any]]) -> list[tuple[str, Any, Any]]:
+    return sorted(
+        (str(order.get("orderId", "<missing>")), order.get("status"), order.get("sagaStatus"))
+        for order in orders
+    )
+
+
+def stock_quantity_snapshot(stock: Mapping[str, Any]) -> tuple[Any, Any]:
+    return stock.get("availableQuantity"), stock.get("reservedQuantity")
 
 
 def validate_demo_order_flow_result(
@@ -308,8 +443,34 @@ class ApiClient:
                 raw = response.read().decode("utf-8")
         except urllib.error.HTTPError as error:
             raw = error.read().decode("utf-8")
-            raise RuntimeError(f"HTTP {error.code} {method} {url}: {raw}") from error
+            try:
+                error_payload = json.loads(raw) if raw else {}
+            except json.JSONDecodeError:
+                error_payload = {}
+            raise ApiHttpError(error.code, method, url, error_payload, raw) from error
         return json.loads(raw) if raw else {}
+
+
+class ApiHttpError(RuntimeError):
+    def __init__(
+        self,
+        status_code: int,
+        method: str,
+        url: str,
+        payload: Mapping[str, Any],
+        raw: str,
+    ) -> None:
+        super().__init__(f"HTTP {status_code} {method} {url}: {raw}")
+        self.status_code = status_code
+        self.payload = payload
+
+    @property
+    def error_code(self) -> str | None:
+        error = self.payload.get("error")
+        if isinstance(error, Mapping):
+            code = error.get("code")
+            return str(code) if code is not None else None
+        return None
 
 
 def response_data(payload: Mapping[str, Any]) -> Any:
@@ -322,6 +483,14 @@ def count_pending_outbox(client: ApiClient, config: ScenarioConfig) -> dict[str,
         payload = response_data(client.get(outbox_list_url(config, name)))
         counts[name] = len(payload.get("items", []))
     return counts
+
+
+def pending_outbox_event_ids(client: ApiClient, config: ScenarioConfig) -> dict[str, set[str]]:
+    event_ids: dict[str, set[str]] = {}
+    for name in SERVICE_BASES:
+        payload = response_data(client.get(outbox_list_url(config, name)))
+        event_ids[name] = {str(item.get("eventId")) for item in payload.get("items", []) if item.get("eventId")}
+    return event_ids
 
 
 def outbox_list_url(config: ScenarioConfig, service: str) -> str:
@@ -339,7 +508,7 @@ def outbox_retry_url(config: ScenarioConfig, service: str) -> str:
 
 
 def pending_outbox_delta(before: Mapping[str, int], after: Mapping[str, int]) -> dict[str, int]:
-    return {name: max(0, after.get(name, 0) - before.get(name, 0)) for name in SERVICE_BASES}
+    return {name: after.get(name, 0) - before.get(name, 0) for name in SERVICE_BASES}
 
 
 def ensure_no_pending_outbox(client: ApiClient, config: ScenarioConfig) -> None:
@@ -386,7 +555,10 @@ def run_concurrent_sku_scenario(config: ScenarioConfig) -> Mapping[str, Any]:
         final_stock = get_stock(client, config, sku_id)
         pending_after = count_pending_outbox(client, config)
         pending_delta = pending_outbox_delta(pending_before, pending_after)
-        if not summarize_orders(final_orders).unresolved_order_ids and not any(pending_delta.values()):
+        if (
+            not summarize_orders(final_orders).unresolved_order_ids
+            and not positive_pending_outbox_changes(pending_delta)
+        ):
             break
         time.sleep(config.wait_seconds)
     else:
@@ -412,6 +584,110 @@ def run_concurrent_sku_scenario(config: ScenarioConfig) -> Mapping[str, Any]:
         "pendingOutboxCounts": pending_after,
         "pendingOutboxDelta": pending_delta,
         "summary": summarize_orders(final_orders).__dict__,
+        "errors": errors,
+    }
+
+
+def run_burst_idempotency_scenario(config: ScenarioConfig) -> Mapping[str, Any]:
+    client = ApiClient(timeout_seconds=120.0)
+    product_code, sku_id = scenario_ids(config.prefix)
+
+    healthcheck(client, config)
+    ensure_no_pending_outbox(client, config)
+    pending_before = count_pending_outbox(client, config)
+    pending_ids_before = pending_outbox_event_ids(client, config)
+    seed_product(client, config, product_code)
+    seed_stock(client, config, product_code, sku_id)
+    attempts = create_order_attempts_with_idempotency_replays(client, config, product_code, sku_id)
+    unique_orders = unique_orders_from_attempts(attempts)
+    unique_order_ids = [str(order["orderId"]) for order in unique_orders]
+
+    final_orders: list[Mapping[str, Any]] = []
+    final_stock: Mapping[str, Any] = {}
+    pending_after = pending_before
+    pending_delta = pending_outbox_delta(pending_before, pending_after)
+    pending_ids_after = pending_ids_before
+    pending_new_ids: dict[str, list[str]] = {}
+    for _ in range(config.max_attempts):
+        relay_wave_concurrently(client, config)
+        final_orders = [get_order(client, config, order_id) for order_id in unique_order_ids]
+        final_stock = get_stock(client, config, sku_id)
+        pending_after = count_pending_outbox(client, config)
+        pending_delta = pending_outbox_delta(pending_before, pending_after)
+        pending_ids_after = pending_outbox_event_ids(client, config)
+        pending_new_ids = new_pending_outbox_event_ids(pending_ids_before, pending_ids_after)
+        if (
+            not summarize_orders(final_orders).unresolved_order_ids
+            and not positive_pending_outbox_changes(pending_delta)
+            and not pending_new_ids
+        ):
+            break
+        time.sleep(config.wait_seconds)
+    else:
+        final_orders = [get_order(client, config, order_id) for order_id in unique_order_ids]
+        final_stock = get_stock(client, config, sku_id)
+        pending_after = count_pending_outbox(client, config)
+        pending_delta = pending_outbox_delta(pending_before, pending_after)
+        pending_ids_after = pending_outbox_event_ids(client, config)
+        pending_new_ids = new_pending_outbox_event_ids(pending_ids_before, pending_ids_after)
+
+    post_replay_orders: list[Mapping[str, Any]] = []
+    post_replay_stock: Mapping[str, Any] = {}
+    post_replay_pending_after = pending_after
+    post_replay_pending_delta = pending_outbox_delta(pending_before, post_replay_pending_after)
+    post_replay_pending_ids_after = pending_ids_after
+    post_replay_new_pending_ids = pending_new_ids
+    for _ in range(config.stability_waves):
+        relay_wave_concurrently(client, config)
+        time.sleep(config.wait_seconds)
+
+    post_replay_orders = [get_order(client, config, order_id) for order_id in unique_order_ids]
+    post_replay_stock = get_stock(client, config, sku_id)
+    post_replay_pending_after = count_pending_outbox(client, config)
+    post_replay_pending_delta = pending_outbox_delta(pending_before, post_replay_pending_after)
+    post_replay_pending_ids_after = pending_outbox_event_ids(client, config)
+    post_replay_new_pending_ids = new_pending_outbox_event_ids(pending_ids_before, post_replay_pending_ids_after)
+    replay_order_ids = order_ids_by_request_index(attempts)
+
+    errors = validate_burst_idempotency_result(
+        orders=final_orders,
+        stock=final_stock,
+        initial_stock=config.initial_stock,
+        quantity_per_order=config.quantity_per_order,
+        order_count=config.order_count,
+        pending_outbox_counts=pending_delta,
+        new_pending_outbox_event_ids=pending_new_ids,
+        replay_order_ids_by_index=replay_order_ids,
+        request_attempt_count=len(attempts),
+        idempotency_replays=config.idempotency_replays,
+        post_replay_orders=post_replay_orders,
+        post_replay_stock=post_replay_stock,
+        post_replay_pending_outbox_counts=post_replay_pending_delta,
+        post_replay_new_pending_outbox_event_ids=post_replay_new_pending_ids,
+    )
+
+    return {
+        "productCode": product_code,
+        "skuId": sku_id,
+        "requestAttemptCount": len(attempts),
+        "orderIds": unique_order_ids,
+        "idempotencyReplayOrderIdsByIndex": replay_order_ids,
+        "orders": final_orders,
+        "stock": final_stock,
+        "pendingOutboxBaseline": pending_before,
+        "pendingOutboxCounts": pending_after,
+        "pendingOutboxDelta": pending_delta,
+        "pendingOutboxNewEventIds": pending_new_ids,
+        "postReplayOrders": post_replay_orders,
+        "postReplayStock": post_replay_stock,
+        "postReplayPendingOutboxCounts": post_replay_pending_after,
+        "postReplayPendingOutboxDelta": post_replay_pending_delta,
+        "postReplayPendingOutboxNewEventIds": post_replay_new_pending_ids,
+        "summary": summarize_orders(final_orders).__dict__,
+        "postReplaySummary": summarize_orders(post_replay_orders).__dict__,
+        "idempotencyReplays": config.idempotency_replays,
+        "relayWorkers": config.relay_workers,
+        "stabilityWaves": config.stability_waves,
         "errors": errors,
     }
 
@@ -476,7 +752,7 @@ def run_demo_order_flow_scenario(config: ScenarioConfig) -> Mapping[str, Any]:
             and is_order_state(orders["fail"], "CANCELLED", "FAILED")
             and is_order_state(orders["delay"], "CANCELLED", "FAILED")
             and final_stock.get("reservedQuantity") == 0
-            and not any(pending_delta.values())
+            and not positive_pending_outbox_changes(pending_delta)
         ):
             break
         time.sleep(config.wait_seconds)
@@ -652,11 +928,103 @@ def create_orders_concurrently(
     return sorted(results, key=lambda order: str(order["orderId"]))
 
 
+def create_order_attempts_with_idempotency_replays(
+    client: ApiClient,
+    config: ScenarioConfig,
+    product_code: str,
+    sku_id: str,
+) -> list[Mapping[str, Any]]:
+    def create_attempt(index: int, replay: int) -> Mapping[str, Any]:
+        idempotency_key = f"idem-order-{product_code}-{index:02d}"
+        payload = response_data(
+            create_order_with_retryable_replay_pending(
+                client,
+                config,
+                product_code,
+                sku_id,
+                index,
+                replay,
+                idempotency_key,
+            )
+        )
+        return {
+            "index": index,
+            "replay": replay,
+            "idempotencyKey": idempotency_key,
+            "orderId": str(payload["orderId"]),
+            "order": payload,
+        }
+
+    attempts: list[Mapping[str, Any]] = []
+    task_count = config.order_count * config.idempotency_replays
+    max_workers = min(task_count, MAX_BURST_WORKERS)
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = [
+            executor.submit(create_attempt, index, replay)
+            for index in range(1, config.order_count + 1)
+            for replay in range(1, config.idempotency_replays + 1)
+        ]
+        for future in as_completed(futures):
+            attempts.append(future.result())
+    return sorted(attempts, key=lambda attempt: (int(attempt["index"]), int(attempt["replay"])))
+
+
+def create_order_with_retryable_replay_pending(
+    client: ApiClient,
+    config: ScenarioConfig,
+    product_code: str,
+    sku_id: str,
+    index: int,
+    replay: int,
+    idempotency_key: str,
+) -> Mapping[str, Any]:
+    for attempt in range(1, config.max_attempts + 1):
+        try:
+            return client.post(
+                f"{config.order_api_url}/api/orders",
+                {
+                    "memberId": f"member-burst-{index:02d}",
+                    "paymentMethod": "CARD",
+                    "items": [
+                        {
+                            "productCode": product_code,
+                            "skuId": sku_id,
+                            "quantity": config.quantity_per_order,
+                            "unitPrice": config.unit_price,
+                        }
+                    ],
+                },
+                headers={
+                    "Idempotency-Key": idempotency_key,
+                    "X-Correlation-Id": f"corr-burst-{product_code}-{index:02d}-{replay:02d}-{attempt:02d}",
+                },
+            )
+        except ApiHttpError as error:
+            if error.status_code == 409 and error.error_code == "ORDER_IDEMPOTENCY_REPLAY_PENDING":
+                time.sleep(config.wait_seconds)
+                continue
+            raise
+    raise RuntimeError(f"idempotent replay remained pending after {config.max_attempts} attempts: {idempotency_key}")
+
+
 def relay_wave(client: ApiClient, config: ScenarioConfig) -> None:
     relay_order = ["order", "inventory", "order", "payment", "order", "inventory"]
     for service in relay_order:
         client.post(outbox_retry_url(config, service))
         time.sleep(config.wait_seconds)
+
+
+def relay_wave_concurrently(client: ApiClient, config: ScenarioConfig) -> None:
+    relay_order = ["order", "inventory", "order", "payment", "order", "inventory"]
+
+    def retry_all_services() -> None:
+        for service in relay_order:
+            client.post(outbox_retry_url(config, service))
+
+    with ThreadPoolExecutor(max_workers=config.relay_workers) as executor:
+        futures = [executor.submit(retry_all_services) for _ in range(config.relay_workers)]
+        for future in as_completed(futures):
+            future.result()
 
 
 def get_order(client: ApiClient, config: ScenarioConfig, order_id: str) -> Mapping[str, Any]:
@@ -735,6 +1103,36 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
         default_initial_stock=20,
         default_prefix="DEMO-E2E",
     )
+
+    burst = subparsers.add_parser(
+        "burst-idempotency",
+        aliases=["idempotent-burst", "outbox-idempotent-burst"],
+        help="Run high-volume idempotency replay and concurrent outbox retry E2E",
+    )
+    add_runtime_arguments(
+        burst,
+        default_orders=30,
+        default_initial_stock=10,
+        default_prefix="BURST-E2E",
+    )
+    burst.add_argument(
+        "--idempotency-replays",
+        type=positive_int,
+        default=2,
+        help="Number of same-key create-order attempts per logical order.",
+    )
+    burst.add_argument(
+        "--relay-workers",
+        type=positive_int,
+        default=4,
+        help="Number of concurrent outbox retry workers per relay wave.",
+    )
+    burst.add_argument(
+        "--stability-waves",
+        type=positive_int,
+        default=2,
+        help="Extra concurrent retry waves after the scenario has settled.",
+    )
     return parser.parse_args(argv)
 
 
@@ -757,6 +1155,9 @@ def config_from_args(args: argparse.Namespace) -> ScenarioConfig:
         relay_batch_size=args.relay_batch_size,
         wait_seconds=args.wait_seconds,
         fail_on_existing_pending=not args.allow_existing_pending,
+        idempotency_replays=getattr(args, "idempotency_replays", 1),
+        relay_workers=getattr(args, "relay_workers", 1),
+        stability_waves=getattr(args, "stability_waves", 1),
     )
 
 
@@ -768,6 +1169,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 1 if result["errors"] else 0
     if args.command in {"demo-order-flow", "cards-smoke"}:
         result = run_demo_order_flow_scenario(config_from_args(args))
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return 1 if result["errors"] else 0
+    if args.command in {"burst-idempotency", "idempotent-burst", "outbox-idempotent-burst"}:
+        result = run_burst_idempotency_scenario(config_from_args(args))
         print(json.dumps(result, ensure_ascii=False, indent=2))
         return 1 if result["errors"] else 0
     raise AssertionError(f"Unsupported command: {args.command}")

@@ -1,7 +1,10 @@
 package com.stockrush.order.application;
 
+import java.util.Optional;
+
 public interface OrderCommandRepository {
 
-    void save(OrderSnapshot order, String idempotencyKey);
-}
+    boolean saveIfAbsent(OrderSnapshot order, String idempotencyKey);
 
+    Optional<OrderSnapshot> findByIdempotencyKey(String idempotencyKey);
+}
