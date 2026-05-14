@@ -18,17 +18,40 @@ import type {
 
 export type ServiceDomain = 'order' | 'inventory' | 'payment';
 
+export type ReadModelOrderFilters = {
+  orderId?: string;
+  memberId?: string;
+  status?: string;
+  sagaStatus?: string;
+  couponCode?: string;
+};
+
 export function listRecentOrders(): Promise<AdminOrderPage> {
   return request<AdminOrderPage>(apiUrl('order', '/api/admin/orders', { page: '0', size: '20' }));
 }
 
-export function listReadModelAdminOrders(): Promise<ReadModelOrderPage> {
-  return request<ReadModelOrderPage>(
-    gatewayApiUrl('/api/read-model/admin/orders', {
-      page: '0',
-      size: '50',
-    }),
-  );
+export function listReadModelAdminOrders(filters: ReadModelOrderFilters = {}): Promise<ReadModelOrderPage> {
+  const params: Record<string, string> = {
+    page: '0',
+    size: '50',
+  };
+  if (filters.orderId?.trim()) {
+    params.orderId = filters.orderId.trim();
+  }
+  if (filters.memberId?.trim()) {
+    params.memberId = filters.memberId.trim();
+  }
+  if (filters.status?.trim()) {
+    params.status = filters.status.trim();
+  }
+  if (filters.sagaStatus?.trim()) {
+    params.sagaStatus = filters.sagaStatus.trim();
+  }
+  if (filters.couponCode?.trim()) {
+    params.couponCode = filters.couponCode.trim();
+  }
+
+  return request<ReadModelOrderPage>(gatewayApiUrl('/api/read-model/admin/orders', params));
 }
 
 export function listCouponUsages(filters: {

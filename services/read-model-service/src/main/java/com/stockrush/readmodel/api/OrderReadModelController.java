@@ -26,6 +26,10 @@ class OrderReadModelController {
     @GetMapping("/orders")
     ResponseEntity<ApiResponse<OrderSummaryPageResponse>> listCustomerOrders(
         @RequestParam String memberId,
+        @RequestParam(required = false) String orderId,
+        @RequestParam(required = false) String status,
+        @RequestParam(required = false) String sagaStatus,
+        @RequestParam(required = false) String couponCode,
         @RequestParam(defaultValue = "0") int page,
         @RequestParam(defaultValue = "20") int size,
         @RequestHeader(value = CorrelationIds.HEADER_NAME, required = false) String correlationId
@@ -34,14 +38,20 @@ class OrderReadModelController {
         return ResponseEntity.ok()
             .header(CorrelationIds.HEADER_NAME, resolvedCorrelationId)
             .body(ApiResponse.success(
-                OrderSummaryPageResponse.from(queryService.listCustomerOrders(memberId, page, size)),
+                OrderSummaryPageResponse.from(
+                    queryService.listCustomerOrders(memberId, orderId, status, sagaStatus, couponCode, page, size)
+                ),
                 resolvedCorrelationId
             ));
     }
 
     @GetMapping("/admin/orders")
     ResponseEntity<ApiResponse<OrderSummaryPageResponse>> listAdminOrders(
+        @RequestParam(required = false) String orderId,
+        @RequestParam(required = false) String memberId,
         @RequestParam(required = false) String status,
+        @RequestParam(required = false) String sagaStatus,
+        @RequestParam(required = false) String couponCode,
         @RequestParam(defaultValue = "0") int page,
         @RequestParam(defaultValue = "20") int size,
         @RequestHeader(value = CorrelationIds.HEADER_NAME, required = false) String correlationId
@@ -50,7 +60,9 @@ class OrderReadModelController {
         return ResponseEntity.ok()
             .header(CorrelationIds.HEADER_NAME, resolvedCorrelationId)
             .body(ApiResponse.success(
-                OrderSummaryPageResponse.from(queryService.listAdminOrders(status, page, size)),
+                OrderSummaryPageResponse.from(
+                    queryService.listAdminOrders(orderId, memberId, status, sagaStatus, couponCode, page, size)
+                ),
                 resolvedCorrelationId
             ));
     }

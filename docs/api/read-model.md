@@ -26,6 +26,10 @@ Mobile and external demo clients should call the Gateway route.
 | Parameter | Required | Rule |
 |---|---:|---|
 | `memberId` | yes | customer member id |
+| `orderId` | no | exact order id filter within the member history |
+| `status` | no | filters by order status such as `CREATED`, `CONFIRMED`, `CANCELLED` |
+| `sagaStatus` | no | filters by Saga state such as `STARTED`, `COMPLETED`, `FAILED`, `PAYMENT_DELAYED` |
+| `couponCode` | no | exact coupon code filter |
 | `page` | no | default `0`; negative values are normalized to `0` |
 | `size` | no | default `20`; values over `100` are normalized to `100` |
 
@@ -63,6 +67,7 @@ Mobile and external demo clients should call the Gateway route.
 ```
 
 Results are ordered by `createdAt desc`, then projection row id descending.
+When optional filters are omitted or blank after trimming, the API returns the member's default history page.
 
 ## Admin Order Summary
 
@@ -78,7 +83,11 @@ Results are ordered by `createdAt desc`, then projection row id descending.
 
 | Parameter | Required | Rule |
 |---|---:|---|
+| `orderId` | no | exact order id filter |
+| `memberId` | no | exact member id filter |
 | `status` | no | filters by order status such as `CREATED`, `CONFIRMED`, `CANCELLED` |
+| `sagaStatus` | no | filters by Saga state such as `STARTED`, `COMPLETED`, `FAILED`, `PAYMENT_DELAYED` |
+| `couponCode` | no | exact coupon code filter |
 | `page` | no | default `0`; negative values are normalized to `0` |
 | `size` | no | default `20`; values over `100` are normalized to `100` |
 
@@ -87,6 +96,7 @@ Results are ordered by `createdAt desc`, then projection row id descending.
 `200 OK`
 
 The response body uses the same page and item shape as customer order history.
+Admin search can combine `orderId`, `memberId`, `status`, `sagaStatus`, and `couponCode`; blank optional values are ignored.
 
 ## Projection Rules
 

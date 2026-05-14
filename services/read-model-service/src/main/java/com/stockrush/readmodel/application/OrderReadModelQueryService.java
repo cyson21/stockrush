@@ -15,9 +15,22 @@ public class OrderReadModelQueryService {
         this.jdbcClient = jdbcClient;
     }
 
-    public OrderSummaryPage listCustomerOrders(String memberId, int page, int size) {
+    public OrderSummaryPage listCustomerOrders(
+        String memberId,
+        String orderId,
+        String status,
+        String sagaStatus,
+        String couponCode,
+        int page,
+        int size
+    ) {
         int normalizedPage = normalizePage(page);
         int normalizedSize = normalizeSize(size);
+        String normalizedMemberId = normalizeFilter(memberId);
+        String normalizedOrderId = normalizeFilter(orderId);
+        String normalizedStatus = normalizeFilter(status);
+        String normalizedSagaStatus = normalizeFilter(sagaStatus);
+        String normalizedCouponCode = normalizeFilter(couponCode);
         return new OrderSummaryPage(
             normalizedPage,
             normalizedSize,
@@ -27,11 +40,23 @@ public class OrderReadModelQueryService {
                            created_at, updated_at
                     from order_summaries
                     where member_id = :memberId
+                      and (:orderIdFilter = false or order_id = :orderId)
+                      and (:statusFilter = false or status = :status)
+                      and (:sagaStatusFilter = false or saga_status = :sagaStatus)
+                      and (:couponCodeFilter = false or coupon_code = :couponCode)
                     order by created_at desc, id desc
                     limit :limit
                     offset :offset
                 """)
-                .param("memberId", memberId)
+                .param("memberId", valueOrEmpty(normalizedMemberId))
+                .param("orderIdFilter", hasFilter(normalizedOrderId))
+                .param("orderId", valueOrEmpty(normalizedOrderId))
+                .param("statusFilter", hasFilter(normalizedStatus))
+                .param("status", valueOrEmpty(normalizedStatus))
+                .param("sagaStatusFilter", hasFilter(normalizedSagaStatus))
+                .param("sagaStatus", valueOrEmpty(normalizedSagaStatus))
+                .param("couponCodeFilter", hasFilter(normalizedCouponCode))
+                .param("couponCode", valueOrEmpty(normalizedCouponCode))
                 .param("limit", normalizedSize)
                 .param("offset", normalizedPage * normalizedSize)
                 .query(this::mapSummary)
@@ -39,9 +64,22 @@ public class OrderReadModelQueryService {
         );
     }
 
-    public OrderSummaryPage listAdminOrders(String status, int page, int size) {
+    public OrderSummaryPage listAdminOrders(
+        String orderId,
+        String memberId,
+        String status,
+        String sagaStatus,
+        String couponCode,
+        int page,
+        int size
+    ) {
         int normalizedPage = normalizePage(page);
         int normalizedSize = normalizeSize(size);
+        String normalizedOrderId = normalizeFilter(orderId);
+        String normalizedMemberId = normalizeFilter(memberId);
+        String normalizedStatus = normalizeFilter(status);
+        String normalizedSagaStatus = normalizeFilter(sagaStatus);
+        String normalizedCouponCode = normalizeFilter(couponCode);
         return new OrderSummaryPage(
             normalizedPage,
             normalizedSize,
@@ -50,13 +88,25 @@ public class OrderReadModelQueryService {
                            discount_amount, payable_amount, item_count, cancellation_reason,
                            created_at, updated_at
                     from order_summaries
-                    where (:statusFilter = false or status = :status)
+                    where (:orderIdFilter = false or order_id = :orderId)
+                      and (:memberIdFilter = false or member_id = :memberId)
+                      and (:statusFilter = false or status = :status)
+                      and (:sagaStatusFilter = false or saga_status = :sagaStatus)
+                      and (:couponCodeFilter = false or coupon_code = :couponCode)
                     order by created_at desc, id desc
                     limit :limit
                     offset :offset
                 """)
-                .param("statusFilter", status != null && !status.isBlank())
-                .param("status", status == null ? "" : status)
+                .param("orderIdFilter", hasFilter(normalizedOrderId))
+                .param("orderId", valueOrEmpty(normalizedOrderId))
+                .param("memberIdFilter", hasFilter(normalizedMemberId))
+                .param("memberId", valueOrEmpty(normalizedMemberId))
+                .param("statusFilter", hasFilter(normalizedStatus))
+                .param("status", valueOrEmpty(normalizedStatus))
+                .param("sagaStatusFilter", hasFilter(normalizedSagaStatus))
+                .param("sagaStatus", valueOrEmpty(normalizedSagaStatus))
+                .param("couponCodeFilter", hasFilter(normalizedCouponCode))
+                .param("couponCode", valueOrEmpty(normalizedCouponCode))
                 .param("limit", normalizedSize)
                 .param("offset", normalizedPage * normalizedSize)
                 .query(this::mapSummary)
@@ -73,6 +123,21 @@ public class OrderReadModelQueryService {
             return 20;
         }
         return Math.min(size, 100);
+    }
+
+    private String normalizeFilter(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        return value.trim();
+    }
+
+    private boolean hasFilter(String value) {
+        return value != null;
+    }
+
+    private String valueOrEmpty(String value) {
+        return value == null ? "" : value;
     }
 
     private OrderSummaryProjection mapSummary(ResultSet rs, int rowNum) throws SQLException {

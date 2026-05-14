@@ -2,6 +2,7 @@
 
 관리자용 React/Vite 앱입니다.
 Read Model 기반 주문 Dashboard, 쿠폰 사용 이력, 출고 요청 이력, 상품 등록/수정, SKU 재고 설정, 최근 주문 조회, 지연 결제 취소 요청, 주문 Saga 상세 조회, 서비스별 outbox 이벤트 조회/재시도/requeue를 한 화면에서 처리할 수 있습니다.
+Read Model Dashboard는 주문 ID, 회원 ID, 주문 상태, Saga 상태, 쿠폰 코드 조건 검색을 지원합니다.
 Outbox 운영 요청에는 `X-Operator-Id: admin-app`을 전달해 서비스별 감사 로그에 남깁니다.
 
 ## 실행

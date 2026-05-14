@@ -135,54 +135,69 @@ describe('admin app operations', () => {
       }
 
       if (request.pathname === '/api/read-model/admin/orders' && method === 'GET') {
+        const orders = [
+          {
+            orderId: 'ord_read_admin_001',
+            memberId: 'member-a',
+            status: 'CONFIRMED',
+            sagaStatus: 'COMPLETED',
+            couponCode: 'WELCOME10',
+            totalAmount: 12000,
+            discountAmount: 1000,
+            payableAmount: 11000,
+            itemCount: 1,
+            cancellationReason: null,
+            createdAt: '2026-05-13T00:00:00Z',
+            updatedAt: '2026-05-13T00:02:00Z',
+          },
+          {
+            orderId: 'ord_read_admin_002',
+            memberId: 'member-b',
+            status: 'CANCELLED',
+            sagaStatus: 'FAILED',
+            couponCode: null,
+            totalAmount: 8800,
+            discountAmount: 0,
+            payableAmount: 8800,
+            itemCount: 2,
+            cancellationReason: 'PAYMENT_DECLINED',
+            createdAt: '2026-05-13T00:03:00Z',
+            updatedAt: '2026-05-13T00:04:00Z',
+          },
+          {
+            orderId: 'ord_read_admin_003',
+            memberId: 'member-c',
+            status: 'CREATED',
+            sagaStatus: 'PAYMENT_DELAYED',
+            couponCode: null,
+            totalAmount: 5000,
+            discountAmount: 0,
+            payableAmount: 5000,
+            itemCount: 1,
+            cancellationReason: null,
+            createdAt: '2026-05-13T00:05:00Z',
+            updatedAt: '2026-05-13T00:06:00Z',
+          },
+        ].filter((order) => {
+          const orderId = request.searchParams.get('orderId');
+          const memberId = request.searchParams.get('memberId');
+          const status = request.searchParams.get('status');
+          const sagaStatus = request.searchParams.get('sagaStatus');
+          const couponCode = request.searchParams.get('couponCode');
+          return (
+            (!orderId || order.orderId === orderId) &&
+            (!memberId || order.memberId === memberId) &&
+            (!status || order.status === status) &&
+            (!sagaStatus || order.sagaStatus === sagaStatus) &&
+            (!couponCode || order.couponCode === couponCode)
+          );
+        });
+
         return toJsonResponse(
           buildResponse(true, {
             page: 0,
             size: 50,
-            items: [
-              {
-                orderId: 'ord_read_admin_001',
-                memberId: 'member-a',
-                status: 'CONFIRMED',
-                sagaStatus: 'COMPLETED',
-                couponCode: 'WELCOME10',
-                totalAmount: 12000,
-                discountAmount: 1000,
-                payableAmount: 11000,
-                itemCount: 1,
-                cancellationReason: null,
-                createdAt: '2026-05-13T00:00:00Z',
-                updatedAt: '2026-05-13T00:02:00Z',
-              },
-              {
-                orderId: 'ord_read_admin_002',
-                memberId: 'member-b',
-                status: 'CANCELLED',
-                sagaStatus: 'FAILED',
-                couponCode: null,
-                totalAmount: 8800,
-                discountAmount: 0,
-                payableAmount: 8800,
-                itemCount: 2,
-                cancellationReason: 'PAYMENT_DECLINED',
-                createdAt: '2026-05-13T00:03:00Z',
-                updatedAt: '2026-05-13T00:04:00Z',
-              },
-              {
-                orderId: 'ord_read_admin_003',
-                memberId: 'member-c',
-                status: 'CREATED',
-                sagaStatus: 'PAYMENT_DELAYED',
-                couponCode: null,
-                totalAmount: 5000,
-                discountAmount: 0,
-                payableAmount: 5000,
-                itemCount: 1,
-                cancellationReason: null,
-                createdAt: '2026-05-13T00:05:00Z',
-                updatedAt: '2026-05-13T00:06:00Z',
-              },
-            ],
+            items: orders,
           }),
           200,
         );
@@ -421,7 +436,7 @@ describe('admin app operations', () => {
     await user.click(screen.getByRole('tab', { name: 'Dashboard' }));
 
     expect(await screen.findByText('주문 대시보드')).toBeInTheDocument();
-    expect(screen.getByText('총 주문')).toBeInTheDocument();
+    expect(screen.getByText('조회 주문')).toBeInTheDocument();
     expect(screen.getByText('3건')).toBeInTheDocument();
     expect(screen.getByText('확정 주문')).toBeInTheDocument();
     expect(screen.getByText('취소 주문')).toBeInTheDocument();
@@ -431,6 +446,41 @@ describe('admin app operations', () => {
     expect(screen.getByText('₩1,000')).toBeInTheDocument();
     expect(screen.getByText('ord_read_admin_003')).toBeInTheDocument();
     expect(screen.getByText('PAYMENT_DECLINED')).toBeInTheDocument();
+  });
+
+  it('filters dashboard read model summaries through gateway', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(screen.getByRole('tab', { name: 'Dashboard' }));
+    expect(await screen.findByText('주문 대시보드')).toBeInTheDocument();
+
+    await user.type(screen.getByLabelText('Read Model 주문 ID'), 'ord_read_admin_001');
+    await user.type(screen.getByLabelText('Read Model 회원 ID'), 'member-a');
+    await user.selectOptions(screen.getByLabelText('Read Model 주문 상태'), 'CONFIRMED');
+    await user.selectOptions(screen.getByLabelText('Read Model Saga 상태'), 'COMPLETED');
+    await user.type(screen.getByLabelText('Read Model 쿠폰 코드'), 'WELCOME10');
+    await user.click(screen.getByRole('button', { name: '대시보드 조회' }));
+
+    await waitFor(() => {
+      const filteredCalls = fetchMock.mock.calls.filter(([url]) => {
+        const request = new URL(String(url), 'http://localhost:5173');
+        return (
+          request.pathname === '/api/read-model/admin/orders' &&
+          request.searchParams.get('orderId') === 'ord_read_admin_001' &&
+          request.searchParams.get('memberId') === 'member-a' &&
+          request.searchParams.get('status') === 'CONFIRMED' &&
+          request.searchParams.get('sagaStatus') === 'COMPLETED' &&
+          request.searchParams.get('couponCode') === 'WELCOME10'
+        );
+      });
+      expect(filteredCalls.length).toBeGreaterThanOrEqual(1);
+    });
+
+    expect(screen.getByText('ord_read_admin_001')).toBeInTheDocument();
+    expect(screen.queryByText('ord_read_admin_002')).not.toBeInTheDocument();
+    expect(screen.queryByText('ord_read_admin_003')).not.toBeInTheDocument();
+    expect(screen.getAllByText('1건').length).toBeGreaterThanOrEqual(1);
   });
 
   it('shows dashboard error when read model request fails', async () => {

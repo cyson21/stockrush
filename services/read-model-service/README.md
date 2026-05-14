@@ -27,10 +27,11 @@ If a result event arrives before its `OrderCreated` summary is ready, the servic
 
 | Method | Path | Purpose |
 |---|---|---|
-| `GET` | `/api/read-model/orders?memberId={memberId}` | Customer order history from projection |
-| `GET` | `/api/read-model/admin/orders?status={status}` | Admin order summary list from projection |
+| `GET` | `/api/read-model/orders?memberId={memberId}&orderId={orderId}&status={status}&sagaStatus={sagaStatus}&couponCode={couponCode}` | Customer order history from projection |
+| `GET` | `/api/read-model/admin/orders?orderId={orderId}&memberId={memberId}&status={status}&sagaStatus={sagaStatus}&couponCode={couponCode}` | Admin order summary list from projection |
 
 Both APIs return the common `ApiResponse` shape and propagate `X-Correlation-Id`.
+Optional filters are trimmed before query execution. Blank optional values are ignored.
 
 ## Local Run
 

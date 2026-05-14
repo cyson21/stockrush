@@ -118,7 +118,7 @@ Windows 11 PowerShell에서는 `.\scripts\demo-up.ps1`, `.\scripts\demo-smoke.ps
 - Outbox 운영 액션은 `X-Operator-Id`, `X-Correlation-Id`, batch size, 처리 건수를 서비스별 감사 테이블에 남깁니다.
 - Promotion Service는 쿠폰 등록/목록과 주문 전 할인 견적 계산을 제공하고, 주문 이벤트를 소비해 쿠폰 사용 상태를 기록합니다. Order Service는 주문 생성 시 할인 가격 snapshot을 저장해 결제 예정 금액을 Payment command로 전달합니다.
 - Fulfillment Service는 `OrderConfirmed`를 소비해 주문별 출고 준비 요청을 `PREPARING` 상태로 기록하고, 관리자 출고 상태 조회 API를 제공합니다.
-- Read Model Service는 주문 생성/완료/취소 이벤트를 소비해 `read_model.order_summaries`를 갱신하고 고객 주문 내역과 관리자 주문 요약 API를 제공합니다.
+- Read Model Service는 주문 생성/완료/취소 이벤트를 소비해 `read_model.order_summaries`를 갱신하고 고객 주문 내역과 관리자 주문 요약 API를 제공합니다. 관리자 대시보드는 주문 ID, 회원 ID, 주문 상태, Saga 상태, 쿠폰 코드 조건 검색을 지원합니다.
 
 ## 대표 시나리오
 
@@ -149,12 +149,12 @@ Windows 11 PowerShell에서는 `.\scripts\demo-up.ps1`, `.\scripts\demo-smoke.ps
 - 쿠폰 주문 반영 검증: Order Service 테스트로 quote 실패/타임아웃/금액 일관성, 주문 저장 가격 snapshot, Payment command 결제 예정 금액을 확인하고 Customer App Vitest/build로 쿠폰 UI를 확인했습니다.
 - 쿠폰 사용 이벤트 검증: Promotion Service 테스트로 `OrderCreated` 사용 기록, `OrderConfirmed` 사용 완료, `OrderCancelled` 사용 해제와 중복 이벤트 무해 처리를 확인했습니다.
 - 출고 준비 이벤트 검증: Fulfillment Service 테스트로 `OrderConfirmed` 출고 준비 요청 생성과 중복 이벤트 무해 처리를 확인했습니다.
-- 주문 요약 projection 검증: Read Model Service 테스트로 주문 생성/완료/취소 이벤트 처리, JSON consumer dispatch, 고객/관리자 조회 API를 확인했습니다.
+- 주문 요약 projection 검증: Read Model Service 테스트로 주문 생성/완료/취소 이벤트 처리, JSON consumer dispatch, 고객/관리자 조회 API와 조건 검색을 확인했습니다.
 
 ## 현재 한계
 
 - Gateway는 주문 생성/조회, 관리자 주문 조회/취소, Outbox 조회/재시도/requeue 라우팅 smoke와 동일 SKU runner/runbook의 Gateway 경유 경로까지 검증 범위를 넓혔습니다.
 - Promotion Service는 주문 이벤트 기반 쿠폰 사용 상태, Gateway 쿠폰 견적/사용 이력 route, 관리자 사용 이력 화면까지 연결했습니다.
 - Fulfillment Service는 출고 준비 요청 기록, Gateway route, 관리자 출고 상태 화면까지 연결했습니다. carrier/label/tracking 상태는 후속 확장 범위입니다.
-- Read Model Service는 주문 요약 projection, 서비스-local 조회 API, Gateway 조회 route, 관리자 대시보드까지 연결했습니다. 상품 검색 projection은 후속 확장 범위입니다.
+- Read Model Service는 주문 요약 projection, 서비스-local 조회 API, Gateway 조회 route, 조건 검색 가능한 관리자 대시보드까지 연결했습니다. 상품 검색 projection은 후속 확장 범위입니다.
 - 인증/권한, 부하 벤치마크, Kafka consumer 병렬성 검증, Kafka 장애 복구 자동화는 후속 확장 범위입니다.

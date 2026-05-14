@@ -15,6 +15,7 @@ import {
   retryOutbox,
   setStockQuantity,
   updateCatalogProduct,
+  type ReadModelOrderFilters,
   type ServiceDomain,
 } from './api/admin';
 import type {
@@ -115,15 +116,28 @@ function DashboardTab() {
   const [orders, setOrders] = useState<ReadModelOrderSummary[]>([]);
   const [dashboardState, setDashboardState] = useState<LoadState>('idle');
   const [dashboardError, setDashboardError] = useState<string | null>(null);
+  const [orderIdInput, setOrderIdInput] = useState('');
+  const [memberIdInput, setMemberIdInput] = useState('');
+  const [statusInput, setStatusInput] = useState('');
+  const [sagaStatusInput, setSagaStatusInput] = useState('');
+  const [couponCodeInput, setCouponCodeInput] = useState('');
+  const isMountedRef = useRef(true);
+  const dashboardRequestId = useRef(0);
 
-  useEffect(() => {
-    let cancelled = false;
+  const loadOrders = (filters: ReadModelOrderFilters = {
+    orderId: orderIdInput,
+    memberId: memberIdInput,
+    status: statusInput,
+    sagaStatus: sagaStatusInput,
+    couponCode: couponCodeInput,
+  }) => {
+    const requestId = ++dashboardRequestId.current;
     setDashboardState('loading');
     setDashboardError(null);
 
-    listReadModelAdminOrders()
+    listReadModelAdminOrders(filters)
       .then((response) => {
-        if (cancelled) {
+        if (!isMountedRef.current || requestId !== dashboardRequestId.current) {
           return;
         }
 
@@ -131,18 +145,29 @@ function DashboardTab() {
         setDashboardState('ready');
       })
       .catch((error) => {
-        if (cancelled) {
+        if (!isMountedRef.current || requestId !== dashboardRequestId.current) {
           return;
         }
 
+        setOrders([]);
         setDashboardState('error');
         setDashboardError(errorMessage(error));
       });
+  };
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    loadOrders({ orderId: '', memberId: '', status: '', sagaStatus: '', couponCode: '' });
 
     return () => {
-      cancelled = true;
+      isMountedRef.current = false;
     };
   }, []);
+
+  const onSubmitFilters = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    loadOrders();
+  };
 
   const metrics = useMemo(() => {
     const confirmed = orders.filter((order) => order.status === 'CONFIRMED').length;
@@ -174,7 +199,7 @@ function DashboardTab() {
             {dashboardState === 'loading'
               ? 'Read Model 조회 중'
               : dashboardState === 'ready'
-                ? `Read Model 기준 최근 ${orders.length}건`
+                ? `Read Model 조회 결과 ${orders.length}건`
                 : '대시보드 대기'}
           </p>
         </div>
@@ -185,13 +210,62 @@ function DashboardTab() {
           </p>
         )}
 
+        <form className="filter-grid read-model-filter-grid" onSubmit={onSubmitFilters}>
+          <label className="form-field">
+            <span>Read Model 주문 ID</span>
+            <input
+              value={orderIdInput}
+              onChange={(event) => setOrderIdInput(event.target.value)}
+              placeholder="예: ord_..."
+            />
+          </label>
+          <label className="form-field">
+            <span>Read Model 회원 ID</span>
+            <input
+              value={memberIdInput}
+              onChange={(event) => setMemberIdInput(event.target.value)}
+              placeholder="예: member-a"
+            />
+          </label>
+          <label className="form-field">
+            <span>Read Model 주문 상태</span>
+            <select value={statusInput} onChange={(event) => setStatusInput(event.target.value)}>
+              <option value="">전체</option>
+              <option value="CREATED">CREATED</option>
+              <option value="CONFIRMED">CONFIRMED</option>
+              <option value="CANCELLED">CANCELLED</option>
+            </select>
+          </label>
+          <label className="form-field">
+            <span>Read Model Saga 상태</span>
+            <select value={sagaStatusInput} onChange={(event) => setSagaStatusInput(event.target.value)}>
+              <option value="">전체</option>
+              <option value="STARTED">STARTED</option>
+              <option value="COMPLETED">COMPLETED</option>
+              <option value="FAILED">FAILED</option>
+              <option value="PAYMENT_DELAYED">PAYMENT_DELAYED</option>
+            </select>
+          </label>
+          <label className="form-field">
+            <span>Read Model 쿠폰 코드</span>
+            <input
+              value={couponCodeInput}
+              onChange={(event) => setCouponCodeInput(event.target.value)}
+              placeholder="예: WELCOME10"
+            />
+          </label>
+          <button type="submit" className="action-btn">
+            대시보드 조회
+          </button>
+        </form>
+
         {dashboardState === 'error' ? (
           <p className="empty-message">대시보드 데이터를 불러오지 못했습니다.</p>
         ) : (
           <>
             <dl className="metric-grid" aria-label="주문 운영 지표">
               <div>
-                <dt>총 주문</dt>
+                <dt>조회 주문</dt>
                 <dd>{orders.length}건</dd>
               </div>
               <div>

@@ -419,6 +419,10 @@ hr {
   grid-template-columns: repeat(2, minmax(0, 1fr)) auto;
 }
 
+.read-model-filter-grid {
+  grid-template-columns: repeat(5, minmax(120px, 1fr)) auto;
+}
+
 .form-field {
   display: grid;
   gap: 6px;
