@@ -4,7 +4,7 @@ $RootDir = Resolve-Path (Join-Path $PSScriptRoot "..")
 $ComposeFile = Join-Path $RootDir "infra/demo/docker-compose.yml"
 $EnvFile = Join-Path $RootDir "infra/demo/.env"
 $EnvExample = Join-Path $RootDir "infra/demo/.env.example"
-$ExpectedEnvRev = "2026-05-14-demo-ports-v2"
+$ExpectedEnvRev = "2026-05-14-demo-cicd-v3"
 
 $RefreshEnv = $false
 $SkipPortCheck = $false

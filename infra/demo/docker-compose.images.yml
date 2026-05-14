@@ -1,0 +1,30 @@
+services:
+  catalog-service:
+    image: ${STOCKRUSH_IMAGE_REGISTRY:-ghcr.io}/${STOCKRUSH_IMAGE_OWNER:-cyson21}/stockrush-catalog-service:${STOCKRUSH_IMAGE_TAG:-latest-demo}
+
+  inventory-service:
+    image: ${STOCKRUSH_IMAGE_REGISTRY:-ghcr.io}/${STOCKRUSH_IMAGE_OWNER:-cyson21}/stockrush-inventory-service:${STOCKRUSH_IMAGE_TAG:-latest-demo}
+
+  order-service:
+    image: ${STOCKRUSH_IMAGE_REGISTRY:-ghcr.io}/${STOCKRUSH_IMAGE_OWNER:-cyson21}/stockrush-order-service:${STOCKRUSH_IMAGE_TAG:-latest-demo}
+
+  payment-service:
+    image: ${STOCKRUSH_IMAGE_REGISTRY:-ghcr.io}/${STOCKRUSH_IMAGE_OWNER:-cyson21}/stockrush-payment-service:${STOCKRUSH_IMAGE_TAG:-latest-demo}
+
+  promotion-service:
+    image: ${STOCKRUSH_IMAGE_REGISTRY:-ghcr.io}/${STOCKRUSH_IMAGE_OWNER:-cyson21}/stockrush-promotion-service:${STOCKRUSH_IMAGE_TAG:-latest-demo}
+
+  fulfillment-service:
+    image: ${STOCKRUSH_IMAGE_REGISTRY:-ghcr.io}/${STOCKRUSH_IMAGE_OWNER:-cyson21}/stockrush-fulfillment-service:${STOCKRUSH_IMAGE_TAG:-latest-demo}
+
+  read-model-service:
+    image: ${STOCKRUSH_IMAGE_REGISTRY:-ghcr.io}/${STOCKRUSH_IMAGE_OWNER:-cyson21}/stockrush-read-model-service:${STOCKRUSH_IMAGE_TAG:-latest-demo}
+
+  gateway:
+    image: ${STOCKRUSH_IMAGE_REGISTRY:-ghcr.io}/${STOCKRUSH_IMAGE_OWNER:-cyson21}/stockrush-gateway:${STOCKRUSH_IMAGE_TAG:-latest-demo}
+
+  customer-app:
+    image: ${STOCKRUSH_IMAGE_REGISTRY:-ghcr.io}/${STOCKRUSH_IMAGE_OWNER:-cyson21}/stockrush-customer-app:${STOCKRUSH_IMAGE_TAG:-latest-demo}
+
+  admin-app:
+    image: ${STOCKRUSH_IMAGE_REGISTRY:-ghcr.io}/${STOCKRUSH_IMAGE_OWNER:-cyson21}/stockrush-admin-app:${STOCKRUSH_IMAGE_TAG:-latest-demo}

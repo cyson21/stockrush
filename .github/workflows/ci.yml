@@ -1,0 +1,134 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend services
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+
+      - name: Start local infrastructure
+        run: |
+          docker compose -f infra/local/docker-compose.yml up -d postgres kafka kafka-init
+          init_status="$(docker wait stockrush-kafka-init)"
+          test "$init_status" = "0"
+          docker compose -f infra/local/docker-compose.yml ps
+
+      - name: Run Maven tests
+        run: |
+          set -euo pipefail
+          for service in \
+            catalog-service \
+            inventory-service \
+            order-service \
+            payment-service \
+            promotion-service \
+            fulfillment-service \
+            read-model-service \
+            gateway
+          do
+            echo "::group::${service}"
+            (cd "services/${service}" && mvn -q test)
+            echo "::endgroup::"
+          done
+
+      - name: Show infrastructure logs on failure
+        if: failure()
+        run: docker compose -f infra/local/docker-compose.yml logs --tail=200
+
+      - name: Stop local infrastructure
+        if: always()
+        run: docker compose -f infra/local/docker-compose.yml down -v
+
+  web-apps:
+    name: Web apps
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: |
+            apps/customer-app/package-lock.json
+            apps/admin-app/package-lock.json
+
+      - name: Test and build customer app
+        run: |
+          npm --prefix apps/customer-app ci
+          npm --prefix apps/customer-app test
+          npm --prefix apps/customer-app run build
+
+      - name: Test and build admin app
+        run: |
+          npm --prefix apps/admin-app ci
+          npm --prefix apps/admin-app test
+          npm --prefix apps/admin-app run build
+
+  mobile-app:
+    name: Mobile app
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: apps/mobile-app/package-lock.json
+
+      - name: Test mobile app
+        run: |
+          npm --prefix apps/mobile-app ci
+          npm --prefix apps/mobile-app test
+          npm --prefix apps/mobile-app run typecheck
+          npm --prefix apps/mobile-app run test:scaffold
+
+  tools:
+    name: Tools and architecture guard
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Run local E2E runner tests
+        run: python -m unittest discover tools/local-e2e/tests
+
+      - name: Run architecture guard
+        run: ./tools/architecture-guard/architecture-guard check

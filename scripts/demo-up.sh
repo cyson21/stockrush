@@ -5,7 +5,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 COMPOSE_FILE="$ROOT_DIR/infra/demo/docker-compose.yml"
 ENV_FILE="$ROOT_DIR/infra/demo/.env"
 ENV_EXAMPLE="$ROOT_DIR/infra/demo/.env.example"
-EXPECTED_ENV_REV="2026-05-14-demo-ports-v2"
+EXPECTED_ENV_REV="2026-05-14-demo-cicd-v3"
 
 PORT_SPECS=(
   "POSTGRES_HOST_PORT:25432:postgres:5432"

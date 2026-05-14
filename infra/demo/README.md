@@ -20,6 +20,12 @@ The demo stack uses a separate high host-port range so it can run next to the de
 ./scripts/demo-down.sh
 ```
 
+GHCR에 발행된 이미지를 그대로 배포할 때는 local build 대신 deploy wrapper를 사용한다.
+
+```bash
+./scripts/deploy-local.sh --login --tag latest-demo
+```
+
 ## Windows 11
 
 Use Docker Desktop with WSL2 integration enabled. From PowerShell:
@@ -28,6 +34,12 @@ Use Docker Desktop with WSL2 integration enabled. From PowerShell:
 .\scripts\demo-up.ps1
 .\scripts\demo-smoke.ps1
 .\scripts\demo-down.ps1
+```
+
+GHCR 이미지 배포:
+
+```powershell
+.\scripts\deploy-local.ps1 --login --tag latest-demo
 ```
 
 WSL2 shell users can use the macOS/Linux shell scripts.
@@ -55,6 +67,14 @@ The wrapper scripts copy `infra/demo/.env.example` to `infra/demo/.env` on first
 If `infra/demo/.env` already exists, later `.env.example` changes are not copied automatically. Run `./scripts/demo-up.sh --refresh-env` or `.\scripts\demo-up.ps1 --refresh-env` to replace it with the current demo defaults.
 
 `demo-up` checks host ports before starting containers. If a port is already listening, edit the matching value in `infra/demo/.env`, then run `demo-up` again. Use `--skip-port-check` only when the current demo stack is already running and you intentionally want Docker Compose to reconcile it.
+
+`deploy-local` uses:
+
+- `STOCKRUSH_IMAGE_REGISTRY` default `ghcr.io`
+- `STOCKRUSH_IMAGE_OWNER` default `cyson21`
+- `STOCKRUSH_IMAGE_TAG` default `latest-demo`
+
+The image override file is `infra/demo/docker-compose.images.yml`.
 
 Inside the Docker network, services use:
 

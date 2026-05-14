@@ -26,6 +26,7 @@ StockRush는 한정 판매 주문 흐름에서 Kafka, Outbox, Saga를 묶은 엔
 - [관리자 앱 가이드](apps/admin-app/README.md)
 - [모바일 앱 가이드](apps/mobile-app/README.md)
 - [서비스 실행 가이드](services/README.md)
+- [CI/CD 운영 기준](docs/ci-cd.md)
 
 ## 빠른 실행 순서
 
@@ -95,6 +96,7 @@ Windows 11 PowerShell에서는 `.\scripts\demo-up.ps1`, `.\scripts\demo-smoke.ps
 | 데이터 저장 | 단일 PostgreSQL 인스턴스 안의 서비스별 schema |
 | 앱 | React/Vite 고객/관리자 웹앱, Expo React Native 고객 모바일 앱 |
 | AI 개발 운영 | Dev RAG, Project MCP, Spark worker/reviewer, Agent Runner, Architecture Guard |
+| CI/CD | GitHub Actions, GHCR, Docker Compose local deploy |
 
 ## 기술 선택 이유
 
@@ -104,6 +106,7 @@ Windows 11 PowerShell에서는 `.\scripts\demo-up.ps1`, `.\scripts\demo-smoke.ps
 - PostgreSQL schema 분리: 초기 개발 속도를 유지하면서도 서비스별 데이터 소유권을 명확히 하기 위해 사용했습니다.
 - React/Vite 웹앱: 백엔드 흐름을 고객/관리자 관점에서 빠르게 시연할 수 있게 하기 위해 최소 웹앱을 먼저 구현했습니다.
 - Expo React Native 모바일 앱: Android/iOS에서 고객 주문 흐름과 Read Model 기반 주문 내역을 시연할 수 있도록 Gateway-first client 구조를 잡고, 상품/SKU 재고 조회, 쿠폰/주문 생성, 주문 상태 추적, 주문 내역 화면을 연결했습니다.
+- GitHub Actions/GHCR: 개인 AWS 자원을 쓰지 않고도 테스트, 이미지 발행, 로컬 배포를 자동화하기 위해 사용했습니다.
 
 ## 실행 상태에서 확인되는 핵심 포인트
 

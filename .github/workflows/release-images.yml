@@ -1,0 +1,134 @@
+name: Release Images
+
+on:
+  workflow_run:
+    workflows:
+      - CI
+    branches:
+      - main
+    types:
+      - completed
+  workflow_dispatch:
+    inputs:
+      source_ref:
+        description: Git ref or SHA to publish
+        required: false
+        default: main
+      image_tag:
+        description: Additional image tag
+        required: false
+        default: latest-demo
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: release-images-${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || inputs.source_ref || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Publish ${{ matrix.image }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: catalog-service
+            dockerfile: services/Dockerfile
+            build_args: |
+              SERVICE_DIR=services/catalog-service
+              SERVICE_PORT=18081
+          - image: inventory-service
+            dockerfile: services/Dockerfile
+            build_args: |
+              SERVICE_DIR=services/inventory-service
+              SERVICE_PORT=18082
+          - image: order-service
+            dockerfile: services/Dockerfile
+            build_args: |
+              SERVICE_DIR=services/order-service
+              SERVICE_PORT=18083
+          - image: payment-service
+            dockerfile: services/Dockerfile
+            build_args: |
+              SERVICE_DIR=services/payment-service
+              SERVICE_PORT=18084
+          - image: promotion-service
+            dockerfile: services/Dockerfile
+            build_args: |
+              SERVICE_DIR=services/promotion-service
+              SERVICE_PORT=18085
+          - image: fulfillment-service
+            dockerfile: services/Dockerfile
+            build_args: |
+              SERVICE_DIR=services/fulfillment-service
+              SERVICE_PORT=18086
+          - image: read-model-service
+            dockerfile: services/Dockerfile
+            build_args: |
+              SERVICE_DIR=services/read-model-service
+              SERVICE_PORT=18087
+          - image: gateway
+            dockerfile: services/Dockerfile
+            build_args: |
+              SERVICE_DIR=services/gateway
+              SERVICE_PORT=18080
+          - image: customer-app
+            dockerfile: apps/Dockerfile
+            build_args: |
+              APP_DIR=customer-app
+          - image: admin-app
+            dockerfile: apps/Dockerfile
+            build_args: |
+              APP_DIR=admin-app
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || inputs.source_ref || github.ref }}
+
+      - name: Set image variables
+        id: vars
+        run: |
+          short_sha="$(git rev-parse --short=12 HEAD)"
+          image_tag="${{ github.event_name == 'workflow_dispatch' && inputs.image_tag || 'latest-demo' }}"
+          echo "short_sha=${short_sha}" >> "$GITHUB_OUTPUT"
+          echo "image_tag=${image_tag}" >> "$GITHUB_OUTPUT"
+          echo "image_name=ghcr.io/${{ github.repository_owner }}/stockrush-${{ matrix.image }}" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          push: true
+          build-args: ${{ matrix.build_args }}
+          tags: |
+            ${{ steps.vars.outputs.image_name }}:${{ steps.vars.outputs.image_tag }}
+            ${{ steps.vars.outputs.image_name }}:git-${{ steps.vars.outputs.short_sha }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ steps.vars.outputs.short_sha }}
+            org.opencontainers.image.title=StockRush ${{ matrix.image }}
+
+      - name: Summary
+        run: |
+          {
+            echo "### Published image"
+            echo "- `${{ steps.vars.outputs.image_name }}:${{ steps.vars.outputs.image_tag }}`"
+            echo "- `${{ steps.vars.outputs.image_name }}:git-${{ steps.vars.outputs.short_sha }}`"
+          } >> "$GITHUB_STEP_SUMMARY"
