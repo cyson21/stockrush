@@ -273,4 +273,204 @@ describe('ProductListScreen', () => {
       expect(screen.getByText('LIMITED-002-260')).toBeTruthy();
     });
   });
+
+  it('quotes a coupon and sends a discounted order payload', async () => {
+    fetchMock.mockImplementation((input, init) => {
+      const url = String(input);
+
+      if (url === 'http://localhost:18080/api/products?status=ON_SALE') {
+        return jsonResponse({
+          success: true,
+          data: [
+            {
+              productCode: 'LIMITED-001',
+              name: 'Limited Hoodie',
+              status: 'ON_SALE',
+              listPrice: 12000,
+            },
+          ],
+          error: null,
+          trace: { correlationId: 'corr-products' },
+        });
+      }
+
+      if (url === 'http://localhost:18080/api/stocks?productCode=LIMITED-001') {
+        return jsonResponse({
+          success: true,
+          data: [
+            {
+              skuId: 'LIMITED-001-S',
+              productCode: 'LIMITED-001',
+              availableQuantity: 8,
+              reservedQuantity: 2,
+              version: 4,
+            },
+          ],
+          error: null,
+          trace: { correlationId: 'corr-stocks' },
+        });
+      }
+
+      if (url === 'http://localhost:18080/api/coupons/quote' && init?.method === 'POST') {
+        return jsonResponse({
+          success: true,
+          data: {
+            couponCode: 'WELCOME10',
+            applied: true,
+            discountAmount: 5000,
+            payAmount: 7000,
+            reason: 'APPLIED',
+          },
+          error: null,
+          trace: { correlationId: 'corr-quote' },
+        });
+      }
+
+      if (url === 'http://localhost:18080/api/orders' && init?.method === 'POST') {
+        return jsonResponse(
+          {
+            success: true,
+            data: {
+              orderId: 'ord_mobile_001',
+              status: 'CREATED',
+              sagaStatus: 'STARTED',
+              paymentMethod: 'FAIL_CARD',
+              couponCode: 'WELCOME10',
+              totalAmount: 12000,
+              discountAmount: 5000,
+              payableAmount: 7000,
+            },
+            error: null,
+            trace: { correlationId: 'corr-order' },
+          },
+          201,
+        );
+      }
+
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    render(<ProductListScreen />);
+
+    fireEvent.press(await screen.findByText('Limited Hoodie'));
+    expect(await screen.findByText('LIMITED-001-S')).toBeTruthy();
+
+    fireEvent.changeText(screen.getByLabelText('쿠폰 코드'), 'WELCOME10');
+    fireEvent.press(screen.getByText('쿠폰 적용'));
+
+    expect(await screen.findByText('쿠폰 적용: APPLIED')).toBeTruthy();
+    expect(screen.getAllByText('할인 5,000원').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('결제 예정 7,000원').length).toBeGreaterThan(0);
+
+    fireEvent.press(screen.getByText('FAIL_CARD'));
+    fireEvent.press(screen.getByText('주문 생성'));
+
+    expect(await screen.findByText('ord_mobile_001')).toBeTruthy();
+    expect(screen.getByText('STARTED')).toBeTruthy();
+
+    const quoteRequest = fetchMock.mock.calls.find(
+      ([url, init]) => String(url) === 'http://localhost:18080/api/coupons/quote' && init?.method === 'POST',
+    );
+    expect(JSON.parse(String(quoteRequest?.[1]?.body))).toEqual({
+      couponCode: 'WELCOME10',
+      orderAmount: 12000,
+    });
+
+    const orderRequest = fetchMock.mock.calls.find(
+      ([url, init]) => String(url) === 'http://localhost:18080/api/orders' && init?.method === 'POST',
+    );
+    expect(orderRequest?.[1]?.headers).toEqual(
+      expect.objectContaining({
+        'Content-Type': 'application/json',
+        'Idempotency-Key': expect.stringMatching(/^mobile-order-create-/),
+        'X-Correlation-Id': 'mobile-order-create',
+      }),
+    );
+    expect(JSON.parse(String(orderRequest?.[1]?.body))).toEqual({
+      memberId: 'member-mobile-demo',
+      paymentMethod: 'FAIL_CARD',
+      couponCode: 'WELCOME10',
+      items: [
+        {
+          productCode: 'LIMITED-001',
+          skuId: 'LIMITED-001-S',
+          quantity: 1,
+          unitPrice: 12000,
+        },
+      ],
+    });
+  });
+
+  it('blocks order creation when coupon quote is not applied', async () => {
+    fetchMock.mockImplementation((input, init) => {
+      const url = String(input);
+
+      if (url === 'http://localhost:18080/api/products?status=ON_SALE') {
+        return jsonResponse({
+          success: true,
+          data: [
+            {
+              productCode: 'LIMITED-001',
+              name: 'Limited Hoodie',
+              status: 'ON_SALE',
+              listPrice: 12000,
+            },
+          ],
+          error: null,
+          trace: { correlationId: 'corr-products' },
+        });
+      }
+
+      if (url === 'http://localhost:18080/api/stocks?productCode=LIMITED-001') {
+        return jsonResponse({
+          success: true,
+          data: [
+            {
+              skuId: 'LIMITED-001-S',
+              productCode: 'LIMITED-001',
+              availableQuantity: 8,
+              reservedQuantity: 2,
+              version: 4,
+            },
+          ],
+          error: null,
+          trace: { correlationId: 'corr-stocks' },
+        });
+      }
+
+      if (url === 'http://localhost:18080/api/coupons/quote' && init?.method === 'POST') {
+        return jsonResponse({
+          success: true,
+          data: {
+            couponCode: 'BAD01',
+            applied: false,
+            discountAmount: 0,
+            payAmount: 12000,
+            reason: 'INVALID_COUPON',
+          },
+          error: null,
+          trace: { correlationId: 'corr-quote' },
+        });
+      }
+
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    render(<ProductListScreen />);
+
+    fireEvent.press(await screen.findByText('Limited Hoodie'));
+    expect(await screen.findByText('LIMITED-001-S')).toBeTruthy();
+
+    fireEvent.changeText(screen.getByLabelText('쿠폰 코드'), 'BAD01');
+    fireEvent.press(screen.getByText('쿠폰 적용'));
+
+    expect(await screen.findByText('쿠폰 적용: INVALID_COUPON')).toBeTruthy();
+    expect(screen.getByText('쿠폰 적용 상태를 확인하세요.')).toBeTruthy();
+
+    fireEvent.press(screen.getByText('주문 생성'));
+
+    expect(
+      fetchMock.mock.calls.some(([url, init]) => String(url) === 'http://localhost:18080/api/orders' && init?.method === 'POST'),
+    ).toBe(false);
+  });
 });
