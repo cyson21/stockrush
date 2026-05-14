@@ -61,7 +61,7 @@ Customer App
   -> read-model-service order summary projection on OrderCreated/OrderConfirmed/OrderCancelled
 ```
 
-The customer app reads order status through `GET /api/orders/{orderId}`. The admin app reads order/Saga state and service-specific outbox rows through Gateway admin APIs.
+The current customer web app reads order status through `GET /api/orders/{orderId}`. The planned Android/iOS customer app will reuse the same customer APIs and add Read Model order history. The admin web app reads order/Saga state and service-specific outbox rows through Gateway admin APIs.
 Read Model Service currently exposes service-local summary APIs and is not proxied by Gateway.
 
 ## First Demo Scenario

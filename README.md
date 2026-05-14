@@ -13,6 +13,7 @@ StockRush는 한정 판매 주문 흐름에서 Kafka, Outbox, Saga를 묶은 엔
 - Fulfillment Service 주문 완료 이벤트 기반 출고 준비 요청 기록
 - Read Model Service 주문 이벤트 기반 고객/관리자 주문 요약 projection
 - 고객 앱 쿠폰 견적 UI와 Order Service 주문 할인 반영
+- 계획 확장: Expo React Native 기반 Android/iOS 고객 모바일 앱
 - Kafka + 서비스 로컬 Outbox + Saga 상태 전이
 - `CARD` 성공, `FAIL_CARD` 실패/재고 복구, `DELAY_CARD` 지연 결제와 관리자 취소 흐름
 
@@ -31,8 +32,9 @@ StockRush는 한정 판매 주문 흐름에서 Kafka, Outbox, Saga를 묶은 엔
    - 쿠폰 API를 확인할 때는 promotion-service도 함께 기동합니다.
    - 출고 준비 요청을 확인할 때는 fulfillment-service도 함께 기동합니다.
    - 주문 요약 projection을 확인할 때는 read-model-service도 함께 기동합니다.
-3. customer-app과 admin-app을 실행합니다.
-4. [Local E2E Runbook](docs/runbooks/local-e2e.md)에 따라 `CARD`, `FAIL_CARD`, `DELAY_CARD`, 지연 결제 취소 시나리오를 확인합니다.
+3. 현재 구현된 React/Vite customer-app과 admin-app을 실행합니다.
+4. 모바일 앱은 후속 Phase에서 `apps/mobile-app`으로 추가하고, 구현 후 Expo 실행 가이드를 별도 README에 둡니다.
+5. [Local E2E Runbook](docs/runbooks/local-e2e.md)에 따라 `CARD`, `FAIL_CARD`, `DELAY_CARD`, 지연 결제 취소 시나리오를 확인합니다.
 
 자세한 명령은 실행 문서에 분리했습니다. README는 포트폴리오 설명과 검증 기준을 빠르게 파악하는 진입점으로 유지합니다.
 
@@ -48,6 +50,7 @@ docker compose up -d
 - [Phase 1 Commerce Foundation](docs/architecture/phase-1-commerce-foundation.md)
 - [Customer App Flow](docs/architecture/customer-app-flow.md)
 - [Admin App Flow](docs/architecture/admin-app-flow.md)
+- [Mobile App Flow](docs/architecture/mobile-app-flow.md)
 - [Event Envelope](docs/architecture/events.md)
 - [Outbox and Consumer Idempotency](docs/architecture/outbox.md)
 - [Test Strategy](docs/test-strategy.md)
@@ -74,7 +77,7 @@ docker compose up -d
 | 발행 안정성 | 서비스별 Outbox relay와 retry/failed 상태 |
 | 중복 처리 | Consumer processed event 저장 |
 | 데이터 저장 | 단일 PostgreSQL 인스턴스 안의 서비스별 schema |
-| 앱 | React/Vite 고객 앱과 관리자 앱 |
+| 앱 | React/Vite 고객/관리자 웹앱, Expo React Native 고객 모바일 앱 계획 |
 | AI 개발 운영 | Dev RAG, Project MCP, Spark worker/reviewer, Agent Runner, Architecture Guard |
 
 ## 기술 선택 이유
@@ -83,7 +86,8 @@ docker compose up -d
 - Outbox: DB 상태 변경과 Kafka 발행 사이의 실패 지점을 운영자가 확인하고 재시도할 수 있게 만들기 위해 사용했습니다.
 - Saga Orchestration: 주문 상태의 최종 책임을 Order Service에 두고, 재고/결제 결과 이벤트에 따라 다음 흐름을 결정하기 위해 선택했습니다.
 - PostgreSQL schema 분리: 초기 개발 속도를 유지하면서도 서비스별 데이터 소유권을 명확히 하기 위해 사용했습니다.
-- React/Vite 앱: 백엔드 흐름을 고객/관리자 관점에서 직접 시연할 수 있게 하기 위해 최소 앱을 함께 구현했습니다.
+- React/Vite 웹앱: 백엔드 흐름을 고객/관리자 관점에서 빠르게 시연할 수 있게 하기 위해 최소 웹앱을 먼저 구현했습니다.
+- Expo React Native 모바일 앱: Android/iOS에서 고객 주문 흐름과 Read Model 기반 주문 내역을 시연할 수 있게 후속 확장으로 계획했습니다.
 
 ## 실행 상태에서 확인되는 핵심 포인트
 
@@ -114,6 +118,7 @@ docker compose up -d
 
 - 백엔드는 서비스별 `mvn test`로 API, Outbox relay, Kafka smoke, Saga handler를 검증합니다.
 - 고객/관리자 앱은 Vitest와 production build로 API 호출 모양, 상태 렌더링, 재시도 키 재사용을 검증합니다.
+- 모바일 앱은 구현 후 TypeScript/React Native 테스트와 Android 또는 iOS smoke로 검증합니다.
 - `./tools/architecture-guard/architecture-guard check`로 schema ownership, Controller 반환 타입, 이벤트 envelope, Outbox table shape를 점검합니다.
 - 실제 로컬 E2E는 [Local E2E Runbook](docs/runbooks/local-e2e.md)의 `CARD`, `FAIL_CARD`, `DELAY_CARD`, 지연 결제 취소 시나리오를 기준으로 재현합니다.
 - 최근 지연 결제 취소 E2E 증거: `ord_20260513012031_8c06cd49` 주문이 `CREATED/PAYMENT_DELAYED` 도달 후 관리자 취소로 `CANCELLED/FAILED`가 됐고, SKU `DELAY-E2E-102029-S` 재고는 `available=20`, `reserved=0`으로 복구됐습니다.
