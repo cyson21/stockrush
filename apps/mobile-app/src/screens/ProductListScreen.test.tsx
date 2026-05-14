@@ -32,6 +32,10 @@ describe('ProductListScreen', () => {
     global.fetch = fetchMock;
   });
 
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
   it('loads on-sale products and shows selected SKU stock', async () => {
     fetchMock.mockImplementation((input) => {
       const url = String(input);
@@ -347,6 +351,34 @@ describe('ProductListScreen', () => {
         );
       }
 
+      if (url === 'http://localhost:18080/api/orders/ord_mobile_001' && init?.method === 'GET') {
+        return jsonResponse({
+          success: true,
+          data: {
+            orderId: 'ord_mobile_001',
+            memberId: 'member-mobile-demo',
+            status: 'CANCELLED',
+            sagaStatus: 'FAILED',
+            paymentMethod: 'FAIL_CARD',
+            couponCode: 'WELCOME10',
+            totalAmount: 12000,
+            discountAmount: 5000,
+            payableAmount: 7000,
+            items: [
+              {
+                productCode: 'LIMITED-001',
+                skuId: 'LIMITED-001-S',
+                quantity: 1,
+                unitPrice: 12000,
+                lineAmount: 12000,
+              },
+            ],
+          },
+          error: null,
+          trace: { correlationId: 'corr-order-detail' },
+        });
+      }
+
       throw new Error(`Unexpected request: ${url}`);
     });
 
@@ -366,7 +398,14 @@ describe('ProductListScreen', () => {
     fireEvent.press(screen.getByText('주문 생성'));
 
     expect(await screen.findByText('ord_mobile_001')).toBeTruthy();
-    expect(screen.getByText('STARTED')).toBeTruthy();
+    expect(await screen.findByText('FAILED')).toBeTruthy();
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        'http://localhost:18080/api/orders/ord_mobile_001',
+        expect.objectContaining({ method: 'GET' }),
+      );
+    });
 
     const quoteRequest = fetchMock.mock.calls.find(
       ([url, init]) => String(url) === 'http://localhost:18080/api/coupons/quote' && init?.method === 'POST',
@@ -472,5 +511,125 @@ describe('ProductListScreen', () => {
     expect(
       fetchMock.mock.calls.some(([url, init]) => String(url) === 'http://localhost:18080/api/orders' && init?.method === 'POST'),
     ).toBe(false);
+  });
+
+  it('polls order status until a terminal saga status is received', async () => {
+    jest.useFakeTimers();
+    let detailCallCount = 0;
+
+    fetchMock.mockImplementation((input, init) => {
+      const url = String(input);
+
+      if (url === 'http://localhost:18080/api/products?status=ON_SALE') {
+        return jsonResponse({
+          success: true,
+          data: [
+            {
+              productCode: 'LIMITED-001',
+              name: 'Limited Hoodie',
+              status: 'ON_SALE',
+              listPrice: 12000,
+            },
+          ],
+          error: null,
+          trace: { correlationId: 'corr-products' },
+        });
+      }
+
+      if (url === 'http://localhost:18080/api/stocks?productCode=LIMITED-001') {
+        return jsonResponse({
+          success: true,
+          data: [
+            {
+              skuId: 'LIMITED-001-S',
+              productCode: 'LIMITED-001',
+              availableQuantity: 8,
+              reservedQuantity: 2,
+              version: 4,
+            },
+          ],
+          error: null,
+          trace: { correlationId: 'corr-stocks' },
+        });
+      }
+
+      if (url === 'http://localhost:18080/api/orders' && init?.method === 'POST') {
+        return jsonResponse(
+          {
+            success: true,
+            data: {
+              orderId: 'ord_mobile_polling',
+              status: 'CREATED',
+              sagaStatus: 'STARTED',
+              paymentMethod: 'CARD',
+              couponCode: null,
+              totalAmount: 12000,
+              discountAmount: 0,
+              payableAmount: 12000,
+            },
+            error: null,
+            trace: { correlationId: 'corr-order' },
+          },
+          201,
+        );
+      }
+
+      if (url === 'http://localhost:18080/api/orders/ord_mobile_polling' && init?.method === 'GET') {
+        detailCallCount += 1;
+        const completed = detailCallCount >= 2;
+
+        return jsonResponse({
+          success: true,
+          data: {
+            orderId: 'ord_mobile_polling',
+            memberId: 'member-mobile-demo',
+            status: completed ? 'CONFIRMED' : 'CREATED',
+            sagaStatus: completed ? 'COMPLETED' : 'STARTED',
+            paymentMethod: 'CARD',
+            couponCode: null,
+            totalAmount: 12000,
+            discountAmount: 0,
+            payableAmount: 12000,
+            items: [
+              {
+                productCode: 'LIMITED-001',
+                skuId: 'LIMITED-001-S',
+                quantity: 1,
+                unitPrice: 12000,
+                lineAmount: 12000,
+              },
+            ],
+          },
+          error: null,
+          trace: { correlationId: 'corr-order-detail' },
+        });
+      }
+
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    render(<ProductListScreen />);
+
+    fireEvent.press(await screen.findByText('Limited Hoodie'));
+    expect(await screen.findByText('LIMITED-001-S')).toBeTruthy();
+
+    fireEvent.press(screen.getByText('주문 생성'));
+
+    expect(await screen.findByText('ord_mobile_polling')).toBeTruthy();
+    expect(await screen.findByText('STARTED')).toBeTruthy();
+
+    await act(async () => {
+      jest.advanceTimersByTime(2000);
+      await Promise.resolve();
+    });
+
+    expect(await screen.findByText('COMPLETED')).toBeTruthy();
+
+    await act(async () => {
+      jest.advanceTimersByTime(4000);
+      await Promise.resolve();
+    });
+
+    expect(detailCallCount).toBe(2);
   });
 });

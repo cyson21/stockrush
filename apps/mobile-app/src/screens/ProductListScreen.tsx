@@ -11,10 +11,10 @@ import {
 import { listOnSaleProducts } from '../api/catalog';
 import { ApiClientError } from '../api/client';
 import { listStocks } from '../api/inventory';
-import { createOrder } from '../api/orders';
+import { createOrder, getOrder } from '../api/orders';
 import { quoteCoupon } from '../api/promotion';
 import { getDefaultMemberId } from '../config/runtime';
-import type { CreateOrderResponse, Product, PromotionQuoteResponse, Stock } from '../types/api';
+import type { CreateOrderResponse, OrderDetail, Product, PromotionQuoteResponse, Stock } from '../types/api';
 
 type LoadStatus = 'idle' | 'loading' | 'ready' | 'error';
 type PaymentMethod = 'CARD' | 'FAIL_CARD' | 'DELAY_CARD';
@@ -35,6 +35,10 @@ function formatError(error: unknown): string {
   return '요청을 처리하지 못했습니다.';
 }
 
+function isTerminalSagaStatus(sagaStatus: string): boolean {
+  return sagaStatus === 'COMPLETED' || sagaStatus === 'FAILED' || sagaStatus === 'PAYMENT_DELAYED';
+}
+
 export default function ProductListScreen() {
   const [products, setProducts] = useState<Product[]>([]);
   const [productStatus, setProductStatus] = useState<LoadStatus>('idle');
@@ -53,6 +57,8 @@ export default function ProductListScreen() {
   const [orderStatus, setOrderStatus] = useState<LoadStatus>('idle');
   const [orderError, setOrderError] = useState<string | null>(null);
   const [createdOrder, setCreatedOrder] = useState<CreateOrderResponse | null>(null);
+  const [orderDetail, setOrderDetail] = useState<OrderDetail | null>(null);
+  const [orderPollError, setOrderPollError] = useState<string | null>(null);
   const stockRequestIdRef = useRef(0);
   const memberId = getDefaultMemberId();
 
@@ -76,6 +82,8 @@ export default function ProductListScreen() {
     setCouponError(null);
     setCouponStatus('idle');
     setCreatedOrder(null);
+    setOrderDetail(null);
+    setOrderPollError(null);
     setOrderError(null);
     setOrderStatus('idle');
 
@@ -102,6 +110,8 @@ export default function ProductListScreen() {
     setCouponError(null);
     setCouponStatus('idle');
     setCreatedOrder(null);
+    setOrderDetail(null);
+    setOrderPollError(null);
     setOrderError(null);
     setOrderStatus('idle');
 
@@ -125,6 +135,57 @@ export default function ProductListScreen() {
   useEffect(() => {
     void loadProducts();
   }, [loadProducts]);
+
+  useEffect(() => {
+    if (!createdOrder) {
+      return undefined;
+    }
+
+    const orderId = createdOrder.orderId;
+    let cancelled = false;
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+    let consecutiveFailures = 0;
+
+    function scheduleNextLoad() {
+      timeoutId = setTimeout(() => {
+        void loadOrder();
+      }, 2000);
+    }
+
+    async function loadOrder() {
+      try {
+        const response = await getOrder(orderId);
+        if (cancelled) {
+          return;
+        }
+        setOrderDetail(response);
+        setOrderPollError(null);
+        consecutiveFailures = 0;
+
+        if (!isTerminalSagaStatus(response.sagaStatus)) {
+          scheduleNextLoad();
+        }
+      } catch (error) {
+        if (!cancelled) {
+          consecutiveFailures += 1;
+          setOrderPollError(`상태 조회 실패 ${consecutiveFailures}/3: ${formatError(error)}`);
+
+          if (consecutiveFailures < 3) {
+            scheduleNextLoad();
+          }
+        }
+      }
+    }
+
+    void loadOrder();
+
+    return () => {
+      cancelled = true;
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+    };
+  }, [createdOrder]);
 
   const updateCouponCode = (value: string) => {
     setCouponCode(value);
@@ -170,6 +231,8 @@ export default function ProductListScreen() {
 
     setOrderStatus('loading');
     setOrderError(null);
+    setOrderDetail(null);
+    setOrderPollError(null);
 
     try {
       const response = await createOrder({
@@ -378,6 +441,7 @@ export default function ProductListScreen() {
               </View>
 
               {orderError ? <Text style={styles.errorText}>{orderError}</Text> : null}
+              {orderPollError ? <Text style={styles.errorText}>상태 조회 실패: {orderPollError}</Text> : null}
 
               <Pressable
                 accessibilityRole="button"
@@ -395,8 +459,11 @@ export default function ProductListScreen() {
                 <View style={styles.summaryBox}>
                   <Text style={styles.summaryLabel}>생성된 주문</Text>
                   <Text style={styles.summaryValue}>{createdOrder.orderId}</Text>
-                  <Text style={styles.summaryText}>{createdOrder.status}</Text>
-                  <Text style={styles.summaryText}>{createdOrder.sagaStatus}</Text>
+                  <Text style={styles.summaryText}>{orderDetail?.status ?? createdOrder.status}</Text>
+                  <Text style={styles.summaryText}>{orderDetail?.sagaStatus ?? createdOrder.sagaStatus}</Text>
+                  <Text style={styles.summaryText}>
+                    결제수단 {orderDetail?.paymentMethod ?? createdOrder.paymentMethod}
+                  </Text>
                 </View>
               ) : null}
             </>

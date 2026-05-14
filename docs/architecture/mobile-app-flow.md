@@ -15,7 +15,7 @@ StockRush 모바일 앱은 Android/iOS 설치형 고객 앱으로 계획한다. 
 [implemented] Product List and SKU Stock Selection
   -> [implemented] Coupon Quote
   -> [implemented] Checkout
-  -> [remaining] Order Status Tracking
+  -> [implemented] Order Status Tracking
   -> [remaining] Order History
 ```
 
@@ -58,7 +58,6 @@ Remaining screen modules:
 ```text
 apps/mobile-app
   src/screens
-    OrderStatusScreen.tsx
     OrderHistoryScreen.tsx
   src/components
 ```
@@ -88,7 +87,7 @@ API 호출, 타입, 화면 컴포넌트를 분리한다. 앱 내부에는 주문
 ## Verification
 
 - 현재 scaffold는 `node apps/mobile-app/scripts/validate-scaffold.mjs`로 구조와 API base URL 기준을 검증한다.
-- `ProductListScreen.test.tsx`는 상품 목록 조회, 선택 상품 SKU 재고 조회, 상품 목록 오류와 재시도, SKU 재고 오류와 재시도, 연속 선택 시 늦은 재고 응답 무시, 쿠폰 견적, 쿠폰 미적용 차단, 주문 생성 payload와 header를 검증한다.
+- `ProductListScreen.test.tsx`는 상품 목록 조회, 선택 상품 SKU 재고 조회, 상품 목록 오류와 재시도, SKU 재고 오류와 재시도, 연속 선택 시 늦은 재고 응답 무시, 쿠폰 견적, 쿠폰 미적용 차단, 주문 생성 payload와 header, 주문 상태 polling을 검증한다.
 - 의존성 설치 후 TypeScript typecheck를 실행한다.
 - Expo start로 Android/iOS 중 최소 한 환경에서 수동 smoke를 수행한다.
 - 백엔드 E2E와 혼동하지 않도록 모바일 검증 결과는 별도 AI Run Ledger에 기록한다.

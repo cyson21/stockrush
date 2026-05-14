@@ -2,7 +2,7 @@
 
 Expo React Native customer app scaffold for Android/iOS.
 
-This app currently implements Gateway-based product browsing, stock lookup, coupon quote, and order creation. The same Gateway-first client layer is prepared for order status and Read Model order history slices.
+This app currently implements Gateway-based product browsing, stock lookup, coupon quote, order creation, and order status tracking. The same Gateway-first client layer is prepared for the Read Model order history slice.
 
 ## Runtime
 
@@ -62,10 +62,10 @@ npm run test:scaffold
 - SKU stock lookup for the selected product through `GET /api/stocks?productCode={productCode}`
 - Coupon quote through `POST /api/coupons/quote`
 - Order creation through `POST /api/orders`
-- React Native Testing Library coverage for product loading, stock loading, product error retry, stock error retry, out-of-order stock responses, coupon quote, coupon block, and order payload/header
+- Order status tracking through `GET /api/orders/{orderId}`
+- React Native Testing Library coverage for product loading, stock loading, product error retry, stock error retry, out-of-order stock responses, coupon quote, coupon block, order payload/header, and order status polling
 
 ## Next Implementation Slices
 
-1. Order status polling screen.
-2. Read Model order history screen.
-3. Android or iOS smoke evidence.
+1. Read Model order history screen.
+2. Android or iOS smoke evidence.
