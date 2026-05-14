@@ -1,0 +1,18 @@
+{
+  "expo": {
+    "name": "StockRush Mobile",
+    "slug": "stockrush-mobile",
+    "scheme": "stockrush",
+    "version": "0.0.1",
+    "orientation": "portrait",
+    "platforms": ["ios", "android"],
+    "userInterfaceStyle": "light",
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "bundleIdentifier": "com.stockrush.mobile"
+    },
+    "android": {
+      "package": "com.stockrush.mobile"
+    }
+  }
+}

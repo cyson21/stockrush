@@ -33,14 +33,29 @@ Product List
 
 ## Client Architecture
 
+Current scaffold:
+
 ```text
 apps/mobile-app
+  App.tsx
+  app.json
+  package.json
   src/api
     catalog.ts
     inventory.ts
     promotion.ts
     orders.ts
     readModel.ts
+  src/config
+    runtime.ts
+  src/types
+    api.ts
+```
+
+Planned screen modules:
+
+```text
+apps/mobile-app
   src/screens
     ProductListScreen.tsx
     ProductDetailScreen.tsx
@@ -48,7 +63,6 @@ apps/mobile-app
     OrderStatusScreen.tsx
     OrderHistoryScreen.tsx
   src/components
-  src/types
 ```
 
 API 호출, 타입, 화면 컴포넌트를 분리한다. 앱 내부에는 주문 상태 전이 판단을 넣지 않고, 서버 응답의 `status`와 `sagaStatus`를 표시한다.
@@ -63,7 +77,7 @@ API 호출, 타입, 화면 컴포넌트를 분리한다. 앱 내부에는 주문
 | Android Emulator | `http://10.0.2.2:18080` |
 | Physical Device | `http://{host-lan-ip}:18080` |
 
-초기 목표는 Gateway를 기본 진입점으로 쓰는 것이다. Promotion과 Read Model이 Gateway에 연결되기 전에는 서비스별 개발 URL을 임시로 둘 수 있지만, 포트폴리오 시연 기준은 Gateway 경유로 정리한다.
+모바일 앱은 Gateway를 기본 진입점으로 쓴다. 필요한 Promotion quote와 Read Model order history route는 Gateway에 연결되어 있다.
 
 ## UX Rules
 
@@ -75,8 +89,9 @@ API 호출, 타입, 화면 컴포넌트를 분리한다. 앱 내부에는 주문
 
 ## Verification
 
-- Jest 또는 React Native Testing Library로 API 호출과 화면 상태를 검증한다.
-- TypeScript typecheck를 실행한다.
+- 현재 scaffold는 `node apps/mobile-app/scripts/validate-scaffold.mjs`로 구조와 API base URL 기준을 검증한다.
+- 화면 구현 후 Jest 또는 React Native Testing Library로 API 호출과 화면 상태를 검증한다.
+- 의존성 설치 후 TypeScript typecheck를 실행한다.
 - Expo start로 Android/iOS 중 최소 한 환경에서 수동 smoke를 수행한다.
 - 백엔드 E2E와 혼동하지 않도록 모바일 검증 결과는 별도 AI Run Ledger에 기록한다.
 
