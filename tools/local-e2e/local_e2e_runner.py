@@ -10,7 +10,7 @@ import urllib.error
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import Any, Mapping, Sequence
 from uuid import uuid4
 
@@ -21,10 +21,12 @@ DEFAULT_ORDER_URL = "http://localhost:18083"
 DEFAULT_ORDER_API_URL = "http://localhost:18080"
 DEFAULT_OUTBOX_API_URL = "http://localhost:18080"
 DEFAULT_PAYMENT_URL = "http://localhost:18084"
+DEFAULT_PROMOTION_URL = "http://localhost:18085"
 SERVICE_BASES = ("order", "inventory", "payment")
 MAX_GENERATED_PREFIX_LENGTH = 48
 MAX_RELAY_BATCH_SIZE = 100
 OUTBOX_QUERY_LIMIT = 200
+DEMO_COUPON_DISCOUNT_AMOUNT = 1000
 
 
 @dataclass(frozen=True)
@@ -42,6 +44,7 @@ class ScenarioConfig:
     order_api_url: str
     outbox_api_url: str
     payment_url: str
+    promotion_url: str
     order_count: int
     initial_stock: int
     quantity_per_order: int
@@ -101,6 +104,33 @@ def scenario_ids(prefix: str) -> tuple[str, str]:
     suffix = f"{datetime.now().strftime('%Y%m%d%H%M%S')}-{uuid4().hex[:8]}"
     product_code = f"{normalized}-{suffix}"
     return product_code, f"{product_code}-S"
+
+
+def coupon_code_for_product(product_code: str) -> str:
+    return f"{product_code}-C"
+
+
+def demo_order_amount(config: ScenarioConfig) -> int:
+    return config.unit_price * config.quantity_per_order
+
+
+def demo_coupon_discount_amount(config: ScenarioConfig) -> int:
+    return min(DEMO_COUPON_DISCOUNT_AMOUNT, demo_order_amount(config))
+
+
+def demo_coupon_payable_amount(config: ScenarioConfig) -> int:
+    return max(0, demo_order_amount(config) - demo_coupon_discount_amount(config))
+
+
+def demo_coupon_period(now: datetime | None = None) -> tuple[str, str]:
+    base = now or datetime.now(timezone.utc)
+    starts_at = base - timedelta(days=1)
+    ends_at = base + timedelta(days=365)
+    return format_utc_instant(starts_at), format_utc_instant(ends_at)
+
+
+def format_utc_instant(value: datetime) -> str:
+    return value.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def summarize_orders(orders: Sequence[Mapping[str, Any]]) -> OrderSummary:
@@ -163,6 +193,9 @@ def validate_demo_order_flow_result(
     initial_stock: int,
     quantity_per_order: int,
     pending_outbox_counts: Mapping[str, int],
+    coupon_code: str,
+    expected_discount_amount: int,
+    expected_payable_amount: int,
 ) -> list[str]:
     errors: list[str] = []
     expected_available = initial_stock - quantity_per_order
@@ -171,6 +204,18 @@ def validate_demo_order_flow_result(
         errors.append(
             "CARD order expected CONFIRMED/COMPLETED; "
             f"got {card_order.get('status')}/{card_order.get('sagaStatus')}"
+        )
+    if card_order.get("couponCode") != coupon_code:
+        errors.append(f"CARD order coupon expected {coupon_code}, got {card_order.get('couponCode')}")
+    if not numeric_equals(card_order.get("discountAmount"), expected_discount_amount):
+        errors.append(
+            "CARD order discountAmount expected "
+            f"{expected_discount_amount}, got {card_order.get('discountAmount')}"
+        )
+    if not numeric_equals(card_order.get("payableAmount"), expected_payable_amount):
+        errors.append(
+            "CARD order payableAmount expected "
+            f"{expected_payable_amount}, got {card_order.get('payableAmount')}"
         )
     if not is_order_state(fail_order, "CANCELLED", "FAILED"):
         errors.append(
@@ -196,8 +241,40 @@ def validate_demo_order_flow_result(
     return errors
 
 
+def validate_coupon_quote_result(
+    *,
+    quote: Mapping[str, Any],
+    coupon_code: str,
+    expected_discount_amount: int,
+    expected_payable_amount: int,
+) -> list[str]:
+    errors: list[str] = []
+    if quote.get("couponCode") != coupon_code:
+        errors.append(f"quote coupon expected {coupon_code}, got {quote.get('couponCode')}")
+    if quote.get("applied") is not True:
+        errors.append(f"quote applied expected True, got {quote.get('applied')} with reason {quote.get('reason')}")
+    if not numeric_equals(quote.get("discountAmount"), expected_discount_amount):
+        errors.append(
+            "quote discountAmount expected "
+            f"{expected_discount_amount}, got {quote.get('discountAmount')}"
+        )
+    if not numeric_equals(quote.get("payAmount"), expected_payable_amount):
+        errors.append(
+            "quote payAmount expected "
+            f"{expected_payable_amount}, got {quote.get('payAmount')}"
+        )
+    return errors
+
+
 def is_order_state(order: Mapping[str, Any], status: str, saga_status: str) -> bool:
     return order.get("status") == status and order.get("sagaStatus") == saga_status
+
+
+def numeric_equals(actual: Any, expected: int) -> bool:
+    try:
+        return float(actual) == float(expected)
+    except (TypeError, ValueError):
+        return False
 
 
 class ApiClient:
@@ -282,6 +359,7 @@ def healthcheck(client: ApiClient, config: ScenarioConfig) -> None:
         config.order_api_url,
         config.outbox_api_url,
         config.payment_url,
+        config.promotion_url,
     ]):
         payload = client.get(f"{base_url}/actuator/health")
         if payload.get("status") != "UP":
@@ -341,14 +419,19 @@ def run_concurrent_sku_scenario(config: ScenarioConfig) -> Mapping[str, Any]:
 def run_demo_order_flow_scenario(config: ScenarioConfig) -> Mapping[str, Any]:
     client = ApiClient(timeout_seconds=90.0)
     product_code, sku_id = scenario_ids(config.prefix)
+    coupon_code = coupon_code_for_product(product_code)
+    expected_discount_amount = demo_coupon_discount_amount(config)
+    expected_payable_amount = demo_coupon_payable_amount(config)
 
     healthcheck(client, config)
     ensure_no_pending_outbox(client, config)
     pending_before = count_pending_outbox(client, config)
     seed_product(client, config, product_code)
     seed_stock(client, config, product_code, sku_id)
+    seed_coupon(client, config, coupon_code)
+    coupon_quote = quote_coupon(client, config, coupon_code, demo_order_amount(config))
 
-    card_order = create_order(client, config, product_code, sku_id, "CARD", "member-demo-card", 1)
+    card_order = create_order(client, config, product_code, sku_id, "CARD", "member-demo-card", 1, coupon_code)
     fail_order = create_order(client, config, product_code, sku_id, "FAIL_CARD", "member-demo-fail", 2)
     delay_order = create_order(client, config, product_code, sku_id, "DELAY_CARD", "member-demo-delay", 3)
 
@@ -402,7 +485,13 @@ def run_demo_order_flow_scenario(config: ScenarioConfig) -> Mapping[str, Any]:
         pending_after = count_pending_outbox(client, config)
         pending_delta = pending_outbox_delta(pending_before, pending_after)
 
-    errors = validate_demo_order_flow_result(
+    errors = validate_coupon_quote_result(
+        quote=coupon_quote,
+        coupon_code=coupon_code,
+        expected_discount_amount=expected_discount_amount,
+        expected_payable_amount=expected_payable_amount,
+    )
+    errors.extend(validate_demo_order_flow_result(
         card_order=orders["card"],
         fail_order=orders["fail"],
         delay_order=orders["delay"],
@@ -410,11 +499,16 @@ def run_demo_order_flow_scenario(config: ScenarioConfig) -> Mapping[str, Any]:
         initial_stock=config.initial_stock,
         quantity_per_order=config.quantity_per_order,
         pending_outbox_counts=pending_delta,
-    )
+        coupon_code=coupon_code,
+        expected_discount_amount=expected_discount_amount,
+        expected_payable_amount=expected_payable_amount,
+    ))
 
     return {
         "productCode": product_code,
         "skuId": sku_id,
+        "couponCode": coupon_code,
+        "couponQuote": coupon_quote,
         "orders": orders,
         "stock": final_stock,
         "pendingOutboxBaseline": pending_before,
@@ -445,6 +539,43 @@ def seed_stock(client: ApiClient, config: ScenarioConfig, product_code: str, sku
     )
 
 
+def seed_coupon(client: ApiClient, config: ScenarioConfig, coupon_code: str) -> Mapping[str, Any]:
+    starts_at, ends_at = demo_coupon_period()
+    return response_data(
+        client.post(
+            f"{config.promotion_url}/api/admin/coupons",
+            {
+                "couponCode": coupon_code,
+                "name": "Demo E2E Coupon",
+                "discountType": "FIXED_AMOUNT",
+                "discountValue": DEMO_COUPON_DISCOUNT_AMOUNT,
+                "minOrderAmount": 0,
+                "maxDiscountAmount": None,
+                "status": "ACTIVE",
+                "startsAt": starts_at,
+                "endsAt": ends_at,
+            },
+            headers={
+                "Idempotency-Key": f"idem-coupon-{coupon_code}",
+                "X-Correlation-Id": f"corr-coupon-{coupon_code}",
+            },
+        )
+    )
+
+
+def quote_coupon(client: ApiClient, config: ScenarioConfig, coupon_code: str, order_amount: int) -> Mapping[str, Any]:
+    return response_data(
+        client.post(
+            f"{config.order_api_url}/api/coupons/quote",
+            {
+                "couponCode": coupon_code,
+                "orderAmount": order_amount,
+            },
+            headers={"X-Correlation-Id": f"corr-coupon-quote-{coupon_code}"},
+        )
+    )
+
+
 def create_order(
     client: ApiClient,
     config: ScenarioConfig,
@@ -453,22 +584,27 @@ def create_order(
     payment_method: str,
     member_id: str,
     index: int,
+    coupon_code: str | None = None,
 ) -> Mapping[str, Any]:
+    body: dict[str, Any] = {
+        "memberId": member_id,
+        "paymentMethod": payment_method,
+        "items": [
+            {
+                "productCode": product_code,
+                "skuId": sku_id,
+                "quantity": config.quantity_per_order,
+                "unitPrice": config.unit_price,
+            }
+        ],
+    }
+    if coupon_code:
+        body["couponCode"] = coupon_code
+
     return response_data(
         client.post(
             f"{config.order_api_url}/api/orders",
-            {
-                "memberId": member_id,
-                "paymentMethod": payment_method,
-                "items": [
-                    {
-                        "productCode": product_code,
-                        "skuId": sku_id,
-                        "quantity": config.quantity_per_order,
-                        "unitPrice": config.unit_price,
-                    }
-                ],
-            },
+            body,
             headers={"Idempotency-Key": f"idem-order-{product_code}-{index:02d}-{payment_method}"},
         )
     )
@@ -552,6 +688,11 @@ def add_runtime_arguments(
         help="Outbox admin routing URL. Defaults to Gateway at http://localhost:18080.",
     )
     command_parser.add_argument("--payment-url", default=DEFAULT_PAYMENT_URL)
+    command_parser.add_argument(
+        "--promotion-url",
+        default=DEFAULT_PROMOTION_URL,
+        help="Promotion Service admin URL. Coupon quote still runs through --order-api-url.",
+    )
     command_parser.add_argument("--orders", type=positive_int, default=default_orders)
     command_parser.add_argument("--initial-stock", type=non_negative_int, default=default_initial_stock)
     command_parser.add_argument("--quantity", type=positive_int, default=1)
@@ -606,6 +747,7 @@ def config_from_args(args: argparse.Namespace) -> ScenarioConfig:
         order_api_url=args.order_api_url.rstrip("/"),
         outbox_api_url=args.outbox_api_url.rstrip("/"),
         payment_url=args.payment_url.rstrip("/"),
+        promotion_url=args.promotion_url.rstrip("/"),
         order_count=args.orders,
         initial_stock=args.initial_stock,
         quantity_per_order=args.quantity,

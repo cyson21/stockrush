@@ -85,20 +85,108 @@ class LocalE2ERunnerTest(unittest.TestCase):
 
         self.assertEqual(delta, {"order": 0, "inventory": 2, "payment": 0})
 
+    def test_demo_coupon_amounts_account_for_quantity(self) -> None:
+        args = local_e2e_runner.parse_args(["demo-order-flow", "--unit-price", "12000", "--quantity", "2"])
+        config = local_e2e_runner.config_from_args(args)
+
+        self.assertEqual(local_e2e_runner.demo_order_amount(config), 24000)
+        self.assertEqual(local_e2e_runner.demo_coupon_discount_amount(config), 1000)
+        self.assertEqual(local_e2e_runner.demo_coupon_payable_amount(config), 23000)
+
+    def test_demo_coupon_period_is_relative_to_runtime(self) -> None:
+        now = local_e2e_runner.datetime(2031, 1, 2, 3, 4, 5, tzinfo=local_e2e_runner.timezone.utc)
+
+        starts_at, ends_at = local_e2e_runner.demo_coupon_period(now)
+
+        self.assertEqual(starts_at, "2031-01-01T03:04:05Z")
+        self.assertEqual(ends_at, "2032-01-02T03:04:05Z")
+
     def test_validate_demo_order_flow_result_accepts_expected_states(self) -> None:
         pending = {"order": 0, "inventory": 0, "payment": 0}
 
         errors = local_e2e_runner.validate_demo_order_flow_result(
-            card_order={"orderId": "ord-card", "status": "CONFIRMED", "sagaStatus": "COMPLETED"},
+            card_order={
+                "orderId": "ord-card",
+                "status": "CONFIRMED",
+                "sagaStatus": "COMPLETED",
+                "couponCode": "DEMO-COUPON",
+                "discountAmount": 1000,
+                "payableAmount": 11000,
+            },
             fail_order={"orderId": "ord-fail", "status": "CANCELLED", "sagaStatus": "FAILED"},
             delay_order={"orderId": "ord-delay", "status": "CANCELLED", "sagaStatus": "FAILED"},
             stock={"availableQuantity": 19, "reservedQuantity": 0},
             initial_stock=20,
             quantity_per_order=1,
             pending_outbox_counts=pending,
+            coupon_code="DEMO-COUPON",
+            expected_discount_amount=1000,
+            expected_payable_amount=11000,
         )
 
         self.assertEqual(errors, [])
+
+    def test_validate_demo_order_flow_result_reports_coupon_mismatch(self) -> None:
+        pending = {"order": 0, "inventory": 0, "payment": 0}
+
+        errors = local_e2e_runner.validate_demo_order_flow_result(
+            card_order={
+                "orderId": "ord-card",
+                "status": "CONFIRMED",
+                "sagaStatus": "COMPLETED",
+                "couponCode": None,
+                "discountAmount": 0,
+                "payableAmount": 12000,
+            },
+            fail_order={"orderId": "ord-fail", "status": "CANCELLED", "sagaStatus": "FAILED"},
+            delay_order={"orderId": "ord-delay", "status": "CANCELLED", "sagaStatus": "FAILED"},
+            stock={"availableQuantity": 19, "reservedQuantity": 0},
+            initial_stock=20,
+            quantity_per_order=1,
+            pending_outbox_counts=pending,
+            coupon_code="DEMO-COUPON",
+            expected_discount_amount=1000,
+            expected_payable_amount=11000,
+        )
+
+        self.assertTrue(any("coupon" in error for error in errors))
+        self.assertTrue(any("discountAmount" in error for error in errors))
+        self.assertTrue(any("payableAmount" in error for error in errors))
+
+    def test_validate_coupon_quote_result_accepts_expected_quote(self) -> None:
+        errors = local_e2e_runner.validate_coupon_quote_result(
+            quote={
+                "couponCode": "DEMO-COUPON",
+                "applied": True,
+                "discountAmount": 1000,
+                "payAmount": 23000,
+                "reason": "APPLIED",
+            },
+            coupon_code="DEMO-COUPON",
+            expected_discount_amount=1000,
+            expected_payable_amount=23000,
+        )
+
+        self.assertEqual(errors, [])
+
+    def test_validate_coupon_quote_result_reports_mismatch(self) -> None:
+        errors = local_e2e_runner.validate_coupon_quote_result(
+            quote={
+                "couponCode": "OTHER",
+                "applied": False,
+                "discountAmount": 0,
+                "payAmount": 24000,
+                "reason": "COUPON_NOT_ACTIVE",
+            },
+            coupon_code="DEMO-COUPON",
+            expected_discount_amount=1000,
+            expected_payable_amount=23000,
+        )
+
+        self.assertTrue(any("quote coupon" in error for error in errors))
+        self.assertTrue(any("quote applied" in error for error in errors))
+        self.assertTrue(any("quote discountAmount" in error for error in errors))
+        self.assertTrue(any("quote payAmount" in error for error in errors))
 
     def test_validate_demo_order_flow_result_reports_unfinished_flow(self) -> None:
         pending = {"order": 0, "inventory": 1, "payment": 0}
@@ -111,6 +199,9 @@ class LocalE2ERunnerTest(unittest.TestCase):
             initial_stock=20,
             quantity_per_order=1,
             pending_outbox_counts=pending,
+            coupon_code="DEMO-COUPON",
+            expected_discount_amount=1000,
+            expected_payable_amount=11000,
         )
 
         self.assertTrue(any("CARD" in error for error in errors))
@@ -133,6 +224,7 @@ class LocalE2ERunnerTest(unittest.TestCase):
         self.assertEqual(args.orders, 3)
         self.assertEqual(args.initial_stock, 20)
         self.assertEqual(args.prefix, "DEMO-E2E")
+        self.assertEqual(args.promotion_url, "http://localhost:18085")
 
     def test_config_from_args_separates_order_admin_public_and_outbox_api_urls(self) -> None:
         args = local_e2e_runner.parse_args([

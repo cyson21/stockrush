@@ -24,6 +24,7 @@
 | Outbox API through Gateway | `http://localhost:18080` |
 | Order health | `http://localhost:18083` |
 | Payment | `http://localhost:18084` |
+| Promotion admin | `http://localhost:18085` |
 
 직접 Order Service 포트로 주문 생성/조회를 검증해야 하면 `--order-api-url http://localhost:18083`을 지정한다. Outbox 검증은 Gateway route shape를 기준으로 한다.
 
@@ -38,7 +39,7 @@
 
 ## demo-order-flow
 
-`CARD`, `FAIL_CARD`, `DELAY_CARD` 주문을 같은 데모 상품/SKU로 생성하고, 지연 결제 주문은 관리자 취소까지 진행한다.
+`CARD`, `FAIL_CARD`, `DELAY_CARD` 주문을 같은 데모 상품/SKU로 생성하고, `CARD` 주문에는 데모 쿠폰을 적용한다. 지연 결제 주문은 관리자 취소까지 진행한다.
 
 ```bash
 ./tools/local-e2e/local-e2e demo-order-flow \
@@ -51,7 +52,10 @@
 
 ### 검증 기준
 
+- 실행마다 고유 상품/SKU와 고유 쿠폰을 생성한다.
+- 데모 쿠폰은 Promotion Service 관리자 API로 생성하고, 쿠폰 견적은 Gateway의 `/api/coupons/quote` 경로로 확인한다.
 - `CARD` 주문은 `CONFIRMED/COMPLETED`가 된다.
+- `CARD` 주문 상세의 `couponCode`, `discountAmount`, `payableAmount`가 쿠폰 견적과 일치해야 한다.
 - `FAIL_CARD` 주문은 `CANCELLED/FAILED`가 되고 재고가 복구된다.
 - `DELAY_CARD` 주문은 `PAYMENT_DELAYED` 도달 후 관리자 취소로 `CANCELLED/FAILED`가 된다.
 - 기본 초기 재고 20개, 수량 1개 기준 최종 재고는 `availableQuantity=19`, `reservedQuantity=0`이다.

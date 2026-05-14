@@ -69,6 +69,7 @@ python (Join-Path $RootDir "tools/local-e2e/local-e2e") demo-order-flow `
   --order-api-url "http://localhost:$GatewayPort" `
   --outbox-api-url "http://localhost:$GatewayPort" `
   --payment-url "http://localhost:$PaymentPort" `
+  --promotion-url "http://localhost:$PromotionPort" `
   --orders 3 `
   --initial-stock 20 `
   --quantity 1 `

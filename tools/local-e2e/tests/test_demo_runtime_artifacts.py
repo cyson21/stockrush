@@ -106,6 +106,7 @@ class DemoRuntimeArtifactsTest(unittest.TestCase):
         self.assertIn("${POSTGRES_HOST_PORT:-25432}:5432", compose)
         self.assertIn("${GATEWAY_HOST_PORT:-28080}:18080", compose)
         self.assertIn("${CUSTOMER_APP_HOST_PORT:-15173}:8080", compose)
+        self.assertIn("http://127.0.0.1:8080", compose)
         self.assertIn("--refresh-env", shell_up)
         self.assertIn("--skip-port-check", shell_up)
         self.assertIn("check_host_ports", shell_up)
@@ -119,8 +120,12 @@ class DemoRuntimeArtifactsTest(unittest.TestCase):
 
         self.assertIn("tools/local-e2e/local-e2e", shell_script)
         self.assertIn("demo-order-flow", shell_script)
+        self.assertIn("--promotion-url", shell_script)
+        self.assertIn("PROMOTION_HOST_PORT", shell_script)
         self.assertIn("tools/local-e2e/local-e2e", powershell_script)
         self.assertIn("demo-order-flow", powershell_script)
+        self.assertIn("--promotion-url", powershell_script)
+        self.assertIn("$PromotionPort", powershell_script)
 
 
 if __name__ == "__main__":

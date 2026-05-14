@@ -50,6 +50,7 @@ check_url "gateway-read-model" "http://localhost:${GATEWAY_HOST_PORT:-28080}/api
   --order-api-url "http://localhost:${GATEWAY_HOST_PORT:-28080}" \
   --outbox-api-url "http://localhost:${GATEWAY_HOST_PORT:-28080}" \
   --payment-url "http://localhost:${PAYMENT_HOST_PORT:-28084}" \
+  --promotion-url "http://localhost:${PROMOTION_HOST_PORT:-28085}" \
   --orders 3 \
   --initial-stock 20 \
   --quantity 1 \

@@ -77,6 +77,6 @@ The web app containers serve Vite build output through Nginx. Nginx also proxies
 
 `demo-smoke` checks service health, web app roots, direct Catalog/Inventory read endpoints, Gateway Read Model routing, and the `demo-order-flow` E2E runner.
 
-The order-flow runner seeds a unique demo product/SKU, creates `CARD`, `FAIL_CARD`, and `DELAY_CARD` orders through Gateway, cancels the delayed order through the admin API, relays service outboxes, and checks final order/stock/outbox state.
+The order-flow runner seeds a unique demo product/SKU and coupon, verifies coupon quote through Gateway, creates `CARD`, `FAIL_CARD`, and `DELAY_CARD` orders through Gateway, cancels the delayed order through the admin API, relays service outboxes, and checks final order/stock/outbox state. The `CARD` order must keep the expected `couponCode`, `discountAmount`, and `payableAmount`.
 
-Latest local verification: `./scripts/demo-up.sh` started the full stack on the demo port range, then `./scripts/demo-smoke.sh` passed for product `DEMO-E2E-20260514155005-f0f4735a` with final stock `available=19`, `reserved=0`, and `pendingOutboxDelta=0` for Order, Inventory, and Payment.
+Latest local verification: `./scripts/demo-smoke.sh` passed for product `DEMO-E2E-20260514160718-21840dc6` and coupon `DEMO-E2E-20260514160718-21840dc6-C`. The quote returned `discountAmount=1000`, `payAmount=11000`, the `CARD` order kept the same discount snapshot, final stock was `available=19`, `reserved=0`, and `pendingOutboxDelta=0` for Order, Inventory, and Payment. Customer/Admin App containers also report healthy after the IPv4 healthcheck adjustment.
