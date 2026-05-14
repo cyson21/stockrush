@@ -873,12 +873,12 @@ describe('admin app operations', () => {
     render(<App />);
 
     expect(await screen.findByText('ord_admin_delay_retry_002')).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: '결제 취소 요청' }));
+    await user.click(await screen.findByRole('button', { name: '결제 취소 요청' }));
     await waitFor(() => {
       expect(screen.getByRole('alert')).toHaveTextContent('CANCEL_FAIL: 일시적으로 취소 요청에 실패했습니다.');
     });
 
-    await user.click(screen.getByRole('button', { name: '결제 취소 요청' }));
+    await user.click(await screen.findByRole('button', { name: '결제 취소 요청' }));
     await waitFor(() => {
       expect(screen.getByText('ord_admin_delay_retry_002 결제 취소 요청이 접수되었습니다.')).toBeInTheDocument();
     });
