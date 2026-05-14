@@ -9,15 +9,14 @@ StockRush 모바일 앱은 Android/iOS 설치형 고객 앱으로 계획한다. 
 - Android와 iOS는 하나의 Expo React Native 코드베이스로 대응한다.
 - 초기 배포 목표는 Expo Go 또는 development build에서 로컬/개발 API를 호출하는 시연 가능한 앱이다.
 
-## Planned Screens
+## Screen Flow
 
 ```text
-Product List
-  -> Product Detail and Stock Selection
-  -> Coupon Quote
-  -> Checkout
-  -> Order Status Tracking
-  -> Order History
+[implemented] Product List and SKU Stock Selection
+  -> [remaining] Coupon Quote
+  -> [remaining] Checkout
+  -> [remaining] Order Status Tracking
+  -> [remaining] Order History
 ```
 
 ## API Mapping
@@ -48,17 +47,17 @@ apps/mobile-app
     readModel.ts
   src/config
     runtime.ts
+  src/screens
+    ProductListScreen.tsx
   src/types
     api.ts
 ```
 
-Planned screen modules:
+Remaining screen modules:
 
 ```text
 apps/mobile-app
   src/screens
-    ProductListScreen.tsx
-    ProductDetailScreen.tsx
     CheckoutScreen.tsx
     OrderStatusScreen.tsx
     OrderHistoryScreen.tsx
@@ -90,7 +89,7 @@ API 호출, 타입, 화면 컴포넌트를 분리한다. 앱 내부에는 주문
 ## Verification
 
 - 현재 scaffold는 `node apps/mobile-app/scripts/validate-scaffold.mjs`로 구조와 API base URL 기준을 검증한다.
-- 화면 구현 후 Jest 또는 React Native Testing Library로 API 호출과 화면 상태를 검증한다.
+- `ProductListScreen.test.tsx`는 상품 목록 조회, 선택 상품 SKU 재고 조회, 상품 목록 오류와 재시도, SKU 재고 오류와 재시도, 연속 선택 시 늦은 재고 응답 무시 상태를 검증한다.
 - 의존성 설치 후 TypeScript typecheck를 실행한다.
 - Expo start로 Android/iOS 중 최소 한 환경에서 수동 smoke를 수행한다.
 - 백엔드 E2E와 혼동하지 않도록 모바일 검증 결과는 별도 AI Run Ledger에 기록한다.

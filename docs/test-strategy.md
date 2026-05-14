@@ -22,7 +22,7 @@ StockRush 테스트 전략은 한정 판매 주문 흐름에서 서비스별 도
 | Outbox relay | `PENDING` claim, Kafka publish, retry, `PUBLISHED`/`FAILED` 전이를 확인 | `services/order-service/src/test/java/com/stockrush/order/infra/outbox/OutboxRelayServiceIntegrationTest.java`, `services/inventory-service/src/test/java/com/stockrush/inventory/infra/outbox/InventoryOutboxRelayServiceIntegrationTest.java`, `services/payment-service/src/test/java/com/stockrush/payment/infra/outbox/PaymentOutboxRelayServiceIntegrationTest.java` |
 | Kafka smoke | 실제 로컬 Kafka에 publish/consume이 되는지 확인 | `services/inventory-service/src/test/java/com/stockrush/inventory/infra/kafka/InventoryKafkaSmokeIntegrationTest.java`, `services/payment-service/src/test/java/com/stockrush/payment/infra/kafka/PaymentKafkaSmokeIntegrationTest.java` |
 | UI behavior | 고객/관리자 앱의 API 호출, 쿠폰 견적 표시, 상태 렌더링, 재시도 키 재사용 확인 | `apps/customer-app/src/App.test.tsx`, `apps/admin-app/src/App.test.tsx` |
-| Mobile behavior | Android/iOS 고객 앱의 API 호출, 주문 상태 렌더링, 주문 내역 조회 확인 | planned `apps/mobile-app` tests |
+| Mobile behavior | Android/iOS 고객 앱의 API 호출과 화면 상태 렌더링 확인 | `apps/mobile-app/src/screens/ProductListScreen.test.tsx` |
 | Gateway routing smoke | Gateway가 주문 생성/조회, 관리자 주문 조회/취소, Outbox 조회/재시도/requeue 요청을 대상 서비스로 전달하는지 확인 | `services/gateway/src/test/java/com/stockrush/gateway/api/OrderGatewayControllerIntegrationTest.java` |
 | Architecture Guard | schema ownership, Controller 반환 타입, event envelope, outbox table shape 확인 | `tools/architecture-guard/tests/test_architecture_guard.py`, `tools/architecture-guard/architecture_guard.py` |
 | Manual E2E | 실제 서비스 기동 후 `CARD`, `FAIL_CARD`, `DELAY_CARD`, 관리자 취소, Gateway 경유 동일 SKU 최종 상태 확인 | `docs/runbooks/local-e2e.md`, `tools/local-e2e` |
@@ -50,7 +50,7 @@ npm --prefix apps/admin-app test -- --run
 npm --prefix apps/admin-app run build
 ```
 
-Mobile verification will be added after `apps/mobile-app` is scaffolded.
+Mobile verification runs inside `apps/mobile-app`.
 
 ```bash
 npm --prefix apps/mobile-app test
@@ -115,7 +115,7 @@ These are known gaps, not hidden assumptions.
 - Promotion Service currently covers coupon definition, quote, Customer App quote UI, Order Service discount application, and order-event-driven coupon usage state. Gateway route and admin usage screens remain future scope.
 - Fulfillment Service currently covers `OrderConfirmed` to `PREPARING` request creation and duplicate event handling. Carrier assignment, labels, tracking, Gateway route, and admin screens remain future scope.
 - Read Model Service currently covers order summary projection, service-local customer/admin APIs, late `OrderCreated` protection, and result-event retry rollback when the summary is missing. Gateway route, product search projection, dashboard metrics, and full Kafka retry/DLQ drills remain future scope.
-- Mobile customer app is now planned as a separate Expo React Native phase. Android/iOS smoke evidence, screenshots, and mobile test commands are not implemented yet.
+- Mobile customer app now has the Expo scaffold, Gateway-first API client, and product/SKU stock screen tests. Coupon quote, checkout, status tracking, order history, Android/iOS smoke evidence, and screenshots remain future scope.
 - Authentication and authorization tests are outside the current public slice.
 - Customer API documentation is now separated from runbook examples, but inventory customer query docs can still be expanded later.
 
