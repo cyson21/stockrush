@@ -8,6 +8,7 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "smoke:preflight": "node scripts/smoke-preflight.mjs",
+    "smoke:evidence": "node scripts/collect-smoke-evidence.mjs",
     "test": "jest --runInBand",
     "test:scaffold": "node scripts/validate-scaffold.mjs",
     "typecheck": "tsc --noEmit"

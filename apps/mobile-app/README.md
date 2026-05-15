@@ -35,6 +35,7 @@ npm test
 npm run typecheck
 npm run test:scaffold
 npm run smoke:preflight -- --api-base-url http://localhost:28080
+npm run smoke:evidence -- --target all --api-base-url http://localhost:28080
 ```
 
 Android:
@@ -62,6 +63,13 @@ npm run smoke:preflight -- --target all --api-base-url http://localhost:28080
 ```
 
 The preflight checks whether mobile dependencies are installed, whether the Gateway health endpoint is reachable, and whether iOS `simctl` or Android emulator tooling is available. It reports blockers without installing packages.
+
+Smoke evidence:
+
+```bash
+```
+
+The evidence command runs Jest, TypeScript typecheck, scaffold validation, and preflight in one pass. It exits non-zero only when the hard checks fail; simulator or emulator absence is recorded as a preflight blocker so the remaining environment gap is explicit.
 
 For Android emulator runs, the app should use `10.0.2.2`, but the preflight health check usually runs from the host shell. In that case pass both URLs:
 

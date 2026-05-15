@@ -25,6 +25,7 @@ assert.equal(packageJson.scripts.start, 'expo start');
 assert.equal(packageJson.scripts.android, 'expo start --android');
 assert.equal(packageJson.scripts.ios, 'expo start --ios');
 assert.equal(packageJson.scripts['smoke:preflight'], 'node scripts/smoke-preflight.mjs');
+assert.equal(packageJson.scripts['smoke:evidence'], 'node scripts/collect-smoke-evidence.mjs');
 assert.equal(packageJson.scripts['test:scaffold'], 'node scripts/validate-scaffold.mjs');
 assert.equal(packageJson.dependencies.expo, '~54.0.34');
 assert.equal(packageJson.dependencies.react, '19.1.0');
@@ -51,6 +52,7 @@ assert.equal(appConfig.expo.scheme, 'stockrush');
   'src/api/orders.ts',
   'src/api/readModel.ts',
   'scripts/smoke-preflight.mjs',
+  'scripts/collect-smoke-evidence.mjs',
 ].forEach(readText);
 
 const runtimeConfig = readText('src/config/runtime.ts');
@@ -78,5 +80,11 @@ assert.ok(smokePreflight.includes('simctl'));
 assert.ok(smokePreflight.includes('emulator'));
 assert.ok(smokePreflight.includes('SUPPORTED_TARGETS'));
 assert.ok(smokePreflight.includes('unsupported target'));
+
+const smokeEvidence = readText('scripts/collect-smoke-evidence.mjs');
+assert.ok(smokeEvidence.includes('npm test'));
+assert.ok(smokeEvidence.includes('npm run typecheck'));
+assert.ok(smokeEvidence.includes('npm run test:scaffold'));
+assert.ok(smokeEvidence.includes('smoke:preflight'));
 
 console.log('Mobile scaffold validation passed.');
