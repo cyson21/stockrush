@@ -21,6 +21,12 @@ describe('mobile runtime auth redirect URI', () => {
     expect(getAuthRedirectUri()).toBe('stockrush://auth/callback');
   });
 
+  it('uses localhost issuer for emulator Keycloak cookie continuity', () => {
+    const { getAuthIssuer } = loadRuntime();
+
+    expect(getAuthIssuer()).toBe('http://localhost:28088/realms/stockrush');
+  });
+
   it('uses an explicit redirect URI when provided', () => {
     process.env.EXPO_PUBLIC_AUTH_REDIRECT_URI = 'exp://192.168.0.10:8081/--/auth/callback';
     const { getAuthRedirectUri } = loadRuntime();

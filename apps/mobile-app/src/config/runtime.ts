@@ -24,8 +24,7 @@ function trimValue(value?: string): string {
 }
 
 function defaultAuthIssuer(): string {
-  const host = Platform.OS === 'android' ? '10.0.2.2:28088' : 'localhost:28088';
-  return `http://${host}/realms/stockrush`;
+  return 'http://localhost:28088/realms/stockrush';
 }
 
 function defaultExpoGoHost(): string {
