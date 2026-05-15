@@ -19,6 +19,18 @@ StockRush uses independent Spring Boot projects under `services/<service-name>`.
 
 Use Java 17.
 
+The repository includes wrappers that detect Java 17 and run a command with `JAVA_HOME` set for that process:
+
+```bash
+./scripts/with-java17.sh mvn -version
+```
+
+```powershell
+.\scripts\with-java17.ps1 mvn -version
+```
+
+If auto-detection cannot find the JDK, set `STOCKRUSH_JAVA17_HOME` to the installed Java 17 path.
+
 macOS:
 
 ```bash
@@ -44,18 +56,18 @@ Adjust the paths to the installed JDK location. The portable demo runtime avoids
 
 ```bash
 cd services/<service-name>
-mvn spring-boot:run
+../../scripts/with-java17.sh mvn spring-boot:run
 ```
 
 Event-consuming services need Kafka listeners enabled for local E2E flows.
 
 ```bash
-cd services/inventory-service && STOCKRUSH_KAFKA_LISTENERS_ENABLED=true mvn spring-boot:run
-cd services/order-service && STOCKRUSH_KAFKA_LISTENERS_ENABLED=true mvn spring-boot:run
-cd services/payment-service && STOCKRUSH_KAFKA_LISTENERS_ENABLED=true mvn spring-boot:run
-cd services/promotion-service && PROMOTION_KAFKA_LISTENERS_ENABLED=true mvn spring-boot:run
-cd services/fulfillment-service && FULFILLMENT_KAFKA_LISTENERS_ENABLED=true mvn spring-boot:run
-cd services/read-model-service && READ_MODEL_KAFKA_LISTENERS_ENABLED=true mvn spring-boot:run
+cd services/inventory-service && STOCKRUSH_KAFKA_LISTENERS_ENABLED=true ../../scripts/with-java17.sh mvn spring-boot:run
+cd services/order-service && STOCKRUSH_KAFKA_LISTENERS_ENABLED=true ../../scripts/with-java17.sh mvn spring-boot:run
+cd services/payment-service && STOCKRUSH_KAFKA_LISTENERS_ENABLED=true ../../scripts/with-java17.sh mvn spring-boot:run
+cd services/promotion-service && PROMOTION_KAFKA_LISTENERS_ENABLED=true ../../scripts/with-java17.sh mvn spring-boot:run
+cd services/fulfillment-service && FULFILLMENT_KAFKA_LISTENERS_ENABLED=true ../../scripts/with-java17.sh mvn spring-boot:run
+cd services/read-model-service && READ_MODEL_KAFKA_LISTENERS_ENABLED=true ../../scripts/with-java17.sh mvn spring-boot:run
 ```
 
 Promotion Service is proxied by Gateway for coupon quote and admin coupon usage history. It is also reachable through the Customer App `/promotion` development proxy. Order Service calls it through `PROMOTION_SERVICE_URL`, and Kafka listeners consume order events for coupon usage state.

@@ -138,7 +138,7 @@ Windows 11 PowerShell에서는 `.\scripts\demo-up.ps1`, `.\scripts\demo-smoke.ps
 
 ## 검증 요약
 
-- 백엔드는 서비스별 `mvn test`로 API, Outbox relay, Kafka smoke, Saga handler를 검증합니다.
+- 백엔드는 서비스별 `mvn test`로 API, Outbox relay, Kafka smoke, Saga handler를 검증합니다. 로컬 기본 Java가 17이 아니면 `scripts/with-java17.*` wrapper를 사용합니다.
 - 고객/관리자 앱은 Vitest와 production build로 API 호출 모양, 상태 렌더링, 재시도 키 재사용을 검증합니다.
 - 모바일 앱은 상품/SKU 재고, 쿠폰 견적, 주문 생성, 주문 상태 추적, Read Model 주문 내역 화면을 React Native Testing Library, Jest Expo, TypeScript typecheck, scaffold validation으로 검증했습니다. `smoke:preflight`로 demo Gateway health와 iOS/Android 실행 도구 준비 상태를 점검하며, Android 또는 iOS live smoke는 의존성 설치와 simulator/emulator 준비 후 진행합니다.
 - `./tools/architecture-guard/architecture-guard check`로 schema ownership, Controller 반환 타입, 이벤트 envelope, Outbox table shape, Gateway/서비스 Correlation ID 전파, Actuator 운영 endpoint 노출을 점검합니다.

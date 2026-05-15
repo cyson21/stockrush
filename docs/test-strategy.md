@@ -33,21 +33,21 @@ StockRush 테스트 전략은 한정 판매 주문 흐름에서 서비스별 도
 Backend tests run per service so a failing bounded context is immediately visible.
 
 ```bash
-cd services/catalog-service && mvn test
-cd services/inventory-service && mvn test
-cd services/order-service && mvn test
-cd services/payment-service && mvn test
-cd services/promotion-service && mvn test
-cd services/fulfillment-service && mvn test
-cd services/read-model-service && mvn test
+cd services/catalog-service && ../../scripts/with-java17.sh mvn test
+cd services/inventory-service && ../../scripts/with-java17.sh mvn test
+cd services/order-service && ../../scripts/with-java17.sh mvn test
+cd services/payment-service && ../../scripts/with-java17.sh mvn test
+cd services/promotion-service && ../../scripts/with-java17.sh mvn test
+cd services/fulfillment-service && ../../scripts/with-java17.sh mvn test
+cd services/read-model-service && ../../scripts/with-java17.sh mvn test
 ```
 
 Outbox 자동 relay scheduler는 빠른 단위 게이트로 별도 실행할 수 있다.
 
 ```bash
-cd services/order-service && mvn -q -Dtest=OutboxRelaySchedulerTest test
-cd services/inventory-service && mvn -q -Dtest=OutboxRelaySchedulerTest test
-cd services/payment-service && mvn -q -Dtest=OutboxRelaySchedulerTest test
+cd services/order-service && ../../scripts/with-java17.sh mvn -q -Dtest=OutboxRelaySchedulerTest test
+cd services/inventory-service && ../../scripts/with-java17.sh mvn -q -Dtest=OutboxRelaySchedulerTest test
+cd services/payment-service && ../../scripts/with-java17.sh mvn -q -Dtest=OutboxRelaySchedulerTest test
 ```
 
 Frontend verification runs both behavior tests and production build.
@@ -74,7 +74,7 @@ Architecture Guard is a separate quality gate.
 Gateway routing smoke runs inside the Gateway module.
 
 ```bash
-cd services/gateway && mvn test
+cd services/gateway && ../../scripts/with-java17.sh mvn test
 ```
 
 ```bash

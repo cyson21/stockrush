@@ -35,11 +35,11 @@ Processed event ids are stored in `processed_events` so duplicate delivery is ha
 ## Run
 
 ```bash
-mvn spring-boot:run
+../../scripts/with-java17.sh mvn spring-boot:run
 ```
 
 ## Verify
 
 ```bash
-mvn test
+../../scripts/with-java17.sh mvn test
 ```

@@ -36,12 +36,11 @@ Optional filters are trimmed before query execution. Blank optional values are i
 ## Local Run
 
 ```bash
-export JAVA_HOME=$(/usr/libexec/java_home -v 17)
-READ_MODEL_KAFKA_LISTENERS_ENABLED=true mvn spring-boot:run
+READ_MODEL_KAFKA_LISTENERS_ENABLED=true ../../scripts/with-java17.sh mvn spring-boot:run
 ```
 
 ## Verification
 
 ```bash
-mvn test
+../../scripts/with-java17.sh mvn test
 ```

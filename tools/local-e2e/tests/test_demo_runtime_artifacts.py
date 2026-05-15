@@ -21,10 +21,12 @@ class DemoRuntimeArtifactsTest(unittest.TestCase):
             "scripts/demo-down.sh",
             "scripts/demo-smoke.sh",
             "scripts/deploy-local.sh",
+            "scripts/with-java17.sh",
             "scripts/demo-up.ps1",
             "scripts/demo-down.ps1",
             "scripts/demo-smoke.ps1",
             "scripts/deploy-local.ps1",
+            "scripts/with-java17.ps1",
         ]
 
         missing_files = [file_name for file_name in expected_files if not (ROOT / file_name).exists()]
@@ -208,6 +210,33 @@ class DemoRuntimeArtifactsTest(unittest.TestCase):
         self.assertIn("$PromotionPort", powershell_script)
         self.assertIn("/actuator/info", powershell_script)
         self.assertIn("/actuator/metrics", powershell_script)
+
+
+    def test_java17_wrappers_are_cross_platform(self) -> None:
+        shell_script = (ROOT / "scripts/with-java17.sh").read_text(encoding="utf-8")
+        powershell_script = (ROOT / "scripts/with-java17.ps1").read_text(encoding="utf-8")
+        services_readme = (ROOT / "services/README.md").read_text(encoding="utf-8")
+
+        for expected in [
+            "STOCKRUSH_JAVA17_HOME",
+            "JAVA_HOME",
+            "java_home -v 17",
+            "exec \"$@\"",
+        ]:
+            with self.subTest(shell=expected):
+                self.assertIn(expected, shell_script)
+
+        for expected in [
+            "STOCKRUSH_JAVA17_HOME",
+            "JAVA_HOME",
+            "jdk-17",
+            "& $Executable @Arguments",
+        ]:
+            with self.subTest(powershell=expected):
+                self.assertIn(expected, powershell_script)
+
+        self.assertIn("./scripts/with-java17.sh mvn -version", services_readme)
+        self.assertIn(".\\scripts\\with-java17.ps1 mvn -version", services_readme)
 
 
 if __name__ == "__main__":

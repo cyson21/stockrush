@@ -41,7 +41,7 @@ Outbox `service` is restricted to `order`, `inventory`, or `payment`.
 ## Verification
 
 ```bash
-JAVA_HOME=/Users/chanyang.son/Library/Java/JavaVirtualMachines/ms-17.0.18/Contents/Home mvn test
+../../scripts/with-java17.sh mvn test
 ```
 
 The routing smoke test uses fake upstream services and verifies method, path, query string, body, `Idempotency-Key`, `X-Correlation-Id`, `X-Operator-Id`, response status, `Location`, and response body propagation for customer order routes, admin order routes, Outbox admin routes including failed requeue, coupon quote, coupon usage history, fulfillment request history, and Read Model order summary routes.
