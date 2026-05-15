@@ -4,10 +4,10 @@ import { getAuthorizationHeaders } from '../auth/oidc';
 type ServiceName = 'catalog' | 'inventory' | 'orders' | 'promotion';
 
 const defaultServicePrefixes: Record<ServiceName, string> = {
-  catalog: '/catalog',
-  inventory: '/inventory',
+  catalog: '',
+  inventory: '',
   orders: '',
-  promotion: '/promotion',
+  promotion: '',
 };
 
 function trimTrailingSlash(value: string): string {
@@ -21,16 +21,6 @@ function withLeadingSlash(value: string): string {
 function serviceBaseUrl(serviceName: ServiceName): string {
   const env = import.meta.env;
   const baseUrl = trimTrailingSlash(env.VITE_API_BASE_URL ?? '');
-  const serviceBaseUrls: Record<ServiceName, string | undefined> = {
-    catalog: env.VITE_CATALOG_API_BASE_URL,
-    inventory: env.VITE_INVENTORY_API_BASE_URL,
-    orders: env.VITE_ORDER_API_BASE_URL,
-    promotion: env.VITE_PROMOTION_API_BASE_URL,
-  };
-
-  if (serviceBaseUrls[serviceName]) {
-    return trimTrailingSlash(serviceBaseUrls[serviceName]);
-  }
 
   return `${baseUrl}${defaultServicePrefixes[serviceName]}`;
 }

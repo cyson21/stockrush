@@ -2,6 +2,7 @@ import { execFileSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import http from 'node:http';
 import https from 'node:https';
+import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -60,6 +61,24 @@ function commandOutput(command, args) {
   }
 }
 
+function androidSdkRoots() {
+  return [
+    process.env.ANDROID_HOME,
+    process.env.ANDROID_SDK_ROOT,
+    join(homedir(), 'Library', 'Android', 'sdk'),
+    join(homedir(), 'Android', 'Sdk'),
+    process.env.LOCALAPPDATA ? join(process.env.LOCALAPPDATA, 'Android', 'Sdk') : '',
+  ].filter(Boolean);
+}
+
+function androidEmulatorCandidates() {
+  const executable = process.platform === 'win32' ? 'emulator.exe' : 'emulator';
+  return [
+    'emulator',
+    ...androidSdkRoots().map((sdkRoot) => join(sdkRoot, 'emulator', executable)),
+  ];
+}
+
 function gatewayHealth(url) {
   return new Promise((resolve) => {
     const targetUrl = new URL('/actuator/health', url);
@@ -115,12 +134,27 @@ function checkIosSimulator() {
 }
 
 function checkAndroidEmulator() {
-  const result = commandOutput('emulator', ['-list-avds']);
-  const avds = result.output.split('\n').map((line) => line.trim()).filter(Boolean);
+  const attempts = [];
+  for (const candidate of androidEmulatorCandidates()) {
+    const result = commandOutput(candidate, ['-list-avds']);
+    attempts.push({ candidate, result });
+    if (!result.ok) {
+      continue;
+    }
+    const avds = result.output.split('\n').map((line) => line.trim()).filter(Boolean);
+    return {
+      name: 'android-emulator',
+      status: avds.length > 0 ? 'PASS' : 'BLOCKED',
+      detail: avds.length > 0
+        ? `AVDs: ${avds.join(', ')} (${candidate})`
+        : `no Android Virtual Device found (${candidate})`,
+    };
+  }
+  const detail = attempts.map(({ candidate, result }) => `${candidate}: ${result.output || 'unavailable'}`).join('; ');
   return {
     name: 'android-emulator',
-    status: result.ok && avds.length > 0 ? 'PASS' : 'BLOCKED',
-    detail: result.ok ? (avds.length > 0 ? `AVDs: ${avds.join(', ')}` : 'no Android Virtual Device found') : result.output || 'emulator command unavailable',
+    status: 'BLOCKED',
+    detail: detail || 'emulator command unavailable',
   };
 }
 

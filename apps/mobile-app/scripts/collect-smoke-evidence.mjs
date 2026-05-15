@@ -1,10 +1,11 @@
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, writeFileSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const appRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+const nodeCommand = process.execPath;
 
 function argValue(name, fallback) {
   const index = process.argv.indexOf(name);
@@ -32,9 +33,48 @@ function runCommand(label, command, args) {
     command: [command, ...args].join(' '),
     exitCode: result.status ?? 1,
     durationMs: Date.now() - startedAt,
-    stdout: result.stdout.trim(),
-    stderr: result.stderr.trim(),
+    stdout: (result.stdout || '').trim(),
+    stderr: (result.stderr || result.error?.message || '').trim(),
   };
+}
+
+function canSpawn(command) {
+  const result = spawnSync(command, ['--version'], {
+    cwd: appRoot,
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  return !result.error;
+}
+
+function localNodeScript(relativePath) {
+  return join(appRoot, relativePath);
+}
+
+function hardCheckCommands() {
+  if (canSpawn(npmCommand)) {
+    return [
+      ['npm test', npmCommand, ['test', '--', '--runInBand']],
+      ['npm run typecheck', npmCommand, ['run', 'typecheck']],
+      ['npm run test:scaffold', npmCommand, ['run', 'test:scaffold']],
+    ];
+  }
+
+  const jestScript = localNodeScript('node_modules/jest/bin/jest.js');
+  const tscScript = localNodeScript('node_modules/typescript/bin/tsc');
+  if (existsSync(jestScript) && existsSync(tscScript)) {
+    return [
+      ['jest --runInBand', nodeCommand, [jestScript, '--runInBand']],
+      ['tsc --noEmit', nodeCommand, [tscScript, '--noEmit']],
+      ['test:scaffold', nodeCommand, ['scripts/validate-scaffold.mjs']],
+    ];
+  }
+
+  return [
+    ['npm test', npmCommand, ['test', '--', '--runInBand']],
+    ['npm run typecheck', npmCommand, ['run', 'typecheck']],
+    ['npm run test:scaffold', npmCommand, ['run', 'test:scaffold']],
+  ];
 }
 
 function runPreflight() {
@@ -73,11 +113,7 @@ function commandLine(command) {
   return command.replace(process.execPath, 'node').replace(appRoot, '.');
 }
 
-const hardChecks = [
-  runCommand('npm test', npmCommand, ['test', '--', '--runInBand']),
-  runCommand('npm run typecheck', npmCommand, ['run', 'typecheck']),
-  runCommand('npm run test:scaffold', npmCommand, ['run', 'test:scaffold']),
-];
+const hardChecks = hardCheckCommands().map(([label, command, args]) => runCommand(label, command, args));
 const preflight = runPreflight();
 const allHardChecksPassed = hardChecks.every((check) => check.exitCode === 0);
 const generatedAt = new Date().toISOString();

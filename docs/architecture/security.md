@@ -42,13 +42,14 @@ The demo IdP is Keycloak. It is an infrastructure dependency like PostgreSQL and
 | Route | Access |
 |---|---|
 | `/actuator/health` | public |
-| `/internal/ping` | public in local/demo only |
-| `GET /api/products`, `GET /api/stocks`, `POST /api/coupons/quote` | public initially, may become customer optional-auth |
-| `POST /api/orders` | `ROLE_CUSTOMER` |
-| `GET /api/orders/{orderId}` | `ROLE_CUSTOMER` and order owner |
-| `GET /api/read-model/orders` | `ROLE_CUSTOMER` and token subject as member id |
-| `/api/admin/**` | `ROLE_ADMIN` |
-| `/api/read-model/admin/**` | `ROLE_ADMIN` |
+| `/internal/ping` | internal/demo only |
+| `GET /api/products`, `GET /api/stocks`, `POST /api/coupons/quote` | public, only through Gateway entrypoint |
+| `POST /api/orders` | `ROLE_CUSTOMER`, requires subject-forwarding |
+| `GET /api/orders/{orderId}` | `ROLE_CUSTOMER`, subject/owner only |
+| `GET /api/read-model/orders` | `ROLE_CUSTOMER`, subject-only query context |
+| `/api/admin/**` | `ROLE_ADMIN`, `X-Operator-Id` from Gateway |
+| `/api/read-model/admin/**` | `ROLE_ADMIN`, `X-Operator-Id` from Gateway |
+| service-local direct routes | internal/dev only, not a public portfolio entrypoint |
 
 ## Principal Propagation
 
@@ -67,8 +68,9 @@ Customer APIs must stop trusting caller supplied `memberId` as the authority sou
 
 - Create order: Gateway or Order Service derives member id from `X-StockRush-Subject`.
 - Customer order detail: a customer can read only their own order.
-- Customer order history: `memberId` query is removed or ignored; subject drives the query.
+- Customer order history: `memberId` query is ignored on protected paths; subject drives the query.
 - Admin search can still filter by member id, but requires `ROLE_ADMIN`.
+- Service-local direct routes are for internal tooling; they are not public demo entrypoints.
 
 ## Demo Identity Setup
 
@@ -144,7 +146,8 @@ Current baseline:
 - Mobile App has Expo Linking based OIDC PKCE login/logout without adding another runtime dependency.
 - Customer protected order APIs and Admin protected APIs attach Bearer tokens.
 - Customer App blocks order submit when unauthenticated. Admin App blocks protected screens when unauthenticated and surfaces forbidden API responses. Mobile App blocks order and history actions when unauthenticated.
-- Gateway owns protected product/stock/order/admin routing so authenticated principal headers are generated at the boundary.
+- Gateway owns protected order/admin routing so authenticated principal headers are generated at the boundary.
+- Public product/stock/coupon quote routes stay open only through Gateway.
 
 ### P9-7. CI Security Gates
 
@@ -169,7 +172,9 @@ Current baseline:
 ## Follow-Up Items
 
 - Live Keycloak browser smoke evidence is recorded; mobile smoke evidence remains pending.
-  - 모바일 실기동 로그인 기반 smoke evidence는 Android emulator 또는 iOS simulator 준비 후 진행한다.
-- 공개 라우트와 레거시 직접 호출 정책 정리가 보류 중이다.
-  - `GET /api/products`, `GET /api/stocks`, `POST /api/coupons/quote`의 공개 정책 범위를 문서에서 정리한다.
-  - 로컬 호환을 위한 `memberId` 기반 경로는 단계적으로 폐기할지, direct call 허용 범위를 명확히 제한할지 다음 단계에서 정한다.
+  - Android preflight는 SDK auto-discovery로 통과했다. 실제 Expo 로그인 UI smoke는 아직 대기 중이며, iOS는 full Xcode simctl 미설치로 차단 상태다.
+- 공개 라우트와 레거시 직접 호출 정책 정리는 완료됐다.
+  - 공개 라우트 정책은 `GET /api/products`, `GET /api/stocks`, `POST /api/coupons/quote`만 Gateway public 경로로 제한한다.
+  - 고객 주문/주문 상세/주문 내역은 `ROLE_CUSTOMER` + subject-forwarding으로 보호한다.
+  - Admin route는 `ROLE_ADMIN` + Gateway operator 주체 전파로 보호한다.
+  - service-local direct route는 내부/dev에서만 허용한다.

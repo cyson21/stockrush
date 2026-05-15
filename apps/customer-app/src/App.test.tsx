@@ -286,7 +286,7 @@ describe('Customer order flow', () => {
       const url = String(input);
       const method = init?.method ?? 'GET';
 
-      if (url.startsWith('/catalog/api/products?status=ON_SALE')) {
+      if (url.startsWith('/api/products?status=ON_SALE')) {
         const parsedUrl = new URL(url, 'http://localhost');
         const query = parsedUrl.searchParams.get('q')?.trim().toLowerCase();
         const matchingProducts = (() => {
@@ -316,7 +316,7 @@ describe('Customer order flow', () => {
         });
       }
 
-      if (url === '/inventory/api/stocks?productCode=LIMITED-001') {
+      if (url === '/api/stocks?productCode=LIMITED-001') {
         if (stocksMode === 'error') {
           return errorResponse('STOCK_LIST_FAILED', '재고 조회 실패');
         }
@@ -363,7 +363,7 @@ describe('Customer order flow', () => {
         );
       }
 
-      if (url === '/promotion/api/coupons/quote' && method === 'POST') {
+      if (url === '/api/coupons/quote' && method === 'POST') {
         if (quoteMode === 'error') {
           return errorResponse('PROMOTION_COUPON_NOT_FOUND', '쿠폰 코드를 확인해주세요.', 404);
         }
@@ -668,7 +668,7 @@ describe('Customer order flow', () => {
     await screen.findByRole('button', { name: /Limited Cap/ });
     expect(screen.queryByRole('button', { name: /Limited Hoodie/ })).not.toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledWith(
-      '/catalog/api/products?status=ON_SALE&q=cap',
+      '/api/products?status=ON_SALE&q=cap',
       expect.objectContaining({ method: 'GET' }),
     );
   });
@@ -692,9 +692,9 @@ describe('Customer order flow', () => {
       expect(screen.getByRole('button', { name: /Limited Cap/ })).toBeInTheDocument();
     });
 
-    const catalogCalls = fetchMock.mock.calls.filter(([url]) => String(url).startsWith('/catalog/api/products'));
+    const catalogCalls = fetchMock.mock.calls.filter(([url]) => String(url).startsWith('/api/products'));
     const latestCatalogCall = catalogCalls[catalogCalls.length - 1];
-    expect(latestCatalogCall?.[0]).toBe('/catalog/api/products?status=ON_SALE');
+    expect(latestCatalogCall?.[0]).toBe('/api/products?status=ON_SALE');
   });
 
   it('stock load failure after product selection shows alert and disables order creation', async () => {
@@ -843,9 +843,9 @@ describe('Customer order flow', () => {
       ).toBe(true);
     });
 
-    const catalogCall = fetchMock.mock.calls.find(([url]) => String(url).startsWith('/catalog/api/products'));
+    const catalogCall = fetchMock.mock.calls.find(([url]) => String(url).startsWith('/api/products'));
     expect(getAuthorizationHeaderValue(catalogCall?.[1]?.headers)).toBeNull();
-    const stockCall = fetchMock.mock.calls.find(([url]) => String(url) === '/inventory/api/stocks?productCode=LIMITED-001');
+    const stockCall = fetchMock.mock.calls.find(([url]) => String(url) === '/api/stocks?productCode=LIMITED-001');
     expect(getAuthorizationHeaderValue(stockCall?.[1]?.headers)).toBeNull();
   });
 

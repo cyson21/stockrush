@@ -116,7 +116,7 @@ cd services/gateway
 
 로컬 기동 시 Gateway는 기본적으로 `ORDER_SERVICE_URL=http://localhost:18083`, `INVENTORY_SERVICE_URL=http://localhost:18082`, `PAYMENT_SERVICE_URL=http://localhost:18084`, `PROMOTION_SERVICE_URL=http://localhost:18085`, `READ_MODEL_SERVICE_URL=http://localhost:18087`로 각 서비스를 호출한다. Outbox admin API는 `service` path 값으로 `order`, `inventory`, `payment`를 선택한다.
 
-Promotion Service는 Gateway의 `/api/coupons/quote` route 또는 service-local API로 확인한다. Customer App은 아직 `/promotion` Vite proxy로 quote API를 호출하고, Order Service는 `PROMOTION_SERVICE_URL`로 quote API를 호출한다. `PROMOTION_KAFKA_LISTENERS_ENABLED=true`로 기동하면 주문 이벤트를 소비해 쿠폰 사용 상태를 `RESERVED`, `CONSUMED`, `RELEASED`로 기록한다.
+Promotion Service는 Gateway의 `/api/coupons/quote` route 또는 service-local API로 확인한다. Customer App은 `/api/products`, `/api/stocks`, `/api/coupons/quote`, `/api/orders` 모두 Gateway 경유 경로를 호출하고, Order Service는 `PROMOTION_SERVICE_URL`로 quote API를 호출한다. `PROMOTION_KAFKA_LISTENERS_ENABLED=true`로 기동하면 주문 이벤트를 소비해 쿠폰 사용 상태를 `RESERVED`, `CONSUMED`, `RELEASED`로 기록한다.
 
 Fulfillment Service는 현재 이벤트 기반 출고 준비 요청 기록을 담당한다. Read Model Service는 service-local 조회 API와 Gateway의 `/api/read-model/orders`, `/api/read-model/admin/orders` route로 주문 요약 projection을 제공한다.
 

@@ -16,15 +16,11 @@ npm run dev
 
 ## 환경 변수
 
-기본 개발 모드는 Vite proxy prefix를 사용합니다. 정적 배포 또는 gateway 분리 환경에서는 아래 값을 지정합니다.
+기본 개발 모드는 Vite proxy를 통해 Gateway로 요청합니다. 정적 배포 또는 Gateway 분리 환경에서는 단일 Gateway base URL만 지정합니다.
 
 | Variable | Default |
 |---|---|
 | `VITE_API_BASE_URL` | same origin |
-| `VITE_CATALOG_API_BASE_URL` | `{VITE_API_BASE_URL}/catalog` |
-| `VITE_INVENTORY_API_BASE_URL` | `{VITE_API_BASE_URL}/inventory` |
-| `VITE_ORDER_API_BASE_URL` | same origin Gateway path |
-| `VITE_PROMOTION_API_BASE_URL` | `{VITE_API_BASE_URL}/promotion` |
 | `VITE_AUTH_ISSUER` | `http://localhost:28088/realms/stockrush` |
 | `VITE_AUTH_CLIENT_ID` | `stockrush-customer-web` |
 | `VITE_AUTH_SCOPE` | `openid profile email` |
@@ -36,12 +32,12 @@ Vite 개발 서버는 아래 프록시를 사용합니다.
 
 | Prefix | Target |
 |---|---|
-| `/catalog` | `http://localhost:18081` |
-| `/inventory` | `http://localhost:18082` |
+| `/api/products` | `http://localhost:18080` |
+| `/api/stocks` | `http://localhost:18080` |
 | `/api/orders` | `http://localhost:18080` |
-| `/promotion` | `http://localhost:18085` |
+| `/api/coupons` | `http://localhost:18080` |
 
-Docker 데모 모드에서는 Nginx가 같은 prefix를 compose 내부 서비스로 프록시합니다. 실행법은 `infra/demo/README.md`를 기준으로 합니다.
+Docker 데모 모드에서도 고객 앱은 Gateway 공개/보호 경로만 호출합니다. service-local 직접 호출은 내부/dev 확인용이며 공개 시연 진입점으로 쓰지 않습니다. 실행법은 `infra/demo/README.md`를 기준으로 합니다.
 
 ## 화면 흐름
 

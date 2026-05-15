@@ -43,14 +43,14 @@ Product List
 
 ## Runtime Configuration
 
-개발 환경은 public 조회 prefix와 Gateway protected path를 함께 사용한다. 배포 환경에서는 `VITE_API_BASE_URL` 또는 서비스별 base URL을 지정해 gateway나 분리된 서비스 주소로 연결한다.
+개발 환경과 배포 환경 모두 고객 앱은 Gateway 경로를 사용한다. 분리 환경에서는 `VITE_API_BASE_URL`로 Gateway base URL만 지정한다.
 
 | Prefix | Service |
 |---|---|
-| `/catalog` | Catalog Service |
-| `/inventory` | Inventory Service |
+| `/api/products` | Gateway to Catalog Service |
+| `/api/stocks` | Gateway to Inventory Service |
 | `/api/orders` | Gateway |
-| `/promotion` | Promotion Service |
+| `/api/coupons` | Gateway to Promotion Service |
 
 ## Status Tracking
 

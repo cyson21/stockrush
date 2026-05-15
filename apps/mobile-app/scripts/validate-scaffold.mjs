@@ -78,6 +78,8 @@ const smokePreflight = readText('scripts/smoke-preflight.mjs');
 assert.ok(smokePreflight.includes('EXPO_PUBLIC_API_BASE_URL'));
 assert.ok(smokePreflight.includes('simctl'));
 assert.ok(smokePreflight.includes('emulator'));
+assert.ok(smokePreflight.includes('ANDROID_HOME'));
+assert.ok(smokePreflight.includes('ANDROID_SDK_ROOT'));
 assert.ok(smokePreflight.includes('SUPPORTED_TARGETS'));
 assert.ok(smokePreflight.includes('unsupported target'));
 
@@ -85,6 +87,8 @@ const smokeEvidence = readText('scripts/collect-smoke-evidence.mjs');
 assert.ok(smokeEvidence.includes('npm test'));
 assert.ok(smokeEvidence.includes('npm run typecheck'));
 assert.ok(smokeEvidence.includes('npm run test:scaffold'));
+assert.ok(smokeEvidence.includes('node_modules/jest/bin/jest.js'));
+assert.ok(smokeEvidence.includes('node_modules/typescript/bin/tsc'));
 assert.ok(smokeEvidence.includes('smoke:preflight'));
 
 console.log('Mobile scaffold validation passed.');

@@ -5,24 +5,21 @@ export default defineConfig({
   plugins: [react()],
   server: {
     proxy: {
-      '/catalog': {
-        target: 'http://localhost:18081',
+      '/api/products': {
+        target: 'http://localhost:18080',
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/catalog/, ''),
       },
-      '/inventory': {
-        target: 'http://localhost:18082',
+      '/api/stocks': {
+        target: 'http://localhost:18080',
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/inventory/, ''),
       },
       '/api/orders': {
         target: 'http://localhost:18080',
         changeOrigin: true,
       },
-      '/promotion': {
-        target: 'http://localhost:18085',
+      '/api/coupons': {
+        target: 'http://localhost:18080',
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/promotion/, ''),
       },
     },
   },
