@@ -100,6 +100,11 @@ jobs:
           echo "image_tag=${image_tag}" >> "$GITHUB_OUTPUT"
           echo "image_name=ghcr.io/${{ github.repository_owner }}/stockrush-${{ matrix.image }}" >> "$GITHUB_OUTPUT"
 
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -116,6 +121,7 @@ jobs:
           context: .
           file: ${{ matrix.dockerfile }}
           push: true
+          platforms: linux/amd64,linux/arm64
           build-args: ${{ matrix.build_args }}
           tags: |
             ${{ steps.vars.outputs.image_name }}:${{ steps.vars.outputs.image_tag }}

@@ -29,7 +29,7 @@ push / pull request
 
 `CI`는 `infra/local/docker-compose.yml`로 PostgreSQL과 Kafka를 띄운 뒤 서비스별 Maven 테스트를 실행한다. 웹앱은 `npm ci`, `npm test`, `npm run build`를 실행하고, 모바일 앱은 Jest, TypeScript typecheck, scaffold validation을 실행한다.
 
-`Release Images`는 backend 8개 서비스와 customer/admin web app을 GHCR에 발행한다.
+`Release Images`는 backend 8개 서비스와 customer/admin web app을 GHCR에 발행한다. 이미지는 `linux/amd64`, `linux/arm64` 두 platform manifest로 발행해 Windows 11/일반 x86 PC와 Apple Silicon Mac에서 같은 태그를 pull할 수 있게 한다.
 
 이미지 이름:
 

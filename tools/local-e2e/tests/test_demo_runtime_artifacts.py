@@ -133,6 +133,7 @@ class DemoRuntimeArtifactsTest(unittest.TestCase):
         image_compose = (ROOT / "infra/demo/docker-compose.images.yml").read_text(encoding="utf-8")
         shell_deploy = (ROOT / "scripts/deploy-local.sh").read_text(encoding="utf-8")
         powershell_deploy = (ROOT / "scripts/deploy-local.ps1").read_text(encoding="utf-8")
+        release_images_workflow = (ROOT / ".github/workflows/release-images.yml").read_text(encoding="utf-8")
 
         expected_images = [
             "stockrush-catalog-service",
@@ -163,6 +164,8 @@ class DemoRuntimeArtifactsTest(unittest.TestCase):
         self.assertIn("demo-smoke.ps1", powershell_deploy)
         self.assertIn("read:packages", powershell_deploy)
         self.assertIn("package visibility", powershell_deploy)
+        self.assertIn("docker/setup-qemu-action@v3", release_images_workflow)
+        self.assertIn("platforms: linux/amd64,linux/arm64", release_images_workflow)
 
     def test_demo_smoke_runs_order_flow_and_burst_runners(self) -> None:
         shell_script = (ROOT / "scripts/demo-smoke.sh").read_text(encoding="utf-8")
