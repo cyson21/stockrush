@@ -59,6 +59,12 @@ docker login ghcr.io -u cyson21 --password-stdin < ~/.config/stockrush/github-to
 
 로컬 pull에 쓰는 개인 토큰에는 `read:packages` 권한이 필요하다. package visibility를 public으로 바꾸기 전까지 private GHCR image는 이 권한 없이는 `denied`가 반환된다.
 
+Docker login 성공은 package pull 권한을 보장하지 않는다. `deploy-local`이 image manifest preflight에서 멈추면 아래를 먼저 확인한다.
+
+- Fine-grained PAT라면 repository access에 `cyson21/stockrush`가 포함되어 있는지 확인한다.
+- package 권한에 `Read`가 포함되어 있는지 확인한다.
+- 외부 시연용이면 GitHub package visibility를 public으로 바꿔 토큰 없이 pull 가능한 상태인지 확인한다.
+
 배포:
 
 ```bash

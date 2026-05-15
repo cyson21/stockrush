@@ -104,7 +104,8 @@ verify_pull_permission() {
   fi
 
   printf 'Cannot read GHCR image manifest: %s\n' "$probe_image" >&2
-  printf 'Check that the token has read:packages permission or that the package is public.\n' >&2
+  printf 'Docker login can succeed even when the token cannot pull private packages.\n' >&2
+  printf 'Check that the token has read:packages permission and repository access, or make the package visibility public.\n' >&2
   exit 1
 }
 

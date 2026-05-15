@@ -154,9 +154,13 @@ class DemoRuntimeArtifactsTest(unittest.TestCase):
         self.assertIn("docker login", shell_deploy)
         self.assertIn("docker compose", shell_deploy)
         self.assertIn("demo-smoke.sh", shell_deploy)
+        self.assertIn("read:packages", shell_deploy)
+        self.assertIn("package visibility", shell_deploy)
         self.assertIn("docker login", powershell_deploy)
         self.assertIn("docker compose", powershell_deploy)
         self.assertIn("demo-smoke.ps1", powershell_deploy)
+        self.assertIn("read:packages", powershell_deploy)
+        self.assertIn("package visibility", powershell_deploy)
 
     def test_demo_smoke_runs_order_flow_and_burst_runners(self) -> None:
         shell_script = (ROOT / "scripts/demo-smoke.sh").read_text(encoding="utf-8")

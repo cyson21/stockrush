@@ -86,7 +86,7 @@ if (-not $SkipPull) {
   $ProbeImage = "$ImageRegistry/$ImageOwner/stockrush-gateway:$ImageTag"
   docker manifest inspect $ProbeImage *> $null
   if ($LASTEXITCODE -ne 0) {
-    throw "Cannot read GHCR image manifest: $ProbeImage. Check that the token has read:packages permission or that the package is public."
+    throw "Cannot read GHCR image manifest: $ProbeImage. Docker login can succeed even when the token cannot pull private packages. Check that the token has read:packages permission and repository access, or make the package visibility public."
   }
   docker compose --env-file $EnvFile -f $ComposeFile -f $ImageComposeFile pull
 }
