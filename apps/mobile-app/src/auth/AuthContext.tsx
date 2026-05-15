@@ -1,6 +1,6 @@
-import { createContext, type PropsWithChildren, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, type PropsWithChildren, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { Linking } from 'react-native';
-import { buildLoginRequest, clearAuthSession, getCurrentAccessToken, handleAuthRedirect } from './oidc';
+import { buildLoginRequest, clearAuthSession, getCurrentAccessToken, handleAuthRedirect, isAuthRedirectUrl } from './oidc';
 import { saveAuthSession } from './session';
 import type { StoredAuthSession } from './session';
 
@@ -23,6 +23,7 @@ export function AuthProvider({
   const [accessToken, setAccessToken] = useState<string | null>(initialAccessToken ?? null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const handledRedirectUrlsRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     let isActive = true;
@@ -71,6 +72,11 @@ export function AuthProvider({
   }, []);
 
   const handleOpenUrl = useCallback(async (url: string) => {
+    if (!isAuthRedirectUrl(url) || handledRedirectUrlsRef.current.has(url)) {
+      return;
+    }
+
+    handledRedirectUrlsRef.current.add(url);
     setError(null);
     setIsLoading(true);
     try {
@@ -94,16 +100,17 @@ export function AuthProvider({
 
   useEffect(() => {
     let isActive = true;
+
+    const subscription = Linking.addEventListener('url', ({ url }) => {
+      void handleOpenUrl(url);
+    });
+
     void (async () => {
       const initialUrl = await Linking.getInitialURL();
       if (initialUrl && isActive) {
         await handleOpenUrl(initialUrl);
       }
     })();
-
-    const subscription = Linking.addEventListener('url', ({ url }) => {
-      void handleOpenUrl(url);
-    });
 
     return () => {
       isActive = false;

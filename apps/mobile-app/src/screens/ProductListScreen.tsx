@@ -63,7 +63,7 @@ export default function ProductListScreen() {
   const [orderPollError, setOrderPollError] = useState<string | null>(null);
   const stockRequestIdRef = useRef(0);
   const memberId = getDefaultMemberId();
-  const { isAuthenticated, accessToken, login, logout } = useAuth();
+  const { isAuthenticated, accessToken, error: authError, login, logout } = useAuth();
 
   const quantity = Number(quantityText);
   const quantityIsValid = Number.isInteger(quantity) && quantity >= 1;
@@ -284,6 +284,7 @@ export default function ProductListScreen() {
           </View>
           <Text style={styles.stateText}>{authStatusLabel}</Text>
           {tokenPreview ? <Text style={styles.tokenText}>토큰 {tokenPreview}</Text> : null}
+          {authError ? <Text style={styles.errorText}>인증 오류: {authError}</Text> : null}
 
           <Pressable
             accessibilityRole="button"

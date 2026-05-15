@@ -48,7 +48,32 @@ describe('mobile OIDC PKCE flow', () => {
     expect(authUrl.searchParams.get('response_type')).toBe('code');
     expect(authUrl.searchParams.get('redirect_uri')).toBe('exp://10.0.2.2:8081/--/auth/callback');
     expect(authUrl.searchParams.get('code_challenge_method')).toBe('S256');
+    expect(authUrl.searchParams.get('code_challenge')).toHaveLength(43);
+    expect(authUrl.searchParams.get('code_challenge')).not.toBe(request.codeVerifier);
     expect(authUrl.searchParams.get('state')).toBe(request.state);
+  });
+
+  it('keeps S256 PKCE hashing when Web Crypto is unavailable', async () => {
+    const originalCrypto = globalThis.crypto;
+    const originalRandom = Math.random;
+    Object.defineProperty(globalThis, 'crypto', { value: undefined, configurable: true });
+    jest.spyOn(Math, 'random').mockReturnValue(0);
+    try {
+      const { buildLoginRequest, clearAuthSession } = require('./oidc') as typeof import('./oidc');
+      const nodeCrypto = require('crypto') as typeof import('crypto');
+      await clearAuthSession();
+
+      const request = await buildLoginRequest();
+      const authUrl = new URL(request.authUrl);
+      const expectedChallenge = nodeCrypto.createHash('sha256').update('A'.repeat(96)).digest('base64url');
+
+      expect(authUrl.searchParams.get('code_challenge_method')).toBe('S256');
+      expect(request.codeVerifier).toBe('A'.repeat(96));
+      expect(authUrl.searchParams.get('code_challenge')).toBe(expectedChallenge);
+    } finally {
+      Math.random = originalRandom;
+      Object.defineProperty(globalThis, 'crypto', { value: originalCrypto, configurable: true });
+    }
   });
 
   it('accepts an Expo Go callback and exchanges the code with the same redirect URI', async () => {
@@ -85,11 +110,21 @@ describe('mobile OIDC PKCE flow', () => {
       }),
     );
     const [, init] = fetchMock.mock.calls[0];
-    const body = init?.body as URLSearchParams;
+    expect(typeof init?.body).toBe('string');
+    const body = new URLSearchParams(init?.body as string);
     expect(body.get('client_id')).toBe('stockrush-mobile');
     expect(body.get('grant_type')).toBe('authorization_code');
     expect(body.get('code')).toBe('auth-code-001');
     expect(body.get('redirect_uri')).toBe('exp://10.0.2.2:8081/--/auth/callback');
     expect(body.get('code_verifier')).toBe(request.codeVerifier);
+  });
+
+  it('distinguishes real auth callbacks from Expo Go project URLs', () => {
+    const { isAuthRedirectUrl } = require('./oidc') as typeof import('./oidc');
+
+    expect(isAuthRedirectUrl('exp://127.0.0.1:8081')).toBe(false);
+    expect(isAuthRedirectUrl('exp://127.0.0.1:8081/--/auth/callback?state=state-only')).toBe(false);
+    expect(isAuthRedirectUrl('exp://127.0.0.1:8081/--/auth/callback?code=code-001&state=state-001')).toBe(true);
+    expect(isAuthRedirectUrl('stockrush://auth/callback?error=access_denied&state=state-001')).toBe(true);
   });
 });
