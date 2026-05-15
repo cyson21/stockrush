@@ -166,6 +166,7 @@ fi
   --payment-url "http://localhost:${PAYMENT_HOST_PORT:-28084}" \
   --promotion-url "http://localhost:${PROMOTION_HOST_PORT:-28085}" \
   --admin-bearer-token "$ADMIN_BEARER_TOKEN" \
+  --customer-bearer-token "$CUSTOMER_BEARER_TOKEN" \
   --relay-mode automatic \
   --orders 3 \
   --initial-stock 20 \
@@ -183,6 +184,7 @@ if [[ "$skip_burst" != true ]]; then
     --payment-url "http://localhost:${PAYMENT_HOST_PORT:-28084}" \
     --promotion-url "http://localhost:${PROMOTION_HOST_PORT:-28085}" \
     --admin-bearer-token "$ADMIN_BEARER_TOKEN" \
+    --customer-bearer-token "$CUSTOMER_BEARER_TOKEN" \
     --relay-mode automatic \
     --orders 12 \
     --initial-stock 4 \
@@ -207,6 +209,7 @@ if [[ "$kafka_outage" == true ]]; then
     --payment-url "http://localhost:${PAYMENT_HOST_PORT:-28084}" \
     --promotion-url "http://localhost:${PROMOTION_HOST_PORT:-28085}" \
     --admin-bearer-token "$ADMIN_BEARER_TOKEN" \
+    --customer-bearer-token "$CUSTOMER_BEARER_TOKEN" \
     --relay-mode automatic \
     --orders 1 \
     --initial-stock 3 \

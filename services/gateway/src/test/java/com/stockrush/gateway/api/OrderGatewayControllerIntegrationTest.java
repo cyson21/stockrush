@@ -107,6 +107,52 @@ class OrderGatewayControllerIntegrationTest {
     }
 
     @Test
+    void rejects_customer_order_routes_without_bearer_token() throws Exception {
+        HttpRequest request = HttpRequest.newBuilder(gatewayUri("/api/orders/ord_gateway_001"))
+            .header("X-Correlation-Id", "corr-gateway-customer-unauthenticated")
+            .GET()
+            .build();
+
+        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+
+        assertThat(response.statusCode()).isEqualTo(401);
+        STUB_ORDER_SERVICE.assertNoRequests();
+        STUB_READ_MODEL_SERVICE.assertNoRequests();
+    }
+
+    @Test
+    void forwards_authenticated_customer_subject_and_ignores_spoofed_subject_header() throws Exception {
+        String requestBody = """
+            {
+              "memberId": "spoofed-body-member",
+              "paymentMethod": "CARD",
+              "items": [
+                {
+                  "productCode": "LIMITED-GW",
+                  "skuId": "LIMITED-GW-S",
+                  "quantity": 1,
+                  "unitPrice": 12000
+                }
+              ]
+            }
+            """;
+
+        HttpRequest request = customerRequest("/api/orders")
+            .header("Content-Type", "application/json")
+            .header("Idempotency-Key", "idem-gateway-customer-create")
+            .header("X-Correlation-Id", "corr-gateway-customer-create")
+            .header("X-StockRush-Subject", "spoofed-header-member")
+            .POST(HttpRequest.BodyPublishers.ofString(requestBody))
+            .build();
+
+        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+
+        assertThat(response.statusCode()).isEqualTo(201);
+        RecordedRequest forwarded = STUB_ORDER_SERVICE.singleRequest();
+        assertThat(forwarded.firstHeader("X-StockRush-Subject")).contains("customer-demo");
+    }
+
+    @Test
     void routes_create_order_to_order_service() throws Exception {
         String requestBody = """
             {
@@ -123,7 +169,7 @@ class OrderGatewayControllerIntegrationTest {
             }
             """;
 
-        HttpRequest request = HttpRequest.newBuilder(gatewayUri("/api/orders"))
+        HttpRequest request = customerRequest("/api/orders")
             .header("Content-Type", "application/json")
             .header("Idempotency-Key", "idem-gateway-create")
             .header("X-Correlation-Id", "corr-gateway-create")
@@ -162,7 +208,7 @@ class OrderGatewayControllerIntegrationTest {
             }
             """;
 
-        HttpRequest request = HttpRequest.newBuilder(gatewayUri("/api/orders"))
+        HttpRequest request = customerRequest("/api/orders")
             .header("Content-Type", "application/json")
             .header("Idempotency-Key", "idem-gateway-generated")
             .POST(HttpRequest.BodyPublishers.ofString(requestBody))
@@ -185,7 +231,7 @@ class OrderGatewayControllerIntegrationTest {
 
     @Test
     void routes_order_detail_query_to_order_service() throws Exception {
-        HttpRequest request = HttpRequest.newBuilder(gatewayUri("/api/orders/ord_gateway_001"))
+        HttpRequest request = customerRequest("/api/orders/ord_gateway_001")
             .header("X-Correlation-Id", "corr-gateway-query")
             .GET()
             .build();
@@ -519,9 +565,7 @@ class OrderGatewayControllerIntegrationTest {
 
     @Test
     void routes_customer_order_history_to_read_model_service() throws Exception {
-        HttpRequest request = HttpRequest.newBuilder(
-                gatewayUri("/api/read-model/orders?memberId=member-mobile&page=0&size=10")
-            )
+        HttpRequest request = customerRequest("/api/read-model/orders?memberId=spoofed-member&page=0&size=10")
             .header("X-Correlation-Id", "corr-gateway-read-model-customer")
             .GET()
             .build();
@@ -536,7 +580,9 @@ class OrderGatewayControllerIntegrationTest {
         RecordedRequest forwarded = STUB_READ_MODEL_SERVICE.singleRequest();
         assertThat(forwarded.method()).isEqualTo("GET");
         assertThat(forwarded.path()).isEqualTo("/api/read-model/orders");
-        assertThat(forwarded.query()).contains("memberId=member-mobile&page=0&size=10");
+        assertThat(forwarded.query()).doesNotContain("memberId=spoofed-member");
+        assertThat(forwarded.query()).contains("page=0&size=10");
+        assertThat(forwarded.firstHeader("X-StockRush-Subject")).contains("customer-demo");
         assertThat(forwarded.firstHeader("X-Correlation-Id")).contains("corr-gateway-read-model-customer");
         STUB_ORDER_SERVICE.assertNoRequests();
         STUB_PROMOTION_SERVICE.assertNoRequests();
@@ -544,9 +590,7 @@ class OrderGatewayControllerIntegrationTest {
 
     @Test
     void creates_missing_correlation_id_once_and_forwards_it_to_upstream() throws Exception {
-        HttpRequest request = HttpRequest.newBuilder(
-                gatewayUri("/api/read-model/orders?memberId=member-generated&page=0&size=10")
-            )
+        HttpRequest request = customerRequest("/api/read-model/orders?page=0&size=10")
             .GET()
             .build();
 
@@ -568,9 +612,7 @@ class OrderGatewayControllerIntegrationTest {
 
     @Test
     void keeps_gateway_correlation_header_when_upstream_response_header_differs() throws Exception {
-        HttpRequest request = HttpRequest.newBuilder(
-                gatewayUri("/api/read-model/orders?memberId=member-upstream-mutates-correlation&page=0&size=10")
-            )
+        HttpRequest request = customerRequest("/api/read-model/orders?orderId=member-upstream-mutates-correlation&page=0&size=10")
             .header("X-Correlation-Id", "corr-gateway-preserved")
             .GET()
             .build();

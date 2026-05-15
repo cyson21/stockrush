@@ -3,6 +3,7 @@ package com.stockrush.order.api;
 import com.stockrush.order.application.CouponNotApplicableException;
 import com.stockrush.order.application.CouponQuoteUnavailableException;
 import com.stockrush.order.application.OrderDataIntegrityException;
+import com.stockrush.order.application.OrderForbiddenException;
 import com.stockrush.order.application.OrderIdempotencyReplayUnavailableException;
 import com.stockrush.order.application.OrderNotFoundException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -53,6 +54,17 @@ class OrderApiExceptionHandler {
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
             .header(CorrelationIds.HEADER_NAME, correlationId)
             .body(ApiResponse.failure("ORDER_NOT_FOUND", exception.getMessage(), correlationId));
+    }
+
+    @ExceptionHandler(OrderForbiddenException.class)
+    ResponseEntity<ApiResponse<Void>> handleOrderForbidden(
+        OrderForbiddenException exception,
+        HttpServletRequest request
+    ) {
+        String correlationId = CorrelationIds.resolve(request.getHeader(CorrelationIds.HEADER_NAME));
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+            .header(CorrelationIds.HEADER_NAME, correlationId)
+            .body(ApiResponse.failure("ORDER_FORBIDDEN", exception.getMessage(), correlationId));
     }
 
     @ExceptionHandler(OrderDataIntegrityException.class)

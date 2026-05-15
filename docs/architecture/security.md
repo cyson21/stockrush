@@ -115,6 +115,14 @@ Demo-only smoke credentials are committed only for the disposable local realm an
 - Add BOLA regression tests for another customer's order.
 - Update customer web/mobile clients.
 
+Implemented baseline:
+
+- Gateway protects `POST /api/orders`, `GET /api/orders/{orderId}`, and `GET /api/read-model/orders` with `ROLE_CUSTOMER`.
+- Gateway removes spoofable identity headers, derives `X-StockRush-Subject` from the JWT subject, and forwards only trusted customer identity headers.
+- Order Service uses the trusted subject for order creation, blocks detail reads for another member, and rejects same `Idempotency-Key` replay when the authenticated subject differs from the existing order owner.
+- Read Model customer history prefers the trusted subject header and Gateway strips caller supplied `memberId` from the customer query path. Admin read-model search still supports `memberId` filtering behind `ROLE_ADMIN`.
+- Service-local direct calls still accept legacy `memberId` where needed for existing local compatibility; the external demo path is Gateway-first.
+
 ### P9-5. Admin Audit Principal
 
 - Derive `X-Operator-Id` from authenticated principal.

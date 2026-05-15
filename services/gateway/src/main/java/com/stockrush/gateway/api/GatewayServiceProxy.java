@@ -21,7 +21,10 @@ class GatewayServiceProxy {
         "content-type",
         "idempotency-key",
         "x-correlation-id",
-        "x-operator-id"
+        "x-operator-id",
+        "x-stockrush-subject",
+        "x-stockrush-email",
+        "x-stockrush-roles"
     );
     private static final Set<String> RESPONSE_HEADERS = Set.of(
         "content-type",

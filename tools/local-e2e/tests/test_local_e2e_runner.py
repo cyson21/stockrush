@@ -530,6 +530,15 @@ class LocalE2ERunnerTest(unittest.TestCase):
 
         self.assertEqual(local_e2e_runner.admin_auth_headers(config), {})
 
+    def test_customer_auth_headers_adds_bearer_prefix(self) -> None:
+        args = local_e2e_runner.parse_args(["demo-order-flow", "--customer-bearer-token", "customer-token"])
+        config = local_e2e_runner.config_from_args(args)
+
+        self.assertEqual(
+            local_e2e_runner.customer_auth_headers(config),
+            {"Authorization": "Bearer customer-token"},
+        )
+
     def test_api_client_get_accepts_headers(self) -> None:
         captured: dict[str, object] = {}
 
@@ -674,6 +683,49 @@ class LocalE2ERunnerTest(unittest.TestCase):
         self.assertEqual(len(posted_headers), 1)
         self.assertEqual(posted_headers[0]["Authorization"], "Bearer cancel-token")
         self.assertEqual(posted_headers[0]["Idempotency-Key"], "idem-admin-cancel-sku-1-order-1")
+
+    def test_create_order_attaches_customer_bearer_token(self) -> None:
+        args = local_e2e_runner.parse_args([
+            "demo-order-flow",
+            "--customer-bearer-token",
+            "customer-create-token",
+        ])
+        config = local_e2e_runner.config_from_args(args)
+        posted_headers: list[dict[str, str]] = []
+
+        class FakeClient:
+            def post(
+                self,
+                _url: str,
+                body: Mapping[str, object] | None = None,
+                headers: Mapping[str, str] | None = None,
+            ) -> dict[str, object]:
+                posted_headers.append(dict(headers or {}))
+                return {"orderId": "ord-test"}
+
+        local_e2e_runner.create_order(FakeClient(), config, "product-1", "sku-1", "CARD", "member-1", 1)
+
+        self.assertEqual(len(posted_headers), 1)
+        self.assertEqual(posted_headers[0]["Authorization"], "Bearer customer-create-token")
+
+    def test_get_order_attaches_customer_bearer_token(self) -> None:
+        args = local_e2e_runner.parse_args([
+            "demo-order-flow",
+            "--customer-bearer-token",
+            "customer-get-token",
+        ])
+        config = local_e2e_runner.config_from_args(args)
+        captured_headers: list[dict[str, str]] = []
+
+        class FakeClient:
+            def get(self, _url: str, headers: Mapping[str, str] | None = None) -> dict[str, object]:
+                captured_headers.append(dict(headers or {}))
+                return {"data": {"orderId": "ord-test"}}
+
+        order = local_e2e_runner.get_order(FakeClient(), config, "ord-test")
+
+        self.assertEqual(order, {"orderId": "ord-test"})
+        self.assertEqual(captured_headers[0]["Authorization"], "Bearer customer-get-token")
 
     def test_docker_compose_action_pauses_named_kafka_service(self) -> None:
         args = local_e2e_runner.parse_args([

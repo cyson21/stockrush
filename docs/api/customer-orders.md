@@ -13,12 +13,14 @@ Customer Order API는 고객 앱에서 상품과 SKU를 선택한 뒤 주문을 
 | Header | Required | Description |
 |---|---:|---|
 | `Idempotency-Key` | yes | 중복 주문 생성 요청 방지 기준 |
+| `Authorization` | yes at Gateway | customer bearer token |
 | `X-Correlation-Id` | no | HTTP/Kafka 흐름 추적 기준 |
 
 ### Idempotency Replay Behavior
 
 - 동일 `Idempotency-Key` + 동일 요청 본문은 재요청이 있어도 멱등하게 처리되어야 한다.
 - 첫 생성은 `201 Created`, 이미 저장된 주문에 대한 동일 키 재요청은 기존 주문 응답과 함께 `200 OK`를 반환한다.
+- Gateway 경유 요청에서는 token subject가 주문 소유자 기준이다. 같은 `Idempotency-Key`라도 다른 token subject가 replay하면 `ORDER_FORBIDDEN`으로 차단한다.
 - 로컬 `burst-idempotency` 검증에서 `--orders 30 --idempotency-replays 2`로 총 60회 요청했을 때 고유 `orderId`는 30개(`BURST-E2E-20260514175639-9f933e0f`)로만 생성되고, `CONFIRMED/COMPLETED` 10건 / `CANCELLED/FAILED` 20건 / `unresolved` 0건으로 수렴됐다.
 
 ### Request
@@ -43,7 +45,7 @@ Customer Order API는 고객 앱에서 상품과 SKU를 선택한 뒤 주문을 
 
 | Field | Required | Rule |
 |---|---:|---|
-| `memberId` | yes | non-blank |
+| `memberId` | yes for legacy direct service calls | Gateway 경유 고객 route에서는 token subject가 우선이며 caller supplied value는 권한 기준으로 사용하지 않음 |
 | `paymentMethod` | no | defaults to `CARD`; blank value is invalid |
 | `couponCode` | no | when present, Order Service requests Promotion coupon quote and stores discounted pricing |
 | `items` | yes | non-empty |
@@ -112,7 +114,10 @@ The response means the order row and `OrderCreated` outbox row were stored. Inve
 
 | Header | Required | Description |
 |---|---:|---|
+| `Authorization` | yes at Gateway | customer bearer token |
 | `X-Correlation-Id` | no | HTTP/Kafka 흐름 추적 기준 |
+
+Gateway 경유 고객 조회는 token subject와 주문 소유자가 일치할 때만 `200 OK`를 반환한다. 다른 고객 주문은 `ORDER_FORBIDDEN`으로 차단된다.
 
 ### Response
 
@@ -177,6 +182,7 @@ The response means the order row and `OrderCreated` outbox row were stored. Inve
 | 400 | `ORDER_INVALID_REQUEST` | request body is invalid |
 | 400 | `ORDER_COUPON_NOT_APPLICABLE` | coupon code cannot be applied to this order |
 | 409 | `ORDER_IDEMPOTENCY_REPLAY_PENDING` | same-key replay row is still becoming visible; retry the same request |
+| 403 | `ORDER_FORBIDDEN` | authenticated customer does not own the order or same-key replay belongs to another customer |
 | 404 | `ORDER_NOT_FOUND` | target order does not exist |
 | 502 | `ORDER_COUPON_QUOTE_UNAVAILABLE` | coupon quote service failed or returned inconsistent pricing |
 | 500 | `ORDER_DATA_INTEGRITY_ERROR` | unexpected order data integrity failure |

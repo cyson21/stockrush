@@ -25,7 +25,7 @@ StockRush 테스트 전략은 한정 판매 주문 흐름에서 서비스별 도
 | UI behavior | 고객/관리자 앱의 API 호출, 쿠폰 견적 표시, 상태 렌더링, 버튼별 오류/disabled 상태, 재시도 키 재사용 확인 | `apps/customer-app/src/App.test.tsx`, `apps/admin-app/src/App.test.tsx` |
 | Mobile behavior | Android/iOS 고객 앱의 API 호출과 화면 상태 렌더링, smoke 준비 상태 확인 | `apps/mobile-app/src/screens/ProductListScreen.test.tsx`, `apps/mobile-app/src/screens/OrderHistoryScreen.test.tsx`, `apps/mobile-app/scripts/collect-smoke-evidence.mjs` |
 | Gateway routing smoke | Gateway가 주문 생성/조회, 관리자 주문 조회/취소, Outbox 조회/재시도/requeue, 쿠폰/출고/Read Model 조회 요청을 대상 서비스로 전달하는지 확인 | `services/gateway/src/test/java/com/stockrush/gateway/api/OrderGatewayControllerIntegrationTest.java` |
-| Gateway security | Gateway가 admin route 인증/권한을 적용하고 `401`/`403`/성공 라우팅을 구분하는지 확인 | `services/gateway/src/test/java/com/stockrush/gateway/api/OrderGatewayControllerIntegrationTest.java` |
+| Gateway security | Gateway가 admin/customer route 인증/권한을 적용하고 `401`/`403`/성공 라우팅, trusted subject header 전파를 구분하는지 확인 | `services/gateway/src/test/java/com/stockrush/gateway/api/OrderGatewayControllerIntegrationTest.java` |
 | Architecture Guard | schema ownership, Controller 반환 타입, event envelope, outbox table shape 확인 | `tools/architecture-guard/tests/test_architecture_guard.py`, `tools/architecture-guard/architecture_guard.py` |
 | Manual E2E | 실제 서비스 기동 후 `CARD`, `FAIL_CARD`, `DELAY_CARD`, 관리자 취소, Gateway 경유 동일 SKU 최종 상태, Kafka pause/unpause 복구 확인 | `docs/runbooks/local-e2e.md`, `tools/local-e2e` |
 
@@ -79,7 +79,7 @@ Gateway routing smoke runs inside the Gateway module.
 cd services/gateway && ../../scripts/with-java17.sh mvn test
 ```
 
-Gateway security tests are included in the same suite. They verify unauthenticated admin access returns `401`, a customer token returns `403`, and an admin token can reach protected upstream routes.
+Gateway security tests are included in the same suite. They verify unauthenticated admin/customer access returns `401`, a customer token cannot access admin routes, an admin token can reach protected admin upstream routes, and customer order routes forward the JWT subject while ignoring spoofed identity headers.
 
 ```bash
 ./tools/architecture-guard/architecture-guard check
@@ -141,7 +141,7 @@ These are known gaps, not hidden assumptions.
 - Fulfillment Service currently covers `OrderConfirmed` to `PREPARING` request creation, duplicate event handling, service API, Gateway route, and Admin App fulfillment request screen. Carrier assignment, labels, and tracking remain future scope.
 - Read Model Service currently covers order summary projection, service-local customer/admin APIs, Gateway routing, Admin Dashboard metrics and filters, late `OrderCreated` protection, and result-event retry rollback when the summary is missing. Customer product search is currently handled by Catalog API/UI; a separate product search projection and full Kafka retry/DLQ drills remain future scope.
 - Mobile customer app now has the Expo scaffold, Gateway-first API client, product/SKU stock screen tests, coupon quote tests, order creation payload/header tests, order status polling tests, Read Model order history tests, smoke preflight, and a smoke evidence collector. Android/iOS live smoke evidence and screenshots remain future scope until a simulator/emulator target is available.
-- Gateway admin authentication and role authorization are now covered by OAuth2 Resource Server tests. Keycloak-backed demo smoke is wired to acquire admin/customer tokens and pass admin bearer tokens into protected Gateway routes. Customer object-level authorization and app OIDC login remain current security gaps.
+- Gateway admin/customer authentication, role authorization, and customer object-level authorization are now covered by OAuth2 Resource Server and service integration tests. Keycloak-backed demo smoke is wired to acquire admin/customer tokens and pass bearer tokens into protected Gateway routes. App OIDC login and authenticated admin audit identity remain current security gaps.
 - Customer API documentation is now separated from runbook examples, but inventory customer query docs can still be expanded later.
 
 ## Related Docs

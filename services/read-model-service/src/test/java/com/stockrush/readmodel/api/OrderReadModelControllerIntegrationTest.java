@@ -68,6 +68,21 @@ class OrderReadModelControllerIntegrationTest {
     }
 
     @Test
+    void lists_customer_order_history_from_authenticated_subject_header() throws Exception {
+        mockMvc.perform(get("/api/read-model/orders")
+                .param("memberId", "member-api-2")
+                .param("size", "5")
+                .header("X-StockRush-Subject", "member-api-1")
+                .header("X-Correlation-Id", "corr-read-auth-customer"))
+            .andExpect(status().isOk())
+            .andExpect(header().string("X-Correlation-Id", "corr-read-auth-customer"))
+            .andExpect(jsonPath("$.success", is(true)))
+            .andExpect(jsonPath("$.data.items", hasSize(2)))
+            .andExpect(jsonPath("$.data.items[0].memberId", is("member-api-1")))
+            .andExpect(jsonPath("$.data.items[1].memberId", is("member-api-1")));
+    }
+
+    @Test
     void normalizes_customer_order_history_page_parameters() throws Exception {
         mockMvc.perform(get("/api/read-model/orders")
                 .param("memberId", "member-api-1")

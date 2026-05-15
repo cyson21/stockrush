@@ -46,10 +46,11 @@
   --initial-stock 20 \
   --quantity 1 \
   --max-attempts 12 \
-  --admin-bearer-token "$STOCKRUSH_ADMIN_BEARER_TOKEN"
+  --admin-bearer-token "$STOCKRUSH_ADMIN_BEARER_TOKEN" \
+  --customer-bearer-token "$STOCKRUSH_CUSTOMER_BEARER_TOKEN"
 ```
 
-`scripts/demo-smoke.sh`와 `scripts/demo-smoke.ps1`은 이 명령을 호출한 뒤 `burst-idempotency`를 이어서 실행해 Docker 데모 스택의 주문 흐름과 멱등 재시도 수렴을 함께 확인한다. 빠른 로컬 확인만 필요하면 smoke 스크립트에 `--skip-burst`를 지정한다.
+Gateway customer route가 보호되므로 Gateway를 경유하는 주문 생성/조회에는 customer bearer token이 필요하다. `scripts/demo-smoke.sh`와 `scripts/demo-smoke.ps1`은 Keycloak demo user로 admin/customer token을 취득한 뒤 이 명령을 호출하고, `burst-idempotency`를 이어서 실행해 Docker 데모 스택의 주문 흐름과 멱등 재시도 수렴을 함께 확인한다. 빠른 로컬 확인만 필요하면 smoke 스크립트에 `--skip-burst`를 지정한다.
 
 ### 검증 기준
 

@@ -81,6 +81,38 @@ class CreateOrderControllerIntegrationTest {
     }
 
     @Test
+    void creates_order_with_authenticated_subject_instead_of_body_member_id() throws Exception {
+        mockMvc.perform(post("/api/orders")
+                .header("Idempotency-Key", "idem-http-auth-subject")
+                .header("X-Correlation-Id", "corr-http-auth-subject")
+                .header("X-StockRush-Subject", "member-authenticated")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "memberId": "member-spoofed",
+                      "items": [
+                        {
+                          "productCode": "LIMITED-001",
+                          "skuId": "SKU-001",
+                          "quantity": 1,
+                          "unitPrice": 12000.00
+                        }
+                      ]
+                    }
+                    """))
+            .andExpect(status().isCreated())
+            .andExpect(header().string("X-Correlation-Id", "corr-http-auth-subject"))
+            .andExpect(jsonPath("$.success", is(true)));
+
+        org.junit.jupiter.api.Assertions.assertEquals(
+            "member-authenticated",
+            jdbcClient.sql("select member_id from customer_orders where order_id = 'ord_http_001'")
+                .query(String.class)
+                .single()
+        );
+    }
+
+    @Test
     void replays_same_idempotency_key_with_existing_order_response() throws Exception {
         String requestBody = """
             {
@@ -116,6 +148,48 @@ class CreateOrderControllerIntegrationTest {
             .andExpect(jsonPath("$.data.status", is("CREATED")))
             .andExpect(jsonPath("$.data.sagaStatus", is("STARTED")))
             .andExpect(jsonPath("$.trace.correlationId", is("corr-http-replay-second")));
+
+        org.junit.jupiter.api.Assertions.assertEquals(1, count("customer_orders"));
+        org.junit.jupiter.api.Assertions.assertEquals(1, count("order_items"));
+        org.junit.jupiter.api.Assertions.assertEquals(1, count("outbox_events"));
+    }
+
+    @Test
+    void rejects_same_idempotency_key_replay_for_different_authenticated_subject() throws Exception {
+        String requestBody = """
+            {
+              "memberId": "ignored-member",
+              "items": [
+                {
+                  "productCode": "LIMITED-001",
+                  "skuId": "SKU-001",
+                  "quantity": 1,
+                  "unitPrice": 12000.00
+                }
+              ]
+            }
+            """;
+
+        mockMvc.perform(post("/api/orders")
+                .header("Idempotency-Key", "idem-http-auth-replay")
+                .header("X-Correlation-Id", "corr-http-auth-replay-first")
+                .header("X-StockRush-Subject", "member-authenticated-1")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(requestBody))
+            .andExpect(status().isCreated())
+            .andExpect(jsonPath("$.data.orderId", is("ord_http_001")));
+
+        mockMvc.perform(post("/api/orders")
+                .header("Idempotency-Key", "idem-http-auth-replay")
+                .header("X-Correlation-Id", "corr-http-auth-replay-second")
+                .header("X-StockRush-Subject", "member-authenticated-2")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(requestBody))
+            .andExpect(status().isForbidden())
+            .andExpect(header().string("X-Correlation-Id", "corr-http-auth-replay-second"))
+            .andExpect(jsonPath("$.success", is(false)))
+            .andExpect(jsonPath("$.error.code", is("ORDER_FORBIDDEN")))
+            .andExpect(jsonPath("$.trace.correlationId", is("corr-http-auth-replay-second")));
 
         org.junit.jupiter.api.Assertions.assertEquals(1, count("customer_orders"));
         org.junit.jupiter.api.Assertions.assertEquals(1, count("order_items"));

@@ -22,6 +22,16 @@ public class OrderQueryService {
     }
 
     @Transactional(readOnly = true)
+    public OrderDetailSnapshot getDetailForMember(String orderId, String memberId) {
+        OrderDetailSnapshot snapshot = getDetail(orderId);
+        String normalizedMemberId = normalizeRequired(memberId, "memberId");
+        if (!snapshot.memberId().equals(normalizedMemberId)) {
+            throw new OrderForbiddenException(orderId);
+        }
+        return snapshot;
+    }
+
+    @Transactional(readOnly = true)
     public OrderPageSnapshot listRecentOrders(int page, int size, String status, String sagaStatus) {
         if (page < 0) {
             throw new IllegalArgumentException("page must be greater than or equal to 0");
@@ -56,5 +66,12 @@ public class OrderQueryService {
         } catch (IllegalArgumentException exception) {
             throw new IllegalArgumentException("invalid " + fieldName + ": " + value, exception);
         }
+    }
+
+    private String normalizeRequired(String value, String fieldName) {
+        if (value == null || value.isBlank()) {
+            throw new IllegalArgumentException(fieldName + " must not be blank");
+        }
+        return value.trim();
     }
 }

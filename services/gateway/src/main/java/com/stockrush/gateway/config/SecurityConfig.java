@@ -9,6 +9,7 @@ import java.util.stream.Collectors;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.convert.converter.Converter;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AbstractAuthenticationToken;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
@@ -33,6 +34,8 @@ class SecurityConfig {
             .authorizeHttpRequests(authorize -> authorize
                 .requestMatchers("/actuator/health/**", "/internal/ping").permitAll()
                 .requestMatchers("/api/admin/**", "/api/read-model/admin/**").hasRole("ADMIN")
+                .requestMatchers(HttpMethod.POST, "/api/orders").hasRole("CUSTOMER")
+                .requestMatchers(HttpMethod.GET, "/api/orders/**", "/api/read-model/orders").hasRole("CUSTOMER")
                 .anyRequest().permitAll()
             )
             .oauth2ResourceServer(oauth2 -> oauth2

@@ -69,6 +69,7 @@ class ScenarioConfig:
     kafka_service: str = "kafka"
     outage_observation_seconds: float = 2.0
     admin_bearer_token: str | None = None
+    customer_bearer_token: str | None = None
 
 
 def expected_success_count(initial_stock: int, quantity_per_order: int, order_count: int) -> int:
@@ -122,6 +123,17 @@ def non_blank_text(value: str) -> str:
 
 
 def normalize_admin_bearer_token(value: str | None) -> str | None:
+    if not value:
+        return None
+    token = value.strip()
+    if not token:
+        return None
+    if token.startswith("Bearer "):
+        token = token[len("Bearer "):].strip()
+    return token or None
+
+
+def normalize_bearer_token(value: str | None) -> str | None:
     if not value:
         return None
     token = value.strip()
@@ -539,6 +551,13 @@ def retryable_pending_outbox_items(
 
 def admin_auth_headers(config: ScenarioConfig) -> dict[str, str]:
     token = config.admin_bearer_token
+    if not token:
+        return {}
+    return {"Authorization": f"Bearer {token}"}
+
+
+def customer_auth_headers(config: ScenarioConfig) -> dict[str, str]:
+    token = config.customer_bearer_token
     if not token:
         return {}
     return {"Authorization": f"Bearer {token}"}
@@ -1363,7 +1382,10 @@ def create_order(
         client.post(
             f"{config.order_api_url}/api/orders",
             body,
-            headers={"Idempotency-Key": f"idem-order-{product_code}-{index:02d}-{payment_method}"},
+            headers={
+                **customer_auth_headers(config),
+                "Idempotency-Key": f"idem-order-{product_code}-{index:02d}-{payment_method}",
+            },
         )
     )
 
@@ -1401,7 +1423,10 @@ def create_orders_concurrently(
                         }
                     ],
                 },
-                headers={"Idempotency-Key": f"idem-order-{product_code}-{index:02d}"},
+                headers={
+                    **customer_auth_headers(config),
+                    "Idempotency-Key": f"idem-order-{product_code}-{index:02d}",
+                },
             )
         )
         return payload
@@ -1481,6 +1506,7 @@ def create_order_with_retryable_replay_pending(
                     ],
                 },
                 headers={
+                    **customer_auth_headers(config),
                     "Idempotency-Key": idempotency_key,
                     "X-Correlation-Id": f"corr-burst-{product_code}-{index:02d}-{replay:02d}-{attempt:02d}",
                 },
@@ -1526,7 +1552,9 @@ def maybe_relay_wave_concurrently(client: ApiClient, config: ScenarioConfig) -> 
 
 
 def get_order(client: ApiClient, config: ScenarioConfig, order_id: str) -> Mapping[str, Any]:
-    return response_data(client.get(f"{config.order_api_url}/api/orders/{order_id}"))
+    return response_data(
+        client.get(f"{config.order_api_url}/api/orders/{order_id}", headers=customer_auth_headers(config))
+    )
 
 
 def get_stock(client: ApiClient, config: ScenarioConfig, sku_id: str) -> Mapping[str, Any]:
@@ -1583,6 +1611,11 @@ def add_runtime_arguments(
         default=os.getenv("STOCKRUSH_ADMIN_BEARER_TOKEN"),
         help="Admin bearer token for Gateway admin routes. Defaults to STOCKRUSH_ADMIN_BEARER_TOKEN.",
     )
+    command_parser.add_argument(
+        "--customer-bearer-token",
+        default=os.getenv("STOCKRUSH_CUSTOMER_BEARER_TOKEN"),
+        help="Customer bearer token for Gateway customer routes. Defaults to STOCKRUSH_CUSTOMER_BEARER_TOKEN.",
+    )
 
 
 def add_outbox_recovery_arguments(command_parser: argparse.ArgumentParser) -> None:
@@ -1619,6 +1652,11 @@ def add_outbox_recovery_arguments(command_parser: argparse.ArgumentParser) -> No
         "--admin-bearer-token",
         default=os.getenv("STOCKRUSH_ADMIN_BEARER_TOKEN"),
         help="Admin bearer token for Gateway admin routes. Defaults to STOCKRUSH_ADMIN_BEARER_TOKEN.",
+    )
+    command_parser.add_argument(
+        "--customer-bearer-token",
+        default=os.getenv("STOCKRUSH_CUSTOMER_BEARER_TOKEN"),
+        help="Customer bearer token for Gateway customer routes. Defaults to STOCKRUSH_CUSTOMER_BEARER_TOKEN.",
     )
 
 
@@ -1744,6 +1782,7 @@ def config_from_args(args: argparse.Namespace) -> ScenarioConfig:
         kafka_service=getattr(args, "kafka_service", "kafka"),
         outage_observation_seconds=getattr(args, "outage_observation_seconds", 2.0),
         admin_bearer_token=normalize_admin_bearer_token(getattr(args, "admin_bearer_token", None)),
+        customer_bearer_token=normalize_bearer_token(getattr(args, "customer_bearer_token", None)),
     )
 
 

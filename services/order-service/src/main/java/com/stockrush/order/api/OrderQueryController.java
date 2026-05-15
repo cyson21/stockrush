@@ -25,14 +25,22 @@ class OrderQueryController {
     @GetMapping("/{orderId}")
     ResponseEntity<ApiResponse<OrderDetailResponse>> getDetail(
         @PathVariable String orderId,
+        @RequestHeader(value = "X-StockRush-Subject", required = false) String authenticatedMemberId,
         @RequestHeader(value = CorrelationIds.HEADER_NAME, required = false) String correlationId
     ) {
         String resolvedCorrelationId = CorrelationIds.resolve(correlationId);
-        OrderDetailResponse response = OrderDetailResponse.from(orderQueryService.getDetail(orderId));
+        OrderDetailResponse response = OrderDetailResponse.from(getDetail(orderId, authenticatedMemberId));
 
         return ResponseEntity.ok()
             .header(CorrelationIds.HEADER_NAME, resolvedCorrelationId)
             .body(ApiResponse.success(response, resolvedCorrelationId));
+    }
+
+    private OrderDetailSnapshot getDetail(String orderId, String authenticatedMemberId) {
+        if (authenticatedMemberId == null || authenticatedMemberId.isBlank()) {
+            return orderQueryService.getDetail(orderId);
+        }
+        return orderQueryService.getDetailForMember(orderId, authenticatedMemberId);
     }
 }
 

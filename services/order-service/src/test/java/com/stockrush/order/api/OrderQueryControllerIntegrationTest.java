@@ -68,6 +68,30 @@ class OrderQueryControllerIntegrationTest {
     }
 
     @Test
+    void returns_order_detail_for_matching_authenticated_subject() throws Exception {
+        mockMvc.perform(get("/api/orders/{orderId}", "ord_query_001")
+                .header("X-StockRush-Subject", "member-query-1")
+                .header("X-Correlation-Id", "corr-order-auth-query"))
+            .andExpect(status().isOk())
+            .andExpect(header().string("X-Correlation-Id", "corr-order-auth-query"))
+            .andExpect(jsonPath("$.success", is(true)))
+            .andExpect(jsonPath("$.data.orderId", is("ord_query_001")))
+            .andExpect(jsonPath("$.data.memberId", is("member-query-1")));
+    }
+
+    @Test
+    void rejects_order_detail_for_different_authenticated_subject() throws Exception {
+        mockMvc.perform(get("/api/orders/{orderId}", "ord_query_001")
+                .header("X-StockRush-Subject", "member-other")
+                .header("X-Correlation-Id", "corr-order-forbidden"))
+            .andExpect(status().isForbidden())
+            .andExpect(header().string("X-Correlation-Id", "corr-order-forbidden"))
+            .andExpect(jsonPath("$.success", is(false)))
+            .andExpect(jsonPath("$.error.code", is("ORDER_FORBIDDEN")))
+            .andExpect(jsonPath("$.trace.correlationId", is("corr-order-forbidden")));
+    }
+
+    @Test
     void returns_not_found_for_unknown_order() throws Exception {
         mockMvc.perform(get("/api/orders/{orderId}", "ord_missing")
                 .header("X-Correlation-Id", "corr-order-missing"))

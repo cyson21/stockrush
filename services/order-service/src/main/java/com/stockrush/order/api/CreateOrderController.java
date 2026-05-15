@@ -34,10 +34,13 @@ class CreateOrderController {
     ResponseEntity<ApiResponse<CreateOrderResponse>> create(
         @RequestHeader("Idempotency-Key") String idempotencyKey,
         @RequestHeader(value = CorrelationIds.HEADER_NAME, required = false) String correlationId,
+        @RequestHeader(value = "X-StockRush-Subject", required = false) String authenticatedMemberId,
         @Valid @RequestBody CreateOrderRequest request
     ) {
         String resolvedCorrelationId = CorrelationIds.resolve(correlationId);
-        CreateOrderResult result = createOrderService.create(request.toCommand(idempotencyKey, resolvedCorrelationId));
+        CreateOrderResult result = createOrderService.create(
+            request.toCommand(idempotencyKey, resolvedCorrelationId, authenticatedMemberId)
+        );
         CreateOrderResponse response = CreateOrderResponse.from(result);
 
         ResponseEntity.BodyBuilder responseBuilder = result.replayed()
@@ -57,15 +60,22 @@ record CreateOrderRequest(
     @NotEmpty List<@Valid CreateOrderItemRequest> items
 ) {
 
-    CreateOrderCommand toCommand(String idempotencyKey, String correlationId) {
+    CreateOrderCommand toCommand(String idempotencyKey, String correlationId, String authenticatedMemberId) {
         return new CreateOrderCommand(
-            memberId,
+            resolveMemberId(authenticatedMemberId),
             idempotencyKey,
             correlationId,
             paymentMethod,
             couponCode,
             items.stream().map(CreateOrderItemRequest::toCommand).toList()
         );
+    }
+
+    private String resolveMemberId(String authenticatedMemberId) {
+        if (authenticatedMemberId == null || authenticatedMemberId.isBlank()) {
+            return memberId;
+        }
+        return authenticatedMemberId.trim();
     }
 }
 

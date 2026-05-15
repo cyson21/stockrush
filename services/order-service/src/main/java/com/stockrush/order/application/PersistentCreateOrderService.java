@@ -24,23 +24,30 @@ public class PersistentCreateOrderService {
     public CreateOrderResult create(CreateOrderCommand command) {
         var existingOrder = orderRepository.findByIdempotencyKey(command.idempotencyKey());
         if (existingOrder.isPresent()) {
-            return CreateOrderResult.replayed(existingOrder.get());
+            return CreateOrderResult.replayed(ownedReplay(existingOrder.get(), command.memberId()));
         }
 
         CreateOrderResult result = createOrderService.create(command);
         boolean saved = orderRepository.saveIfAbsent(result.order(), command.idempotencyKey());
         if (!saved) {
-            return CreateOrderResult.replayed(replayOrder(command.idempotencyKey()));
+            return CreateOrderResult.replayed(replayOrder(command.idempotencyKey(), command.memberId()));
         }
         outboxEventRepository.save(result.outboxEvent());
         return result;
     }
 
-    private OrderSnapshot replayOrder(String idempotencyKey) {
+    private OrderSnapshot replayOrder(String idempotencyKey, String memberId) {
         var existingOrder = orderRepository.findByIdempotencyKey(idempotencyKey);
         if (existingOrder.isPresent()) {
-            return existingOrder.get();
+            return ownedReplay(existingOrder.get(), memberId);
         }
         throw new OrderIdempotencyReplayUnavailableException("Idempotent order replay is not available yet.");
+    }
+
+    private OrderSnapshot ownedReplay(OrderSnapshot existingOrder, String memberId) {
+        if (!existingOrder.memberId().equals(memberId)) {
+            throw new OrderForbiddenException("Order does not belong to the authenticated customer.");
+        }
+        return existingOrder;
     }
 }

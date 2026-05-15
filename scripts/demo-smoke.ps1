@@ -198,6 +198,7 @@ Invoke-LocalE2E demo-order-flow `
   --payment-url "http://localhost:$PaymentPort" `
   --promotion-url "http://localhost:$PromotionPort" `
   --admin-bearer-token "$AdminBearerToken" `
+  --customer-bearer-token "$CustomerBearerToken" `
   --relay-mode automatic `
   --orders 3 `
   --initial-stock 20 `
@@ -219,6 +220,7 @@ if (-not $SkipBurst) {
     --payment-url "http://localhost:$PaymentPort" `
     --promotion-url "http://localhost:$PromotionPort" `
     --admin-bearer-token "$AdminBearerToken" `
+    --customer-bearer-token "$CustomerBearerToken" `
     --relay-mode automatic `
     --orders 12 `
     --initial-stock 4 `
@@ -247,6 +249,7 @@ if ($KafkaOutage) {
     --payment-url "http://localhost:$PaymentPort" `
     --promotion-url "http://localhost:$PromotionPort" `
     --admin-bearer-token "$AdminBearerToken" `
+    --customer-bearer-token "$CustomerBearerToken" `
     --relay-mode automatic `
     --orders 1 `
     --initial-stock 3 `

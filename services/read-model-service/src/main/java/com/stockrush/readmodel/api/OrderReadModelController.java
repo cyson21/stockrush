@@ -25,21 +25,23 @@ class OrderReadModelController {
 
     @GetMapping("/orders")
     ResponseEntity<ApiResponse<OrderSummaryPageResponse>> listCustomerOrders(
-        @RequestParam String memberId,
+        @RequestParam(required = false) String memberId,
         @RequestParam(required = false) String orderId,
         @RequestParam(required = false) String status,
         @RequestParam(required = false) String sagaStatus,
         @RequestParam(required = false) String couponCode,
         @RequestParam(defaultValue = "0") int page,
         @RequestParam(defaultValue = "20") int size,
+        @RequestHeader(value = "X-StockRush-Subject", required = false) String authenticatedMemberId,
         @RequestHeader(value = CorrelationIds.HEADER_NAME, required = false) String correlationId
     ) {
         String resolvedCorrelationId = CorrelationIds.resolve(correlationId);
+        String trustedMemberId = resolveMemberId(authenticatedMemberId, memberId);
         return ResponseEntity.ok()
             .header(CorrelationIds.HEADER_NAME, resolvedCorrelationId)
             .body(ApiResponse.success(
                 OrderSummaryPageResponse.from(
-                    queryService.listCustomerOrders(memberId, orderId, status, sagaStatus, couponCode, page, size)
+                    queryService.listCustomerOrders(trustedMemberId, orderId, status, sagaStatus, couponCode, page, size)
                 ),
                 resolvedCorrelationId
             ));
@@ -65,6 +67,13 @@ class OrderReadModelController {
                 ),
                 resolvedCorrelationId
             ));
+    }
+
+    private String resolveMemberId(String authenticatedMemberId, String requestMemberId) {
+        if (authenticatedMemberId != null && !authenticatedMemberId.isBlank()) {
+            return authenticatedMemberId.trim();
+        }
+        return requestMemberId;
     }
 }
 
