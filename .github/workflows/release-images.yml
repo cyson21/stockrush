@@ -131,6 +131,17 @@ jobs:
             org.opencontainers.image.revision=${{ steps.vars.outputs.short_sha }}
             org.opencontainers.image.title=StockRush ${{ matrix.image }}
 
+      - name: Scan published image for vulnerabilities
+        env:
+          TRIVY_NO_PROGRESS: "true"
+        run: |
+          docker run --rm \
+            -e TRIVY_NO_PROGRESS \
+            -v "$HOME/.docker:/root/.docker:ro" \
+            aquasec/trivy:0.69.3 \
+            image --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 \
+            "${{ steps.vars.outputs.image_name }}:git-${{ steps.vars.outputs.short_sha }}"
+
       - name: Summary
         run: |
           {

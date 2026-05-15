@@ -12,8 +12,10 @@ push / pull request
      -> mobile app tests and typecheck
      -> local-e2e runner unit tests
      -> Architecture Guard
+     -> secret scan and Trivy dependency scan
   -> Release Images
      -> GHCR image publish after CI success on main
+     -> Trivy image scan
   -> Local Deploy
      -> pull GHCR images
      -> docker compose up with image override
@@ -29,7 +31,9 @@ push / pull request
 
 `CI`는 `infra/local/docker-compose.yml`로 PostgreSQL과 Kafka를 띄운 뒤 서비스별 Maven 테스트를 실행한다. 웹앱은 `npm ci`, `npm test`, `npm run build`를 실행하고, 모바일 앱은 Jest, TypeScript typecheck, scaffold validation을 실행한다.
 
-`Release Images`는 backend 8개 서비스와 customer/admin web app을 GHCR에 발행한다. 이미지는 `linux/amd64`, `linux/arm64` 두 platform manifest로 발행해 Windows 11/일반 x86 PC와 Apple Silicon Mac에서 같은 태그를 pull할 수 있게 한다.
+또한 `CI` Tools 관문에서는 `./scripts/check-no-committed-secrets.sh`로 커밋된 비밀을 차단하고, Trivy `fs` 스캔으로 `services`와 `apps` 경로를 `HIGH/CRITICAL` 기준으로 점검한다.
+
+`Release Images`는 backend 8개 서비스와 customer/admin web app을 GHCR에 발행한다. 이미지는 `linux/amd64`, `linux/arm64` 두 platform manifest로 발행해 Windows 11/일반 x86 PC와 Apple Silicon Mac에서 같은 태그를 pull할 수 있게 한다. 발행된 태그는 Trivy 이미지 스캔을 통과해야 release job이 성공한다.
 
 이미지 이름:
 

@@ -40,6 +40,8 @@ info: useful design feedback
 | ARCH-008 Retry and DLQ Visibility | Planned |
 | ARCH-009 Actuator Operations Exposure | Implemented |
 | ARCH-010 Service Correlation MDC | Implemented |
+| ARCH-011 Gateway Security Routes | Implemented |
+| ARCH-012 Trusted Identity Headers | Implemented |
 
 ### ARCH-001: Service Schema Ownership
 
@@ -251,4 +253,41 @@ Suggested fix:
 
 ```text
 Add a service-local OncePerRequestFilter that resolves X-Correlation-Id, stores it in MDC, wraps request headers, and clears MDC in finally.
+```
+
+### ARCH-011: Gateway Security Routes
+
+Severity: error
+
+Gateway must apply OAuth2 Resource Server route authorization for customer and admin entry points.
+
+At minimum, the following must be enforced in `SecurityConfig`:
+
+- admin read APIs require `ROLE_ADMIN`
+- customer order and read-model APIs require `ROLE_CUSTOMER`
+- session creation policy is stateless
+
+Suggested fix:
+
+```text
+Add SecurityConfig with oauth2ResourceServer JWT and requestMatchers covering admin and customer security routes.
+```
+
+### ARCH-012: Trusted Identity Headers
+
+Severity: error
+
+Gateway must remove client supplied identity headers and rewrite trusted headers from the authenticated JWT before forwarding to downstream services.
+
+The trusted path must:
+
+- remove existing identity headers before proxying
+- set `X-StockRush-Subject` from JWT subject
+- set `X-Operator-Id` from authenticated admin principal
+- set `X-StockRush-Roles` and `X-StockRush-Email` from token claims
+
+Suggested fix:
+
+```text
+Introduce a trusted identity header helper in Gateway and reuse it in all protected route proxies.
 ```

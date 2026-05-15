@@ -117,7 +117,7 @@ jobs:
   tools:
     name: Tools and architecture guard
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -132,6 +132,24 @@ jobs:
 
       - name: Run architecture guard
         run: ./tools/architecture-guard/architecture-guard check
+
+      - name: Scan committed secrets
+        run: ./scripts/check-no-committed-secrets.sh
+
+      - name: Scan dependencies for vulnerabilities
+        env:
+          TRIVY_NO_PROGRESS: "true"
+        run: |
+          docker run --rm \
+            -e TRIVY_NO_PROGRESS \
+            -v "$PWD:/workspace:ro" \
+            aquasec/trivy:0.69.3 \
+            fs --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 /workspace/services
+          docker run --rm \
+            -e TRIVY_NO_PROGRESS \
+            -v "$PWD:/workspace:ro" \
+            aquasec/trivy:0.69.3 \
+            fs --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 /workspace/apps
 
       - name: Ensure CI/CD stays cloud-neutral
         run: ./scripts/check-no-aws-usage.sh

@@ -292,6 +292,93 @@ def check_actuator_observability(root: Path) -> list[Violation]:
     return violations
 
 
+def check_gateway_security_routes(root: Path) -> list[Violation]:
+    gateway_root = root / "services" / "gateway"
+    if not gateway_root.exists():
+        return []
+
+    security_config = gateway_root / "src" / "main" / "java" / "com" / "stockrush" / "gateway" / "config" / "SecurityConfig.java"
+    if not security_config.exists():
+        return [
+            Violation(
+                rule_id="ARCH-011",
+                severity="error",
+                file=display_path(root, gateway_root),
+                message="Gateway must define SecurityConfig for protected admin and customer routes.",
+                suggested_fix="Add SecurityConfig with stateless OAuth2 Resource Server JWT route authorization.",
+            )
+        ]
+
+    text = read_text(security_config)
+    required_patterns = {
+        "OAuth2 Resource Server JWT": r"\.oauth2ResourceServer\s*\(",
+        "stateless sessions": r"SessionCreationPolicy\.STATELESS",
+        "admin routes": r'requestMatchers\s*\(\s*"/api/admin/\*\*"\s*,\s*"/api/read-model/admin/\*\*"\s*\)\s*\.hasRole\s*\(\s*"ADMIN"\s*\)',
+        "customer order create": r"requestMatchers\s*\(\s*HttpMethod\.POST\s*,\s*\"/api/orders\"\s*\)\s*\.hasRole\s*\(\s*\"CUSTOMER\"\s*\)",
+        "customer order reads": r"requestMatchers\s*\(\s*HttpMethod\.GET\s*,\s*\"/api/orders/\*\*\"\s*,\s*\"/api/read-model/orders\"\s*\)\s*\.hasRole\s*\(\s*\"CUSTOMER\"\s*\)",
+    }
+    missing = [name for name, pattern in required_patterns.items() if not re.search(pattern, text, re.DOTALL)]
+    if not missing:
+        return []
+
+    return [
+        Violation(
+            rule_id="ARCH-011",
+            severity="error",
+            file=display_path(root, security_config),
+            message=f"Gateway security route authorization is missing: {', '.join(missing)}.",
+            suggested_fix="Keep admin routes under ROLE_ADMIN and customer order/read-model routes under ROLE_CUSTOMER with JWT resource server enabled.",
+        )
+    ]
+
+
+def check_gateway_trusted_identity_headers(root: Path) -> list[Violation]:
+    gateway_root = root / "services" / "gateway"
+    if not gateway_root.exists():
+        return []
+
+    trusted_headers = gateway_root / "src" / "main" / "java" / "com" / "stockrush" / "gateway" / "api" / "TrustedIdentityHeaders.java"
+    if not trusted_headers.exists():
+        return [
+            Violation(
+                rule_id="ARCH-012",
+                severity="error",
+                file=display_path(root, gateway_root),
+                message="Gateway must own trusted internal identity headers.",
+                suggested_fix="Add TrustedIdentityHeaders that removes client supplied identity headers and derives subject/operator from JWT.",
+            )
+        ]
+
+    text = read_text(trusted_headers)
+    required_patterns = {
+        "subject header": r'X-StockRush-Subject',
+        "email header": r'X-StockRush-Email',
+        "roles header": r'X-StockRush-Roles',
+        "operator header": r'X-Operator-Id',
+        "remove subject": r"\.remove\s*\(\s*SUBJECT\s*\)",
+        "remove email": r"\.remove\s*\(\s*EMAIL\s*\)",
+        "remove roles": r"\.remove\s*\(\s*ROLES\s*\)",
+        "remove operator": r"\.remove\s*\(\s*OPERATOR\s*\)",
+        "set subject": r"\.set\s*\(\s*SUBJECT\s*,\s*jwt\.getSubject\s*\(\s*\)\s*\)",
+        "set admin operator": r"\.set\s*\(\s*OPERATOR\s*,\s*operatorId\s*\(\s*jwt\s*\)\s*\)",
+        "email claim": r"jwt\.getClaimAsString\s*\(\s*\"email\"\s*\)",
+        "subject fallback": r"return\s+jwt\.getSubject\s*\(\s*\)",
+    }
+    missing = [name for name, pattern in required_patterns.items() if not re.search(pattern, text, re.DOTALL)]
+    if not missing:
+        return []
+
+    return [
+        Violation(
+            rule_id="ARCH-012",
+            severity="error",
+            file=display_path(root, trusted_headers),
+            message=f"Gateway trusted identity header handling is missing: {', '.join(missing)}.",
+            suggested_fix="Remove client supplied identity/operator headers and set internal headers from the authenticated JWT.",
+        )
+    ]
+
+
 def check_correlation_id_propagation(root: Path) -> list[Violation]:
     violations: list[Violation] = []
     gateway_root = root / "services" / "gateway"
@@ -471,6 +558,8 @@ def check(root: Path) -> list[Violation]:
     violations.extend(check_correlation_id_propagation(root))
     violations.extend(check_api_service_correlation_mdc(root))
     violations.extend(check_actuator_observability(root))
+    violations.extend(check_gateway_security_routes(root))
+    violations.extend(check_gateway_trusted_identity_headers(root))
     return violations
 
 

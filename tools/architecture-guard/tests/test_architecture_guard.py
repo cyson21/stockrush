@@ -509,6 +509,122 @@ class ArchitectureGuardTest(unittest.TestCase):
 
             self.assertTrue(any(violation.rule_id == "ARCH-010" for violation in violations))
 
+    def test_detects_gateway_missing_security_config(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "services" / "gateway").mkdir(parents=True)
+
+            violations = architecture_guard.check(root)
+
+            self.assertTrue(any(violation.rule_id == "ARCH-011" for violation in violations))
+
+    def test_allows_gateway_security_config_with_protected_admin_and_customer_routes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            config_root = root / "services" / "gateway" / "src" / "main" / "java" / "com" / "stockrush" / "gateway" / "config"
+            config_root.mkdir(parents=True)
+            (config_root / "SecurityConfig.java").write_text(
+                "class SecurityConfig {\n"
+                "  Object securityFilterChain(http) {\n"
+                "    return http.sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))\n"
+                "      .authorizeHttpRequests(authorize -> authorize\n"
+                "        .requestMatchers(\"/api/admin/**\", \"/api/read-model/admin/**\").hasRole(\"ADMIN\")\n"
+                "        .requestMatchers(HttpMethod.POST, \"/api/orders\").hasRole(\"CUSTOMER\")\n"
+                "        .requestMatchers(HttpMethod.GET, \"/api/orders/**\", \"/api/read-model/orders\").hasRole(\"CUSTOMER\"))\n"
+                "      .oauth2ResourceServer(oauth2 -> oauth2.jwt());\n"
+                "  }\n"
+                "}\n",
+                encoding="utf-8",
+            )
+
+            violations = architecture_guard.check(root)
+
+            self.assertFalse(any(violation.rule_id == "ARCH-011" for violation in violations))
+
+    def test_detects_gateway_security_config_missing_customer_routes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            config_root = root / "services" / "gateway" / "src" / "main" / "java" / "com" / "stockrush" / "gateway" / "config"
+            config_root.mkdir(parents=True)
+            (config_root / "SecurityConfig.java").write_text(
+                "class SecurityConfig {\n"
+                "  Object securityFilterChain(http) {\n"
+                "    return http.sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))\n"
+                "      .authorizeHttpRequests(authorize -> authorize\n"
+                "        .requestMatchers(\"/api/admin/**\", \"/api/read-model/admin/**\").hasRole(\"ADMIN\"))\n"
+                "      .oauth2ResourceServer(oauth2 -> oauth2.jwt());\n"
+                "  }\n"
+                "}\n",
+                encoding="utf-8",
+            )
+
+            violations = architecture_guard.check(root)
+
+            self.assertTrue(any(violation.rule_id == "ARCH-011" for violation in violations))
+
+    def test_detects_gateway_missing_trusted_identity_headers(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "services" / "gateway").mkdir(parents=True)
+
+            violations = architecture_guard.check(root)
+
+            self.assertTrue(any(violation.rule_id == "ARCH-012" for violation in violations))
+
+    def test_allows_gateway_trusted_identity_headers(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            api_root = root / "services" / "gateway" / "src" / "main" / "java" / "com" / "stockrush" / "gateway" / "api"
+            api_root.mkdir(parents=True)
+            (api_root / "TrustedIdentityHeaders.java").write_text(
+                "class TrustedIdentityHeaders {\n"
+                "  static final String SUBJECT = \"X-StockRush-Subject\";\n"
+                "  static final String EMAIL = \"X-StockRush-Email\";\n"
+                "  static final String ROLES = \"X-StockRush-Roles\";\n"
+                "  static final String OPERATOR = \"X-Operator-Id\";\n"
+                "  Object trustedBase(headers, jwt) {\n"
+                "    headers.remove(SUBJECT); headers.remove(EMAIL); headers.remove(ROLES); headers.remove(OPERATOR);\n"
+                "    headers.set(SUBJECT, jwt.getSubject());\n"
+                "    String email = jwt.getClaimAsString(\"email\");\n"
+                "    return headers;\n"
+                "  }\n"
+                "  Object admin(headers, jwt) { headers.set(OPERATOR, operatorId(jwt)); return headers; }\n"
+                "  String operatorId(jwt) { String email = jwt.getClaimAsString(\"email\"); return jwt.getSubject(); }\n"
+                "}\n",
+                encoding="utf-8",
+            )
+
+            violations = architecture_guard.check(root)
+
+            self.assertFalse(any(violation.rule_id == "ARCH-012" for violation in violations))
+
+    def test_detects_gateway_trusted_identity_headers_without_operator_removal(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            api_root = root / "services" / "gateway" / "src" / "main" / "java" / "com" / "stockrush" / "gateway" / "api"
+            api_root.mkdir(parents=True)
+            (api_root / "TrustedIdentityHeaders.java").write_text(
+                "class TrustedIdentityHeaders {\n"
+                "  static final String SUBJECT = \"X-StockRush-Subject\";\n"
+                "  static final String EMAIL = \"X-StockRush-Email\";\n"
+                "  static final String ROLES = \"X-StockRush-Roles\";\n"
+                "  static final String OPERATOR = \"X-Operator-Id\";\n"
+                "  Object trustedBase(headers, jwt) {\n"
+                "    headers.remove(SUBJECT); headers.remove(EMAIL); headers.remove(ROLES);\n"
+                "    headers.set(SUBJECT, jwt.getSubject());\n"
+                "    String email = jwt.getClaimAsString(\"email\");\n"
+                "    return headers;\n"
+                "  }\n"
+                "  Object admin(headers, jwt) { headers.set(OPERATOR, operatorId(jwt)); return headers; }\n"
+                "  String operatorId(jwt) { String email = jwt.getClaimAsString(\"email\"); return jwt.getSubject(); }\n"
+                "}\n",
+                encoding="utf-8",
+            )
+
+            violations = architecture_guard.check(root)
+
+            self.assertTrue(any(violation.rule_id == "ARCH-012" for violation in violations))
+
     def test_allows_outbox_admin_action_table(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

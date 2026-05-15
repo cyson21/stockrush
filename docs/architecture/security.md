@@ -148,9 +148,15 @@ Current baseline:
 
 ### P9-7. CI Security Gates
 
-- Add dependency and container vulnerability scan.
-- Add secret scanning.
-- Add Architecture Guard rules for protected admin/customer routes.
+- CI tools job now includes `./scripts/check-no-committed-secrets.sh` and Trivy `fs` scans for `services` and `apps`.
+- Release Images workflow now runs Trivy image scan for each published image tag before the release job completes.
+- Architecture Guard now enforces `ARCH-011` (Gateway protected route authorization) and `ARCH-012` (trusted identity header rewriting) in CI.
+
+Current baseline:
+
+- Secret leakage and dependency/container risk checks run in `CI` so security gates fail on `HIGH`/`CRITICAL` findings.
+- Release image pipeline scans pushed tags and fails the release job on actionable vulnerability findings.
+- `ARCH-011` and `ARCH-012` are part of the Architecture Guard baseline and block changes that weaken route protection or header trust boundaries.
 
 ## Current Non-Goals
 
