@@ -44,10 +44,14 @@ Android:
 adb reverse tcp:28088 tcp:28088
 EXPO_PUBLIC_API_BASE_URL=http://10.0.2.2:28080 \
 EXPO_PUBLIC_AUTH_ISSUER=http://10.0.2.2:28088/realms/stockrush \
+EXPO_PUBLIC_AUTH_REDIRECT_MODE=expo-go \
+EXPO_PUBLIC_EXPO_GO_HOST=10.0.2.2:8081 \
 npm run android
 ```
 
 `adb reverse tcp:28088 tcp:28088` is needed for Expo Go login smoke because Keycloak can emit `localhost:28088` form/redirect URLs after the first realm page is opened from the Android emulator.
+
+Expo Go should use `EXPO_PUBLIC_AUTH_REDIRECT_MODE=expo-go`, which builds `exp://{EXPO_PUBLIC_EXPO_GO_HOST}/--/auth/callback`. Development builds can keep the default `stockrush://auth/callback` redirect URI.
 
 iOS on macOS:
 
@@ -112,6 +116,8 @@ Recommended API base URLs:
 | `EXPO_PUBLIC_AUTH_ISSUER` | runtime-specific Keycloak realm URL |
 | `EXPO_PUBLIC_AUTH_CLIENT_ID` | `stockrush-mobile` |
 | `EXPO_PUBLIC_AUTH_REDIRECT_URI` | `stockrush://auth/callback` |
+| `EXPO_PUBLIC_AUTH_REDIRECT_MODE` | unset for development build, `expo-go` for Expo Go |
+| `EXPO_PUBLIC_EXPO_GO_HOST` | `10.0.2.2:8081` on Android emulator, `localhost:8081` on iOS simulator |
 
 ## Current Scope
 

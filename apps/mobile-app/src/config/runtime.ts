@@ -28,6 +28,15 @@ function defaultAuthIssuer(): string {
   return `http://${host}/realms/stockrush`;
 }
 
+function defaultExpoGoHost(): string {
+  return Platform.OS === 'android' ? '10.0.2.2:8081' : 'localhost:8081';
+}
+
+function normalizeExpoGoHost(value?: string): string {
+  const host = trimValue(value).replace(/^exp:\/\//, '').replace(/\/+$/, '');
+  return host || defaultExpoGoHost();
+}
+
 export function getApiBaseUrl(): string {
   return trimTrailingSlash(configuredApiBaseUrl?.trim() || defaultGatewayUrl());
 }
@@ -45,5 +54,14 @@ export function getAuthClientId(): string {
 }
 
 export function getAuthRedirectUri(): string {
-  return process.env.EXPO_PUBLIC_AUTH_REDIRECT_URI?.trim() || 'stockrush://auth/callback';
+  const configuredRedirectUri = trimValue(process.env.EXPO_PUBLIC_AUTH_REDIRECT_URI);
+  if (configuredRedirectUri) {
+    return configuredRedirectUri;
+  }
+
+  if (trimValue(process.env.EXPO_PUBLIC_AUTH_REDIRECT_MODE).toLowerCase() === 'expo-go') {
+    return `exp://${normalizeExpoGoHost(process.env.EXPO_PUBLIC_EXPO_GO_HOST)}/--/auth/callback`;
+  }
+
+  return 'stockrush://auth/callback';
 }

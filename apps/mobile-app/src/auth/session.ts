@@ -1,3 +1,5 @@
+import * as SecureStore from 'expo-secure-store';
+
 export type StoredAuthSession = {
   accessToken: string;
   refreshToken?: string | null;
@@ -12,9 +14,9 @@ type PendingAuthSession = {
 };
 
 type StorageLike = {
-  getItem: (key: string) => string | null;
-  setItem: (key: string, value: string) => void;
-  removeItem: (key: string) => void;
+  getItem: (key: string) => string | null | Promise<string | null>;
+  setItem: (key: string, value: string) => void | Promise<void>;
+  removeItem: (key: string) => void | Promise<void>;
 };
 
 const TOKEN_STORAGE_KEY = 'stockrush-mobile-auth-session';
@@ -50,6 +52,18 @@ function getStorage(): StorageLike {
     return sessionStorageLike;
   }
 
+  if (
+    typeof SecureStore.getItemAsync === 'function' &&
+    typeof SecureStore.setItemAsync === 'function' &&
+    typeof SecureStore.deleteItemAsync === 'function'
+  ) {
+    return {
+      getItem: (key) => SecureStore.getItemAsync(key),
+      setItem: (key, value) => SecureStore.setItemAsync(key, value),
+      removeItem: (key) => SecureStore.deleteItemAsync(key),
+    };
+  }
+
   return {
     getItem: (key) => memoryStorage[key] ?? null,
     setItem: (key, value) => {
@@ -77,18 +91,18 @@ export async function saveAuthSession(session: StoredAuthSession | null): Promis
   const storage = getStorage();
 
   if (session === null) {
-    storage.removeItem(TOKEN_STORAGE_KEY);
+    await storage.removeItem(TOKEN_STORAGE_KEY);
     return;
   }
 
-  storage.setItem(TOKEN_STORAGE_KEY, JSON.stringify(session));
+  await storage.setItem(TOKEN_STORAGE_KEY, JSON.stringify(session));
 }
 
 export async function getAuthSession(): Promise<StoredAuthSession | null> {
   const storage = getStorage();
-  const session = safeJsonParse<StoredAuthSession>(storage.getItem(TOKEN_STORAGE_KEY));
+  const session = safeJsonParse<StoredAuthSession>(await storage.getItem(TOKEN_STORAGE_KEY));
   if (typeof session?.expiresAt === 'number' && session.expiresAt <= Date.now()) {
-    storage.removeItem(TOKEN_STORAGE_KEY);
+    await storage.removeItem(TOKEN_STORAGE_KEY);
     return null;
   }
   return session;
@@ -100,15 +114,15 @@ export async function getAccessToken(): Promise<string | null> {
 
 export async function savePendingAuthRequest(pending: PendingAuthSession): Promise<void> {
   const storage = getStorage();
-  storage.setItem(PENDING_AUTH_KEY, JSON.stringify(pending));
+  await storage.setItem(PENDING_AUTH_KEY, JSON.stringify(pending));
 }
 
 export async function getPendingAuthRequest(): Promise<PendingAuthSession | null> {
   const storage = getStorage();
-  return safeJsonParse(storage.getItem(PENDING_AUTH_KEY));
+  return safeJsonParse(await storage.getItem(PENDING_AUTH_KEY));
 }
 
 export async function clearPendingAuthRequest(): Promise<void> {
   const storage = getStorage();
-  storage.removeItem(PENDING_AUTH_KEY);
+  await storage.removeItem(PENDING_AUTH_KEY);
 }

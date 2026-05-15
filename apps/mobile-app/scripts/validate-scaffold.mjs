@@ -70,6 +70,8 @@ const readme = readText('README.md');
 assert.ok(readme.includes('EXPO_PUBLIC_API_BASE_URL'));
 assert.ok(readme.includes('Android emulator'));
 assert.ok(readme.includes('10.0.2.2'));
+assert.ok(readme.includes('EXPO_PUBLIC_AUTH_REDIRECT_MODE=expo-go'));
+assert.ok(readme.includes('exp://{EXPO_PUBLIC_EXPO_GO_HOST}/--/auth/callback'));
 assert.ok(readme.includes('Demo stack'));
 assert.ok(readme.includes('28080'));
 assert.ok(readme.includes('Windows 11 Android'));
