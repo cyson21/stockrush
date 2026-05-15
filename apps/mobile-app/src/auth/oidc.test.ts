@@ -1,9 +1,26 @@
+const secureStoreValues: Record<string, string> = {};
+
+jest.mock('expo-secure-store', () => ({
+  getItemAsync: jest.fn((key: string) => Promise.resolve(secureStoreValues[key] ?? null)),
+  setItemAsync: jest.fn((key: string, value: string) => {
+    secureStoreValues[key] = value;
+    return Promise.resolve();
+  }),
+  deleteItemAsync: jest.fn((key: string) => {
+    delete secureStoreValues[key];
+    return Promise.resolve();
+  }),
+}));
+
 describe('mobile OIDC PKCE flow', () => {
   const originalEnv = process.env;
   const fetchMock = jest.fn() as jest.MockedFunction<typeof fetch>;
 
   beforeEach(() => {
     jest.resetModules();
+    Object.keys(secureStoreValues).forEach((key) => {
+      delete secureStoreValues[key];
+    });
     process.env = { ...originalEnv };
     process.env.EXPO_PUBLIC_AUTH_ISSUER = 'http://10.0.2.2:28088/realms/stockrush';
     process.env.EXPO_PUBLIC_AUTH_CLIENT_ID = 'stockrush-mobile';

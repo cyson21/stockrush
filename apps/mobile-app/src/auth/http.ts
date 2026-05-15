@@ -6,9 +6,12 @@ function appendHeader(target: Record<string, string>, key: string, value: string
   }
 }
 
-export async function withAuthHeader(baseHeaders: Record<string, string> = {}): Promise<Record<string, string>> {
+export async function withAuthHeader(
+  baseHeaders: Record<string, string> = {},
+  accessToken?: string | null,
+): Promise<Record<string, string>> {
   const headers: Record<string, string> = { ...baseHeaders };
-  const token = await getCurrentAccessToken();
+  const token = accessToken ?? (await getCurrentAccessToken());
   appendHeader(headers, 'Authorization', token ? `Bearer ${token}` : undefined);
   return headers;
 }

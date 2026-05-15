@@ -29,7 +29,7 @@ export default function OrderHistoryScreen() {
   const [status, setStatus] = useState<LoadStatus>('idle');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const memberId = getDefaultMemberId();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, accessToken } = useAuth();
 
   const loadOrders = async () => {
     if (!isAuthenticated) {
@@ -42,7 +42,7 @@ export default function OrderHistoryScreen() {
     setErrorMessage(null);
 
     try {
-      const response = await listOrderHistory(memberId);
+      const response = await listOrderHistory(memberId, 0, 20, accessToken);
       setOrders(response.items);
       setStatus('ready');
     } catch (error) {

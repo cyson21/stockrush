@@ -159,7 +159,7 @@ export default function ProductListScreen() {
 
     async function loadOrder() {
       try {
-        const response = await getOrder(orderId);
+        const response = await getOrder(orderId, accessToken);
         if (cancelled) {
           return;
         }
@@ -245,19 +245,22 @@ export default function ProductListScreen() {
     setOrderPollError(null);
 
     try {
-      const response = await createOrder({
-        memberId,
-        paymentMethod,
-        couponCode: couponCode.trim() || undefined,
-        items: [
-          {
-            productCode: selectedProduct.productCode,
-            skuId: selectedStock.skuId,
-            quantity,
-            unitPrice: selectedProduct.listPrice,
-          },
-        ],
-      });
+      const response = await createOrder(
+        {
+          memberId,
+          paymentMethod,
+          couponCode: couponCode.trim() || undefined,
+          items: [
+            {
+              productCode: selectedProduct.productCode,
+              skuId: selectedStock.skuId,
+              quantity,
+              unitPrice: selectedProduct.listPrice,
+            },
+          ],
+        },
+        accessToken,
+      );
       setCreatedOrder(response);
       setOrderStatus('ready');
     } catch (error) {
