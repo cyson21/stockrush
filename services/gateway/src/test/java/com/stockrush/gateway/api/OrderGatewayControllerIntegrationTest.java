@@ -329,6 +329,7 @@ class OrderGatewayControllerIntegrationTest {
         HttpRequest request = adminRequest("/api/admin/orders/ord_gateway_delay/cancel")
             .header("Idempotency-Key", "idem-gateway-admin-cancel")
             .header("X-Correlation-Id", "corr-gateway-admin-cancel")
+            .header("X-Operator-Id", "spoofed-operator")
             .POST(HttpRequest.BodyPublishers.noBody())
             .build();
 
@@ -343,6 +344,7 @@ class OrderGatewayControllerIntegrationTest {
         assertThat(forwarded.path()).isEqualTo("/api/admin/orders/ord_gateway_delay/cancel");
         assertThat(forwarded.firstHeader("Idempotency-Key")).contains("idem-gateway-admin-cancel");
         assertThat(forwarded.firstHeader("X-Correlation-Id")).contains("corr-gateway-admin-cancel");
+        assertThat(forwarded.firstHeader("X-Operator-Id")).contains("admin-demo");
     }
 
     @Test
@@ -395,7 +397,7 @@ class OrderGatewayControllerIntegrationTest {
     void routes_payment_outbox_failed_requeue_command_to_payment_service() throws Exception {
         HttpRequest request = adminRequest("/api/admin/outbox-services/payment/events/failed/requeue?batchSize=3")
             .header("X-Correlation-Id", "corr-gateway-payment-requeue")
-            .header("X-Operator-Id", "operator-gateway")
+            .header("X-Operator-Id", "spoofed-operator")
             .POST(HttpRequest.BodyPublishers.noBody())
             .build();
 
@@ -411,7 +413,7 @@ class OrderGatewayControllerIntegrationTest {
         assertThat(forwarded.path()).isEqualTo("/api/admin/outbox-events/failed/requeue");
         assertThat(forwarded.query()).contains("batchSize=3");
         assertThat(forwarded.firstHeader("X-Correlation-Id")).contains("corr-gateway-payment-requeue");
-        assertThat(forwarded.firstHeader("X-Operator-Id")).contains("operator-gateway");
+        assertThat(forwarded.firstHeader("X-Operator-Id")).contains("admin-demo");
         STUB_ORDER_SERVICE.assertNoRequests();
         STUB_INVENTORY_SERVICE.assertNoRequests();
     }
@@ -632,6 +634,7 @@ class OrderGatewayControllerIntegrationTest {
     void routes_admin_order_summary_to_read_model_service() throws Exception {
         HttpRequest request = adminRequest("/api/read-model/admin/orders?status=CONFIRMED&page=1&size=5")
             .header("X-Correlation-Id", "corr-gateway-read-model-admin")
+            .header("X-Operator-Id", "spoofed-operator")
             .GET()
             .build();
 
@@ -646,6 +649,7 @@ class OrderGatewayControllerIntegrationTest {
         assertThat(forwarded.path()).isEqualTo("/api/read-model/admin/orders");
         assertThat(forwarded.query()).contains("status=CONFIRMED&page=1&size=5");
         assertThat(forwarded.firstHeader("X-Correlation-Id")).contains("corr-gateway-read-model-admin");
+        assertThat(forwarded.firstHeader("X-Operator-Id")).contains("admin-demo");
         STUB_ORDER_SERVICE.assertNoRequests();
         STUB_PROMOTION_SERVICE.assertNoRequests();
     }

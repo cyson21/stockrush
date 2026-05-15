@@ -168,9 +168,6 @@ export function retryOutbox(service: ServiceDomain, batchSize = 10): Promise<Out
     }),
     {
       method: 'POST',
-      headers: {
-        'X-Operator-Id': 'admin-app',
-      },
     },
   );
 }
@@ -182,9 +179,6 @@ export function requeueFailedOutbox(service: ServiceDomain, batchSize = 10): Pro
     }),
     {
       method: 'POST',
-      headers: {
-        'X-Operator-Id': 'admin-app',
-      },
     },
   );
 }

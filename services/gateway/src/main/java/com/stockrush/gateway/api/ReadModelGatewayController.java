@@ -41,13 +41,14 @@ class ReadModelGatewayController {
     @GetMapping("/admin/orders")
     ResponseEntity<String> getAdminOrders(
         @RequestHeader HttpHeaders headers,
+        @AuthenticationPrincipal Jwt jwt,
         HttpServletRequest request
     ) {
         return gatewayServiceProxy.forward(
             ServiceRoute.READ_MODEL,
             "GET",
             withQueryString("/api/read-model/admin/orders", request),
-            headers,
+            TrustedIdentityHeaders.admin(headers, jwt),
             null
         );
     }

@@ -129,6 +129,13 @@ Implemented baseline:
 - Remove client supplied operator id from Admin App API calls.
 - Verify outbox retry/requeue and delayed payment cancel audit identity.
 
+Current baseline:
+
+- Gateway admin routes derive `X-Operator-Id` from the authenticated admin token and overwrite client supplied values.
+- Admin App no longer sends `X-Operator-Id` for outbox retry/requeue; the Gateway owns operator propagation.
+- Service-local outbox admin APIs keep optional `X-Operator-Id` fallback for direct local tooling compatibility.
+- Delayed payment cancel, product mutation, and stock mutation still need explicit audit rows in their owning services.
+
 ### P9-6. Client Login
 
 - Add OIDC login/logout to Customer App and Admin App.

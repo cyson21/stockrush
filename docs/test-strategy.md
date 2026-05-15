@@ -79,7 +79,7 @@ Gateway routing smoke runs inside the Gateway module.
 cd services/gateway && ../../scripts/with-java17.sh mvn test
 ```
 
-Gateway security tests are included in the same suite. They verify unauthenticated admin/customer access returns `401`, a customer token cannot access admin routes, an admin token can reach protected admin upstream routes, and customer order routes forward the JWT subject while ignoring spoofed identity headers.
+Gateway security tests are included in the same suite. They verify unauthenticated admin/customer access returns `401`, a customer token cannot access admin routes, an admin token can reach protected admin upstream routes, customer order routes forward the JWT subject while ignoring spoofed identity headers, and admin routes overwrite spoofed `X-Operator-Id` with the authenticated principal.
 
 ```bash
 ./tools/architecture-guard/architecture-guard check
@@ -141,7 +141,7 @@ These are known gaps, not hidden assumptions.
 - Fulfillment Service currently covers `OrderConfirmed` to `PREPARING` request creation, duplicate event handling, service API, Gateway route, and Admin App fulfillment request screen. Carrier assignment, labels, and tracking remain future scope.
 - Read Model Service currently covers order summary projection, service-local customer/admin APIs, Gateway routing, Admin Dashboard metrics and filters, late `OrderCreated` protection, and result-event retry rollback when the summary is missing. Customer product search is currently handled by Catalog API/UI; a separate product search projection and full Kafka retry/DLQ drills remain future scope.
 - Mobile customer app now has the Expo scaffold, Gateway-first API client, product/SKU stock screen tests, coupon quote tests, order creation payload/header tests, order status polling tests, Read Model order history tests, smoke preflight, and a smoke evidence collector. Android/iOS live smoke evidence and screenshots remain future scope until a simulator/emulator target is available.
-- Gateway admin/customer authentication, role authorization, and customer object-level authorization are now covered by OAuth2 Resource Server and service integration tests. Keycloak-backed demo smoke is wired to acquire admin/customer tokens and pass bearer tokens into protected Gateway routes. App OIDC login and authenticated admin audit identity remain current security gaps.
+- Gateway admin/customer authentication, role authorization, customer object-level authorization, and Gateway-derived admin operator headers are now covered by OAuth2 Resource Server and service integration tests. Keycloak-backed demo smoke is wired to acquire admin/customer tokens and pass bearer tokens into protected Gateway routes. App OIDC login and explicit audit rows for delayed payment cancel/product/stock changes remain current security gaps.
 - Customer API documentation is now separated from runbook examples, but inventory customer query docs can still be expanded later.
 
 ## Related Docs

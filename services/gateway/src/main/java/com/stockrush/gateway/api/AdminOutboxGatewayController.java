@@ -4,6 +4,8 @@ import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -25,27 +27,48 @@ class AdminOutboxGatewayController {
     ResponseEntity<String> list(
         @PathVariable String service,
         @RequestHeader HttpHeaders headers,
+        @AuthenticationPrincipal Jwt jwt,
         HttpServletRequest request
     ) {
-        return forward(service, "GET", withQueryString("/api/admin/outbox-events", request), headers, null);
+        return forward(
+            service,
+            "GET",
+            withQueryString("/api/admin/outbox-events", request),
+            TrustedIdentityHeaders.admin(headers, jwt),
+            null
+        );
     }
 
     @PostMapping("/retry")
     ResponseEntity<String> retry(
         @PathVariable String service,
         @RequestHeader HttpHeaders headers,
+        @AuthenticationPrincipal Jwt jwt,
         HttpServletRequest request
     ) {
-        return forward(service, "POST", withQueryString("/api/admin/outbox-events/retry", request), headers, null);
+        return forward(
+            service,
+            "POST",
+            withQueryString("/api/admin/outbox-events/retry", request),
+            TrustedIdentityHeaders.admin(headers, jwt),
+            null
+        );
     }
 
     @PostMapping("/failed/requeue")
     ResponseEntity<String> requeueFailed(
         @PathVariable String service,
         @RequestHeader HttpHeaders headers,
+        @AuthenticationPrincipal Jwt jwt,
         HttpServletRequest request
     ) {
-        return forward(service, "POST", withQueryString("/api/admin/outbox-events/failed/requeue", request), headers, null);
+        return forward(
+            service,
+            "POST",
+            withQueryString("/api/admin/outbox-events/failed/requeue", request),
+            TrustedIdentityHeaders.admin(headers, jwt),
+            null
+        );
     }
 
     private ResponseEntity<String> forward(

@@ -105,5 +105,5 @@ Vite 개발 서버는 서비스별 prefix를 backend service로 proxy한다.
 - 지연 결제 취소 요청도 실패 후 재시도하면 주문별 같은 멱등 키를 재사용한다.
 - 수동 retry는 existing relay를 실행한다.
 - failed requeue는 상태를 `PENDING`으로 되돌리고 retry count와 다음 시도 시각, 오류 메시지만 초기화한다.
-- Admin App은 outbox retry/requeue 요청에 `X-Operator-Id: admin-app`을 전달하고, 서비스는 감사 로그에 요청 정보를 저장한다.
+- Admin App은 outbox retry/requeue 요청에 operator header를 직접 만들지 않는다. Gateway가 인증된 관리자 token에서 내부 operator header를 전달하고, 서비스는 감사 로그에 요청 정보를 저장한다.
 - 인증과 권한은 이후 phase에서 추가한다.

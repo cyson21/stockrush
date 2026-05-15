@@ -19,6 +19,19 @@ final class TrustedIdentityHeaders {
     }
 
     static HttpHeaders customer(HttpHeaders source, Jwt jwt) {
+        HttpHeaders headers = trustedBase(source, jwt);
+        headers.set(ROLES, roles(jwt));
+        return headers;
+    }
+
+    static HttpHeaders admin(HttpHeaders source, Jwt jwt) {
+        HttpHeaders headers = trustedBase(source, jwt);
+        headers.set(ROLES, roles(jwt));
+        headers.set(OPERATOR, operatorId(jwt));
+        return headers;
+    }
+
+    private static HttpHeaders trustedBase(HttpHeaders source, Jwt jwt) {
         HttpHeaders headers = new HttpHeaders();
         headers.putAll(source);
         headers.remove(SUBJECT);
@@ -31,8 +44,15 @@ final class TrustedIdentityHeaders {
         if (email != null && !email.isBlank()) {
             headers.set(EMAIL, email.trim());
         }
-        headers.set(ROLES, roles(jwt));
         return headers;
+    }
+
+    private static String operatorId(Jwt jwt) {
+        String email = jwt.getClaimAsString("email");
+        if (email != null && !email.isBlank()) {
+            return email.trim();
+        }
+        return jwt.getSubject();
     }
 
     private static String roles(Jwt jwt) {

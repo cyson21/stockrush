@@ -301,12 +301,12 @@ describe('admin app operations', () => {
       }
 
       if (request.pathname === '/api/admin/outbox-services/inventory/events/retry' && method === 'POST') {
-        expect(headerValue(init?.headers, 'X-Operator-Id')).toBe('admin-app');
+        expect(headerValue(init?.headers, 'X-Operator-Id')).toBe('');
         return toJsonResponse(buildResponse(true, { claimed: 2, published: 1, failed: 0 }), 200);
       }
 
       if (request.pathname === '/api/admin/outbox-services/inventory/events/failed/requeue' && method === 'POST') {
-        expect(headerValue(init?.headers, 'X-Operator-Id')).toBe('admin-app');
+        expect(headerValue(init?.headers, 'X-Operator-Id')).toBe('');
         return toJsonResponse(buildResponse(true, { updated: 1 }), 200);
       }
 

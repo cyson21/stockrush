@@ -4,6 +4,8 @@ import jakarta.servlet.http.HttpServletRequest;
 import java.nio.charset.StandardCharsets;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -25,27 +27,45 @@ class AdminOrderGatewayController {
     @GetMapping
     ResponseEntity<String> list(
         @RequestHeader HttpHeaders headers,
+        @AuthenticationPrincipal Jwt jwt,
         HttpServletRequest request
     ) {
-        return gatewayServiceProxy.forward("GET", withQueryString("/api/admin/orders", request), headers, null);
+        return gatewayServiceProxy.forward(
+            "GET",
+            withQueryString("/api/admin/orders", request),
+            TrustedIdentityHeaders.admin(headers, jwt),
+            null
+        );
     }
 
     @GetMapping("/{orderId}/saga")
     ResponseEntity<String> getSaga(
         @PathVariable String orderId,
-        @RequestHeader HttpHeaders headers
+        @RequestHeader HttpHeaders headers,
+        @AuthenticationPrincipal Jwt jwt
     ) {
         String encodedOrderId = UriUtils.encodePathSegment(orderId, StandardCharsets.UTF_8);
-        return gatewayServiceProxy.forward("GET", "/api/admin/orders/" + encodedOrderId + "/saga", headers, null);
+        return gatewayServiceProxy.forward(
+            "GET",
+            "/api/admin/orders/" + encodedOrderId + "/saga",
+            TrustedIdentityHeaders.admin(headers, jwt),
+            null
+        );
     }
 
     @PostMapping("/{orderId}/cancel")
     ResponseEntity<String> cancel(
         @PathVariable String orderId,
-        @RequestHeader HttpHeaders headers
+        @RequestHeader HttpHeaders headers,
+        @AuthenticationPrincipal Jwt jwt
     ) {
         String encodedOrderId = UriUtils.encodePathSegment(orderId, StandardCharsets.UTF_8);
-        return gatewayServiceProxy.forward("POST", "/api/admin/orders/" + encodedOrderId + "/cancel", headers, null);
+        return gatewayServiceProxy.forward(
+            "POST",
+            "/api/admin/orders/" + encodedOrderId + "/cancel",
+            TrustedIdentityHeaders.admin(headers, jwt),
+            null
+        );
     }
 
     private String withQueryString(String path, HttpServletRequest request) {
