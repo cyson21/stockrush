@@ -135,6 +135,8 @@ check_url "customer-app" "http://localhost:${CUSTOMER_APP_HOST_PORT:-15173}/"
 check_url "admin-app" "http://localhost:${ADMIN_APP_HOST_PORT:-15174}/"
 check_url "catalog-products" "http://localhost:${CATALOG_HOST_PORT:-28081}/api/products?status=ON_SALE"
 check_url "inventory-stocks" "http://localhost:${INVENTORY_HOST_PORT:-28082}/api/stocks"
+check_url "gateway-products" "http://localhost:${GATEWAY_HOST_PORT:-28080}/api/products?status=ON_SALE"
+check_url "gateway-stocks" "http://localhost:${GATEWAY_HOST_PORT:-28080}/api/stocks"
 
 KEYCLOAK_HOST_PORT="${KEYCLOAK_HOST_PORT:-28088}"
 KEYCLOAK_SMOKE_CLIENT_ID="${KEYCLOAK_SMOKE_CLIENT_ID:-stockrush-demo-smoke}"

@@ -334,6 +334,60 @@ class OrderGatewayControllerIntegrationTest {
     }
 
     @Test
+    void routes_public_catalog_products_list_query_to_catalog_service_without_bearer_token() throws Exception {
+        HttpRequest request = HttpRequest.newBuilder(gatewayUri("/api/products?status=ON_SALE&page=0&size=20"))
+            .header("X-Correlation-Id", "corr-gateway-public-products")
+            .GET()
+            .build();
+
+        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.headers().firstValue("X-Correlation-Id")).contains("corr-gateway-public-products");
+        assertThat(response.body()).contains("\"productCode\":\"PROD-001\"");
+
+        RecordedRequest forwarded = STUB_CATALOG_SERVICE.singleRequest();
+        assertThat(forwarded.method()).isEqualTo("GET");
+        assertThat(forwarded.path()).isEqualTo("/api/products");
+        assertThat(forwarded.query()).contains("status=ON_SALE&page=0&size=20");
+        assertThat(forwarded.firstHeader("X-Operator-Id")).isEmpty();
+        assertThat(forwarded.firstHeader("X-Customer-Id")).isEmpty();
+        assertThat(forwarded.firstHeader("X-Correlation-Id")).contains("corr-gateway-public-products");
+        STUB_INVENTORY_SERVICE.assertNoRequests();
+        STUB_ORDER_SERVICE.assertNoRequests();
+        STUB_PROMOTION_SERVICE.assertNoRequests();
+        STUB_FULFILLMENT_SERVICE.assertNoRequests();
+        STUB_READ_MODEL_SERVICE.assertNoRequests();
+    }
+
+    @Test
+    void routes_public_stock_list_query_to_inventory_service_without_bearer_token() throws Exception {
+        HttpRequest request = HttpRequest.newBuilder(gatewayUri("/api/stocks?productCode=PROD-001&page=0&size=25"))
+            .header("X-Correlation-Id", "corr-gateway-public-stocks")
+            .GET()
+            .build();
+
+        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.headers().firstValue("X-Correlation-Id")).contains("corr-gateway-public-stocks");
+        assertThat(response.body()).contains("\"skuId\":\"SKU-007\"");
+
+        RecordedRequest forwarded = STUB_INVENTORY_SERVICE.singleRequest();
+        assertThat(forwarded.method()).isEqualTo("GET");
+        assertThat(forwarded.path()).isEqualTo("/api/stocks");
+        assertThat(forwarded.query()).contains("productCode=PROD-001&page=0&size=25");
+        assertThat(forwarded.firstHeader("X-Operator-Id")).isEmpty();
+        assertThat(forwarded.firstHeader("X-Customer-Id")).isEmpty();
+        assertThat(forwarded.firstHeader("X-Correlation-Id")).contains("corr-gateway-public-stocks");
+        STUB_CATALOG_SERVICE.assertNoRequests();
+        STUB_ORDER_SERVICE.assertNoRequests();
+        STUB_PROMOTION_SERVICE.assertNoRequests();
+        STUB_FULFILLMENT_SERVICE.assertNoRequests();
+        STUB_READ_MODEL_SERVICE.assertNoRequests();
+    }
+
+    @Test
     void rejects_admin_catalog_routes_without_bearer_token() throws Exception {
         HttpRequest request = HttpRequest.newBuilder(gatewayUri("/api/admin/products?page=0&size=20"))
             .header("X-Correlation-Id", "corr-gateway-admin-products-unauthenticated")

@@ -41,8 +41,13 @@ npm run smoke:evidence -- --target all --api-base-url http://localhost:28080
 Android:
 
 ```bash
-EXPO_PUBLIC_API_BASE_URL=http://10.0.2.2:28080 npm run android
+adb reverse tcp:28088 tcp:28088
+EXPO_PUBLIC_API_BASE_URL=http://10.0.2.2:28080 \
+EXPO_PUBLIC_AUTH_ISSUER=http://10.0.2.2:28088/realms/stockrush \
+npm run android
 ```
+
+`adb reverse tcp:28088 tcp:28088` is needed for Expo Go login smoke because Keycloak can emit `localhost:28088` form/redirect URLs after the first realm page is opened from the Android emulator.
 
 iOS on macOS:
 

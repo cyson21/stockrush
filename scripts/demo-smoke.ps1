@@ -167,6 +167,8 @@ Test-Url "customer-app" "http://localhost:$CustomerAppPort/"
 Test-Url "admin-app" "http://localhost:$AdminAppPort/"
 Test-Url "catalog-products" "http://localhost:$CatalogPort/api/products?status=ON_SALE"
 Test-Url "inventory-stocks" "http://localhost:$InventoryPort/api/stocks"
+Test-Url "gateway-products" "http://localhost:$GatewayPort/api/products?status=ON_SALE"
+Test-Url "gateway-stocks" "http://localhost:$GatewayPort/api/stocks"
 
 Wait-KeycloakReady $KeycloakPort
 
