@@ -95,6 +95,8 @@ npm run smoke:preflight -- --target android --api-base-url http://10.0.2.2:28080
 5. In the app, select a product and SKU, enter a coupon, request quote, create a `CARD` order, wait for terminal status, then refresh order history.
 6. Capture the product screen, quote/order screen, final status, and order history screen.
 
+For automation, use `docs/runbooks/mobile-protected-order-smoke.md`. The screen now exposes stable `testID` values for the protected order path, including auth status, product/SKU selection, checkout inputs, payment buttons, submit button, and created order status fields.
+
 ## Windows 11 Android
 
 Use Android first on Windows 11. Run Docker Desktop with WSL2 integration for the backend and use Android Emulator or a physical Android device for the mobile client.
@@ -135,4 +137,4 @@ Recommended API base URLs:
 
 ## Next Implementation Slices
 
-1. Android or iOS smoke evidence.
+1. Android or iOS protected order smoke evidence using stable selectors.

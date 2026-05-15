@@ -42,6 +42,64 @@ describe('ProductListScreen', () => {
     jest.useRealTimers();
   });
 
+  it('exposes stable selectors for the protected order mobile smoke path', async () => {
+    fetchMock.mockImplementation((input) => {
+      const url = String(input);
+
+      if (url === 'http://localhost:18080/api/products?status=ON_SALE') {
+        return jsonResponse({
+          success: true,
+          data: [
+            {
+              productCode: 'LIMITED-001',
+              name: 'Limited Hoodie',
+              status: 'ON_SALE',
+              listPrice: 12000,
+            },
+          ],
+          error: null,
+          trace: { correlationId: 'corr-products' },
+        });
+      }
+
+      if (url === 'http://localhost:18080/api/stocks?productCode=LIMITED-001') {
+        return jsonResponse({
+          success: true,
+          data: [
+            {
+              skuId: 'LIMITED-001-S',
+              productCode: 'LIMITED-001',
+              availableQuantity: 8,
+              reservedQuantity: 2,
+              version: 4,
+            },
+          ],
+          error: null,
+          trace: { correlationId: 'corr-stocks' },
+        });
+      }
+
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    renderWithAuth(<ProductListScreen />, 'test-access-token');
+
+    expect(screen.getByTestId('mobile-product-list-screen')).toBeTruthy();
+    expect(screen.getByTestId('mobile-auth-status-label')).toHaveTextContent('로그인됨');
+    expect(screen.getByTestId('mobile-auth-action-button')).toBeTruthy();
+
+    fireEvent.press(await screen.findByTestId('mobile-product-card-LIMITED-001'));
+
+    expect(await screen.findByTestId('mobile-stock-row-LIMITED-001-S')).toBeTruthy();
+    expect(screen.getByTestId('mobile-checkout-quantity-input').props.value).toBe('1');
+    expect(screen.getByTestId('mobile-checkout-coupon-input')).toBeTruthy();
+    expect(screen.getByTestId('mobile-checkout-apply-coupon-button')).toBeTruthy();
+    expect(screen.getByTestId('mobile-payment-method-CARD')).toBeTruthy();
+    expect(screen.getByTestId('mobile-payment-method-FAIL_CARD')).toBeTruthy();
+    expect(screen.getByTestId('mobile-payment-method-DELAY_CARD')).toBeTruthy();
+    expect(screen.getByTestId('mobile-checkout-submit-order-button')).toBeTruthy();
+  });
+
   it('loads on-sale products and shows selected SKU stock', async () => {
     fetchMock.mockImplementation((input) => {
       const url = String(input);
@@ -403,8 +461,9 @@ describe('ProductListScreen', () => {
     fireEvent.press(screen.getByText('FAIL_CARD'));
     fireEvent.press(screen.getByText('주문 생성'));
 
-    expect(await screen.findByText('ord_mobile_001')).toBeTruthy();
-    expect(await screen.findByText('FAILED')).toBeTruthy();
+    expect(await screen.findByTestId('mobile-created-order-id')).toHaveTextContent('ord_mobile_001');
+    expect(await screen.findByTestId('mobile-created-order-saga-status')).toHaveTextContent('FAILED');
+    expect(screen.getByTestId('mobile-created-order-summary')).toBeTruthy();
 
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(

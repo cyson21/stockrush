@@ -271,7 +271,7 @@ export default function ProductListScreen() {
 
   return (
     <View style={styles.safeArea}>
-      <ScrollView contentContainerStyle={styles.container}>
+      <ScrollView contentContainerStyle={styles.container} testID="mobile-product-list-screen">
         <View style={styles.header}>
           <Text style={styles.eyebrow}>StockRush Mobile</Text>
           <Text style={styles.title}>상품 선택</Text>
@@ -282,11 +282,12 @@ export default function ProductListScreen() {
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>인증 상태</Text>
           </View>
-          <Text style={styles.stateText}>{authStatusLabel}</Text>
-          {tokenPreview ? <Text style={styles.tokenText}>토큰 {tokenPreview}</Text> : null}
-          {authError ? <Text style={styles.errorText}>인증 오류: {authError}</Text> : null}
+          <Text style={styles.stateText} testID="mobile-auth-status-label">{authStatusLabel}</Text>
+          {tokenPreview ? <Text style={styles.tokenText} testID="mobile-auth-token-preview">토큰 {tokenPreview}</Text> : null}
+          {authError ? <Text style={styles.errorText} testID="mobile-auth-error">인증 오류: {authError}</Text> : null}
 
           <Pressable
+            accessibilityLabel={isAuthenticated ? '모바일 로그아웃' : '모바일 로그인'}
             accessibilityRole="button"
             onPress={() => {
               if (isAuthenticated) {
@@ -296,6 +297,7 @@ export default function ProductListScreen() {
               }
             }}
             style={styles.secondaryButton}
+            testID="mobile-auth-action-button"
           >
             <Text style={styles.secondaryButtonText}>{isAuthenticated ? '로그아웃' : '로그인'}</Text>
           </Pressable>
@@ -327,10 +329,12 @@ export default function ProductListScreen() {
 
             return (
               <Pressable
+                accessibilityLabel={`상품 선택 ${product.productCode}`}
                 accessibilityRole="button"
                 key={product.productCode}
                 onPress={() => void loadStocks(product)}
                 style={[styles.productCard, selected ? styles.selectedCard : null]}
+                testID={`mobile-product-card-${product.productCode}`}
               >
                 <View style={styles.productMain}>
                   <Text style={styles.productName}>{product.name}</Text>
@@ -375,10 +379,12 @@ export default function ProductListScreen() {
 
           {stocks.map((stock) => (
             <Pressable
+              accessibilityLabel={`SKU 선택 ${stock.skuId}`}
               accessibilityRole="button"
               key={stock.skuId}
               onPress={() => setSelectedStock(stock)}
               style={[styles.stockRow, selectedStock?.skuId === stock.skuId ? styles.selectedCard : null]}
+              testID={`mobile-stock-row-${stock.skuId}`}
             >
               <View style={styles.stockMain}>
                 <Text style={styles.skuId}>{stock.skuId}</Text>
@@ -415,6 +421,7 @@ export default function ProductListScreen() {
                     setCouponStatus('idle');
                   }}
                   style={styles.input}
+                  testID="mobile-checkout-quantity-input"
                   value={quantityText}
                 />
               </View>
@@ -427,15 +434,18 @@ export default function ProductListScreen() {
                   onChangeText={updateCouponCode}
                   placeholder="WELCOME10"
                   style={styles.input}
+                  testID="mobile-checkout-coupon-input"
                   value={couponCode}
                 />
               </View>
 
               <Pressable
+                accessibilityLabel="쿠폰 적용"
                 accessibilityRole="button"
                 disabled={couponStatus === 'loading' || couponCode.trim().length === 0}
                 onPress={() => void applyCoupon()}
                 style={[styles.secondaryButton, couponStatus === 'loading' ? styles.disabledButton : null]}
+                testID="mobile-checkout-apply-coupon-button"
               >
                 <Text style={styles.secondaryButtonText}>
                   {couponStatus === 'loading' ? '쿠폰 적용 중' : '쿠폰 적용'}
@@ -460,10 +470,12 @@ export default function ProductListScreen() {
               <View style={styles.paymentGroup}>
                 {(['CARD', 'FAIL_CARD', 'DELAY_CARD'] as const).map((method) => (
                   <Pressable
+                    accessibilityLabel={`결제수단 ${method}`}
                     accessibilityRole="button"
                     key={method}
                     onPress={() => setPaymentMethod(method)}
                     style={[styles.paymentButton, paymentMethod === method ? styles.paymentButtonSelected : null]}
+                    testID={`mobile-payment-method-${method}`}
                   >
                     <Text style={paymentMethod === method ? styles.paymentTextSelected : styles.paymentText}>{method}</Text>
                   </Pressable>
@@ -481,6 +493,7 @@ export default function ProductListScreen() {
               {!isAuthenticated ? <Text style={styles.errorText}>로그인 후 주문할 수 있습니다.</Text> : null}
 
               <Pressable
+                accessibilityLabel="주문 생성"
                 accessibilityRole="button"
                 disabled={orderStatus === 'loading' || hasBlockedCoupon || !quantityIsValid || !isAuthenticated}
                 onPress={() => void submitOrder()}
@@ -488,16 +501,17 @@ export default function ProductListScreen() {
                   styles.primaryButton,
                   orderStatus === 'loading' || hasBlockedCoupon || !quantityIsValid || !isAuthenticated ? styles.disabledButton : null,
                 ]}
+                testID="mobile-checkout-submit-order-button"
               >
                 <Text style={styles.primaryButtonText}>{orderStatus === 'loading' ? '주문 생성 중' : '주문 생성'}</Text>
               </Pressable>
 
               {createdOrder ? (
-                <View style={styles.summaryBox}>
+                <View style={styles.summaryBox} testID="mobile-created-order-summary">
                   <Text style={styles.summaryLabel}>생성된 주문</Text>
-                  <Text style={styles.summaryValue}>{createdOrder.orderId}</Text>
-                  <Text style={styles.summaryText}>{orderDetail?.status ?? createdOrder.status}</Text>
-                  <Text style={styles.summaryText}>{orderDetail?.sagaStatus ?? createdOrder.sagaStatus}</Text>
+                  <Text style={styles.summaryValue} testID="mobile-created-order-id">{createdOrder.orderId}</Text>
+                  <Text style={styles.summaryText} testID="mobile-created-order-status">{orderDetail?.status ?? createdOrder.status}</Text>
+                  <Text style={styles.summaryText} testID="mobile-created-order-saga-status">{orderDetail?.sagaStatus ?? createdOrder.sagaStatus}</Text>
                   <Text style={styles.summaryText}>
                     결제수단 {orderDetail?.paymentMethod ?? createdOrder.paymentMethod}
                   </Text>
