@@ -64,3 +64,7 @@ export function getAuthRedirectUri(): string {
 
   return 'stockrush://auth/callback';
 }
+
+export function getMobileSmokeAutoRunEnabled(): boolean {
+  return trimValue(process.env.EXPO_PUBLIC_MOBILE_SMOKE_AUTORUN).toLowerCase() === 'true';
+}

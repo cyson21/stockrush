@@ -76,30 +76,32 @@ export function boundsCenter(bounds) {
 
 export function findNode(xml, criteria) {
   const nodes = parseNodes(xml);
-  return nodes.find((node) => {
-    if (criteria.resourceId && node.resourceId !== criteria.resourceId) {
-      return false;
-    }
-    if (criteria.resourceIdPrefix && !node.resourceId.startsWith(criteria.resourceIdPrefix)) {
-      return false;
-    }
-    if (criteria.text && node.text !== criteria.text) {
-      return false;
-    }
-    if (criteria.textIncludes && !node.text.includes(criteria.textIncludes)) {
-      return false;
-    }
-    if (criteria.contentDesc && node.contentDesc !== criteria.contentDesc) {
-      return false;
-    }
-    if (criteria.clickable !== undefined && node.clickable !== criteria.clickable) {
-      return false;
-    }
-    if (criteria.enabled !== undefined && node.enabled !== criteria.enabled) {
-      return false;
-    }
-    return true;
-  }) || null;
+  return nodes.find((node) => nodeMatches(node, criteria)) || null;
+}
+
+export function nodeMatches(node, criteria) {
+  if (criteria.resourceId && node.resourceId !== criteria.resourceId) {
+    return false;
+  }
+  if (criteria.resourceIdPrefix && !node.resourceId.startsWith(criteria.resourceIdPrefix)) {
+    return false;
+  }
+  if (criteria.text && node.text !== criteria.text) {
+    return false;
+  }
+  if (criteria.textIncludes && !node.text.includes(criteria.textIncludes)) {
+    return false;
+  }
+  if (criteria.contentDesc && node.contentDesc !== criteria.contentDesc) {
+    return false;
+  }
+  if (criteria.clickable !== undefined && node.clickable !== criteria.clickable) {
+    return false;
+  }
+  if (criteria.enabled !== undefined && node.enabled !== criteria.enabled) {
+    return false;
+  }
+  return true;
 }
 
 export function redactValue(value, sensitive) {
@@ -291,6 +293,29 @@ function tapNode(node) {
   return center;
 }
 
+function focusNodeByTab(outputDir, step, maxTabs = 28) {
+  for (let tabIndex = 0; tabIndex <= maxTabs; tabIndex += 1) {
+    const xml = dumpXml(outputDir, `${step.id}-focus-${String(tabIndex).padStart(2, '0')}`);
+    const focusedNode = parseNodes(xml).find((node) => node.focused && nodeMatches(node, step.selector));
+    if (focusedNode) {
+      captureScreenshot(outputDir, `${step.id}-focus-hit`);
+      return focusedNode;
+    }
+    runAdb(['shell', 'input', 'keyevent', 'KEYCODE_TAB'], { allowFailure: true });
+    sleep(180);
+  }
+  return null;
+}
+
+function activateNode(outputDir, step, node) {
+  const focusedNode = focusNodeByTab(outputDir, step);
+  if (focusedNode) {
+    runAdb(['shell', 'input', 'keyevent', 'KEYCODE_ENTER']);
+    return boundsCenter(focusedNode.bounds);
+  }
+  return tapNode(node);
+}
+
 function replaceNodeText(node, value) {
   const center = tapNode(node);
   runAdb(['shell', 'input', 'keyevent', 'KEYCODE_MOVE_END'], { allowFailure: true });
@@ -315,7 +340,7 @@ function runPlan(options) {
     let tap;
 
     if (step.action === 'tap') {
-      tap = tapNode(node);
+      tap = activateNode(outputDir, step, node);
       sleep(options.stepDelayMs);
     } else if (step.action === 'replaceText') {
       tap = replaceNodeText(node, step.value);

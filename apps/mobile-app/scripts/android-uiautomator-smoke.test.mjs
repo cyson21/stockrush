@@ -5,6 +5,7 @@ import {
   boundsCenter,
   buildSelectorPlan,
   findNode,
+  nodeMatches,
   parseNodes,
   redactValue,
 } from './android-uiautomator-smoke.mjs';
@@ -31,6 +32,19 @@ test('findNode locates nodes by resource id, text, and content description', () 
   assert.equal(findNode(xml, { resourceId: 'mobile-auth-status-label', text: '로그인됨' })?.text, '로그인됨');
   assert.equal(findNode(xml, { contentDesc: '상품 선택 LIMITED-001' })?.resourceId, 'mobile-product-card-LIMITED-001');
   assert.equal(findNode(xml, { resourceId: 'missing' }), null);
+});
+
+test('nodeMatches supports focused selector checks used by Android keyboard activation', () => {
+  const node = {
+    resourceId: 'mobile-product-card-LIMITED-001',
+    text: 'Limited Hoodie',
+    contentDesc: '상품 선택 LIMITED-001',
+    clickable: true,
+    enabled: true,
+  };
+
+  assert.equal(nodeMatches(node, { resourceIdPrefix: 'mobile-product-card-', clickable: true }), true);
+  assert.equal(nodeMatches(node, { resourceId: 'mobile-product-card-LIMITED-002' }), false);
 });
 
 test('boundsCenter returns tap coordinates for Android bounds', () => {

@@ -13,13 +13,14 @@ import { ApiClientError } from '../api/client';
 import { listStocks } from '../api/inventory';
 import { createOrder, getOrder } from '../api/orders';
 import { quoteCoupon } from '../api/promotion';
-import { getDefaultMemberId } from '../config/runtime';
+import { getDefaultMemberId, getMobileSmokeAutoRunEnabled } from '../config/runtime';
 import { useAuth } from '../auth/AuthContext';
 import type { CreateOrderResponse, OrderDetail, Product, PromotionQuoteResponse, Stock } from '../types/api';
 import OrderHistoryScreen from './OrderHistoryScreen';
 
 type LoadStatus = 'idle' | 'loading' | 'ready' | 'error';
 type PaymentMethod = 'CARD' | 'FAIL_CARD' | 'DELAY_CARD';
+type SmokeAutoRunPhase = 'idle' | 'loading-stock' | 'submitting' | 'done';
 
 function formatPrice(value: number): string {
   return `${new Intl.NumberFormat('ko-KR').format(value)}원`;
@@ -62,7 +63,10 @@ export default function ProductListScreen() {
   const [orderDetail, setOrderDetail] = useState<OrderDetail | null>(null);
   const [orderPollError, setOrderPollError] = useState<string | null>(null);
   const stockRequestIdRef = useRef(0);
+  const smokeAutoRunPhaseRef = useRef<SmokeAutoRunPhase>('idle');
+  const smokeAutoRunProductIndexRef = useRef(0);
   const memberId = getDefaultMemberId();
+  const smokeAutoRunEnabled = getMobileSmokeAutoRunEnabled();
   const { isAuthenticated, accessToken, error: authError, login, logout } = useAuth();
 
   const quantity = Number(quantityText);
@@ -190,7 +194,7 @@ export default function ProductListScreen() {
         clearTimeout(timeoutId);
       }
     };
-  }, [createdOrder]);
+  }, [accessToken, createdOrder]);
 
   const updateCouponCode = (value: string) => {
     setCouponCode(value);
@@ -223,7 +227,7 @@ export default function ProductListScreen() {
     }
   };
 
-  const submitOrder = async () => {
+  const submitOrder = useCallback(async () => {
     if (!selectedProduct || !selectedStock || !quantityIsValid || totalAmount <= 0) {
       setOrderError('상품, SKU, 수량을 확인하세요.');
       return;
@@ -267,7 +271,94 @@ export default function ProductListScreen() {
       setOrderStatus('error');
       setOrderError(formatError(error));
     }
-  };
+  }, [
+    accessToken,
+    couponCode,
+    hasBlockedCoupon,
+    isAuthenticated,
+    memberId,
+    paymentMethod,
+    quantity,
+    quantityIsValid,
+    selectedProduct,
+    selectedStock,
+    totalAmount,
+  ]);
+
+  const loadSmokeProductAt = useCallback((index: number) => {
+    const product = products[index];
+    if (!product) {
+      smokeAutoRunPhaseRef.current = 'done';
+      setOrderError('스모크 주문 가능한 SKU가 없습니다.');
+      return;
+    }
+
+    smokeAutoRunProductIndexRef.current = index;
+    smokeAutoRunPhaseRef.current = 'loading-stock';
+    void loadStocks(product);
+  }, [loadStocks, products]);
+
+  useEffect(() => {
+    if (
+      !smokeAutoRunEnabled ||
+      !isAuthenticated ||
+      productStatus !== 'ready' ||
+      products.length === 0 ||
+      selectedProduct
+    ) {
+      return;
+    }
+
+    loadSmokeProductAt(0);
+  }, [isAuthenticated, loadSmokeProductAt, productStatus, products.length, selectedProduct, smokeAutoRunEnabled]);
+
+  useEffect(() => {
+    if (
+      !smokeAutoRunEnabled ||
+      smokeAutoRunPhaseRef.current !== 'loading-stock' ||
+      !selectedProduct ||
+      createdOrder ||
+      orderStatus !== 'idle'
+    ) {
+      return;
+    }
+
+    if (stockStatus === 'error') {
+      loadSmokeProductAt(smokeAutoRunProductIndexRef.current + 1);
+      return;
+    }
+
+    if (stockStatus !== 'ready') {
+      return;
+    }
+
+    const availableStock = stocks.find((stock) => stock.availableQuantity >= quantity);
+    if (!availableStock) {
+      loadSmokeProductAt(smokeAutoRunProductIndexRef.current + 1);
+      return;
+    }
+
+    if (selectedStock?.skuId !== availableStock.skuId) {
+      setSelectedStock(availableStock);
+      return;
+    }
+
+    smokeAutoRunPhaseRef.current = 'submitting';
+    void submitOrder().finally(() => {
+      smokeAutoRunPhaseRef.current = 'done';
+    });
+  }, [
+    createdOrder,
+    loadSmokeProductAt,
+    orderStatus,
+    quantity,
+    selectedProduct,
+    selectedStock,
+    smokeAutoRunEnabled,
+    stockStatus,
+    stocks,
+    submitOrder,
+  ]);
 
   return (
     <View style={styles.safeArea}>

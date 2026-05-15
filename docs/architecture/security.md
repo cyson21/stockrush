@@ -171,8 +171,7 @@ Current baseline:
 
 ## Follow-Up Items
 
-- Live Keycloak browser smoke evidence is recorded; mobile smoke evidence remains pending.
-  - Android preflight는 SDK auto-discovery로 통과했다. 실제 Expo 로그인 UI smoke는 아직 대기 중이며, iOS는 full Xcode simctl 미설치로 차단 상태다.
+- Live Keycloak browser and Android Expo Go mobile smoke evidence is recorded.
 - 공개 라우트와 레거시 직접 호출 정책 정리는 완료됐다.
   - 공개 라우트 정책은 `GET /api/products`, `GET /api/stocks`, `POST /api/coupons/quote`만 Gateway public 경로로 제한한다.
   - 고객 주문/주문 상세/주문 내역은 `ROLE_CUSTOMER` + subject-forwarding으로 보호한다.

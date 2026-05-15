@@ -22,6 +22,8 @@ EXPO_PUBLIC_EXPO_GO_HOST=10.0.2.2:8081 \
 npm run android
 ```
 
+For local Expo Go order completion smoke, add `EXPO_PUBLIC_MOBILE_SMOKE_AUTORUN=true`. After manual Keycloak login, the app selects the first SKU with enough available quantity and creates a `CARD` order through the normal authenticated API flow.
+
 ## Stable Selectors
 
 Use these `testID` values for automation. Avoid coordinate-only taps.
@@ -104,6 +106,11 @@ Expected evidence files:
 - Final status and saga status.
 - Order history refresh after the order reaches terminal status.
 
-## Current Gap
+## Latest Evidence
 
-The Android Expo Go login path is verified. The protected order UI path now has an Android UIAutomator runner, but final order creation evidence still depends on a real emulator/simulator run where product tap reaches the React Native handler. If Expo Go keeps ignoring the product tap, use the same runner against an Android development build or iOS simulator to separate Expo Go wrapper behavior from app behavior.
+
+| Field | Value |
+|---|---|
+| Order id | `ord_20260515233439_6a5f6b71` |
+| Order status | `CONFIRMED` |
+| Saga status | `COMPLETED` |

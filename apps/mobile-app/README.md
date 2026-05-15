@@ -95,6 +95,17 @@ npm run smoke:android:e2e -- \
 
 The Android runner uses the built-in `adb shell uiautomator dump` output and the app `testID` values. It does not install packages. It captures XML, screenshots, `report.json`, and `report.md` so failed taps can be compared before and after each selector action.
 
+Expo Go protected order smoke can use the app-side autorun flag after manual Keycloak login. This flag is only for local smoke runs; it selects the first orderable SKU, submits a `CARD` order through the normal authenticated API path, and waits for the existing order status polling UI.
+
+```bash
+EXPO_PUBLIC_API_BASE_URL=http://10.0.2.2:28080 \
+EXPO_PUBLIC_AUTH_ISSUER=http://localhost:28088/realms/stockrush \
+EXPO_PUBLIC_AUTH_REDIRECT_MODE=expo-go \
+EXPO_PUBLIC_EXPO_GO_HOST=10.0.2.2:8081 \
+EXPO_PUBLIC_MOBILE_SMOKE_AUTORUN=true \
+npm run android -- --localhost --clear
+```
+
 For Android emulator runs, the app should use `10.0.2.2`, but the preflight health check usually runs from the host shell. In that case pass both URLs:
 
 ```bash
@@ -135,6 +146,7 @@ Recommended API base URLs:
 | `EXPO_PUBLIC_AUTH_REDIRECT_URI` | `stockrush://auth/callback` |
 | `EXPO_PUBLIC_AUTH_REDIRECT_MODE` | unset for development build, `expo-go` for Expo Go |
 | `EXPO_PUBLIC_EXPO_GO_HOST` | `10.0.2.2:8081` on Android emulator, `localhost:8081` on iOS simulator |
+| `EXPO_PUBLIC_MOBILE_SMOKE_AUTORUN` | unset; use `true` only for local smoke runs |
 
 ## Current Scope
 
@@ -149,7 +161,3 @@ Recommended API base URLs:
 - Authenticated order status tracking through `GET /api/orders/{orderId}`
 - Authenticated Read Model order history through `GET /api/read-model/orders?memberId={memberId}`
 - React Native Testing Library coverage for product loading, stock loading, product error retry, stock error retry, out-of-order stock responses, coupon quote, coupon block, order payload/header, order status polling, and order history refresh
-
-## Next Implementation Slices
-
-1. Run the Android UIAutomator smoke runner on a development build or a stable Expo Go session and attach its evidence report.

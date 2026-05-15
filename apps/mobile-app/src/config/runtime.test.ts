@@ -7,6 +7,7 @@ describe('mobile runtime auth redirect URI', () => {
     delete process.env.EXPO_PUBLIC_AUTH_REDIRECT_URI;
     delete process.env.EXPO_PUBLIC_AUTH_REDIRECT_MODE;
     delete process.env.EXPO_PUBLIC_EXPO_GO_HOST;
+    delete process.env.EXPO_PUBLIC_MOBILE_SMOKE_AUTORUN;
   });
 
   afterAll(() => {
@@ -40,5 +41,15 @@ describe('mobile runtime auth redirect URI', () => {
     const { getAuthRedirectUri } = loadRuntime();
 
     expect(getAuthRedirectUri()).toBe('exp://10.0.2.2:8081/--/auth/callback');
+  });
+
+  it('keeps smoke autorun disabled unless explicitly enabled', () => {
+    const { getMobileSmokeAutoRunEnabled } = loadRuntime();
+
+    expect(getMobileSmokeAutoRunEnabled()).toBe(false);
+
+    process.env.EXPO_PUBLIC_MOBILE_SMOKE_AUTORUN = 'true';
+
+    expect(getMobileSmokeAutoRunEnabled()).toBe(true);
   });
 });

@@ -36,6 +36,7 @@ describe('ProductListScreen', () => {
   beforeEach(() => {
     fetchMock.mockReset();
     global.fetch = fetchMock;
+    delete process.env.EXPO_PUBLIC_MOBILE_SMOKE_AUTORUN;
   });
 
   afterEach(() => {
@@ -567,6 +568,273 @@ describe('ProductListScreen', () => {
         ([url, init]) => String(url) === 'http://localhost:18080/api/orders' && init?.method === 'POST',
       ),
     ).toBe(false);
+  });
+
+  it('auto-runs the authenticated CARD order smoke when explicitly enabled', async () => {
+    process.env.EXPO_PUBLIC_MOBILE_SMOKE_AUTORUN = 'true';
+
+    fetchMock.mockImplementation((input, init) => {
+      const url = String(input);
+
+      if (url === 'http://localhost:18080/api/products?status=ON_SALE') {
+        return jsonResponse({
+          success: true,
+          data: [
+            {
+              productCode: 'LIMITED-001',
+              name: 'Limited Hoodie',
+              status: 'ON_SALE',
+              listPrice: 12000,
+            },
+          ],
+          error: null,
+          trace: { correlationId: 'corr-products' },
+        });
+      }
+
+      if (url === 'http://localhost:18080/api/stocks?productCode=LIMITED-001') {
+        return jsonResponse({
+          success: true,
+          data: [
+            {
+              skuId: 'LIMITED-001-S',
+              productCode: 'LIMITED-001',
+              availableQuantity: 8,
+              reservedQuantity: 0,
+              version: 1,
+            },
+          ],
+          error: null,
+          trace: { correlationId: 'corr-stocks' },
+        });
+      }
+
+      if (url === 'http://localhost:18080/api/orders' && init?.method === 'POST') {
+        return jsonResponse(
+          {
+            success: true,
+            data: {
+              orderId: 'ord_mobile_auto_001',
+              status: 'CREATED',
+              sagaStatus: 'STARTED',
+              paymentMethod: 'CARD',
+              couponCode: null,
+              totalAmount: 12000,
+              discountAmount: 0,
+              payableAmount: 12000,
+            },
+            error: null,
+            trace: { correlationId: 'corr-order' },
+          },
+          201,
+        );
+      }
+
+      if (url === 'http://localhost:18080/api/orders/ord_mobile_auto_001' && init?.method === 'GET') {
+        return jsonResponse({
+          success: true,
+          data: {
+            orderId: 'ord_mobile_auto_001',
+            memberId: 'member-mobile-demo',
+            status: 'CONFIRMED',
+            sagaStatus: 'COMPLETED',
+            paymentMethod: 'CARD',
+            couponCode: null,
+            totalAmount: 12000,
+            discountAmount: 0,
+            payableAmount: 12000,
+            items: [
+              {
+                productCode: 'LIMITED-001',
+                skuId: 'LIMITED-001-S',
+                quantity: 1,
+                unitPrice: 12000,
+                lineAmount: 12000,
+              },
+            ],
+          },
+          error: null,
+          trace: { correlationId: 'corr-order-detail' },
+        });
+      }
+
+      if (url === 'http://localhost:18080/api/read-model/orders?memberId=member-mobile-demo') {
+        return jsonResponse({
+          success: true,
+          data: [],
+          error: null,
+          trace: { correlationId: 'corr-history' },
+        });
+      }
+
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    renderWithAuth(<ProductListScreen />, 'test-access-token');
+
+    expect(await screen.findByTestId('mobile-created-order-id')).toHaveTextContent('ord_mobile_auto_001');
+    expect(await screen.findByTestId('mobile-created-order-saga-status')).toHaveTextContent('COMPLETED');
+
+    const orderRequest = fetchMock.mock.calls.find(
+      ([url, init]) => String(url) === 'http://localhost:18080/api/orders' && init?.method === 'POST',
+    );
+    expect(JSON.parse(String(orderRequest?.[1]?.body))).toEqual({
+      memberId: 'member-mobile-demo',
+      paymentMethod: 'CARD',
+      items: [
+        {
+          productCode: 'LIMITED-001',
+          skuId: 'LIMITED-001-S',
+          quantity: 1,
+          unitPrice: 12000,
+        },
+      ],
+    });
+  });
+
+  it('skips unavailable smoke products until an orderable SKU is found', async () => {
+    process.env.EXPO_PUBLIC_MOBILE_SMOKE_AUTORUN = 'true';
+
+    fetchMock.mockImplementation((input, init) => {
+      const url = String(input);
+
+      if (url === 'http://localhost:18080/api/products?status=ON_SALE') {
+        return jsonResponse({
+          success: true,
+          data: [
+            {
+              productCode: 'SOLD-OUT-001',
+              name: 'Sold Out Hoodie',
+              status: 'ON_SALE',
+              listPrice: 12000,
+            },
+            {
+              productCode: 'LIMITED-002',
+              name: 'Limited Cap',
+              status: 'ON_SALE',
+              listPrice: 8000,
+            },
+          ],
+          error: null,
+          trace: { correlationId: 'corr-products' },
+        });
+      }
+
+      if (url === 'http://localhost:18080/api/stocks?productCode=SOLD-OUT-001') {
+        return jsonResponse({
+          success: true,
+          data: [
+            {
+              skuId: 'SOLD-OUT-001-S',
+              productCode: 'SOLD-OUT-001',
+              availableQuantity: 0,
+              reservedQuantity: 5,
+              version: 3,
+            },
+          ],
+          error: null,
+          trace: { correlationId: 'corr-sold-out-stocks' },
+        });
+      }
+
+      if (url === 'http://localhost:18080/api/stocks?productCode=LIMITED-002') {
+        return jsonResponse({
+          success: true,
+          data: [
+            {
+              skuId: 'LIMITED-002-S',
+              productCode: 'LIMITED-002',
+              availableQuantity: 3,
+              reservedQuantity: 0,
+              version: 1,
+            },
+          ],
+          error: null,
+          trace: { correlationId: 'corr-available-stocks' },
+        });
+      }
+
+      if (url === 'http://localhost:18080/api/orders' && init?.method === 'POST') {
+        return jsonResponse(
+          {
+            success: true,
+            data: {
+              orderId: 'ord_mobile_auto_002',
+              status: 'CREATED',
+              sagaStatus: 'STARTED',
+              paymentMethod: 'CARD',
+              couponCode: null,
+              totalAmount: 8000,
+              discountAmount: 0,
+              payableAmount: 8000,
+            },
+            error: null,
+            trace: { correlationId: 'corr-order' },
+          },
+          201,
+        );
+      }
+
+      if (url === 'http://localhost:18080/api/orders/ord_mobile_auto_002' && init?.method === 'GET') {
+        return jsonResponse({
+          success: true,
+          data: {
+            orderId: 'ord_mobile_auto_002',
+            memberId: 'member-mobile-demo',
+            status: 'CONFIRMED',
+            sagaStatus: 'COMPLETED',
+            paymentMethod: 'CARD',
+            couponCode: null,
+            totalAmount: 8000,
+            discountAmount: 0,
+            payableAmount: 8000,
+            items: [
+              {
+                productCode: 'LIMITED-002',
+                skuId: 'LIMITED-002-S',
+                quantity: 1,
+                unitPrice: 8000,
+                lineAmount: 8000,
+              },
+            ],
+          },
+          error: null,
+          trace: { correlationId: 'corr-order-detail' },
+        });
+      }
+
+      if (url === 'http://localhost:18080/api/read-model/orders?memberId=member-mobile-demo') {
+        return jsonResponse({
+          success: true,
+          data: [],
+          error: null,
+          trace: { correlationId: 'corr-history' },
+        });
+      }
+
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    renderWithAuth(<ProductListScreen />, 'test-access-token');
+
+    expect(await screen.findByTestId('mobile-created-order-id')).toHaveTextContent('ord_mobile_auto_002');
+    expect(await screen.findByTestId('mobile-created-order-saga-status')).toHaveTextContent('COMPLETED');
+
+    const orderRequest = fetchMock.mock.calls.find(
+      ([url, init]) => String(url) === 'http://localhost:18080/api/orders' && init?.method === 'POST',
+    );
+    expect(JSON.parse(String(orderRequest?.[1]?.body))).toEqual({
+      memberId: 'member-mobile-demo',
+      paymentMethod: 'CARD',
+      items: [
+        {
+          productCode: 'LIMITED-002',
+          skuId: 'LIMITED-002-S',
+          quantity: 1,
+          unitPrice: 8000,
+        },
+      ],
+    });
   });
 
   it('blocks order creation when coupon quote is not applied', async () => {
