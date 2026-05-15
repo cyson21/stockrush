@@ -11,6 +11,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 import java.util.Deque;
 import java.util.List;
 import java.util.Map;
@@ -19,6 +20,12 @@ import java.util.concurrent.ConcurrentLinkedDeque;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Primary;
+import org.springframework.security.oauth2.jwt.BadJwtException;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -197,10 +204,44 @@ class OrderGatewayControllerIntegrationTest {
     }
 
     @Test
+    void rejects_admin_routes_without_bearer_token() throws Exception {
+        HttpRequest request = HttpRequest.newBuilder(gatewayUri("/api/admin/orders?page=0&size=5"))
+            .header("X-Correlation-Id", "corr-gateway-admin-unauthenticated")
+            .GET()
+            .build();
+
+        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+
+        assertThat(response.statusCode()).isEqualTo(401);
+        STUB_ORDER_SERVICE.assertNoRequests();
+        STUB_INVENTORY_SERVICE.assertNoRequests();
+        STUB_PAYMENT_SERVICE.assertNoRequests();
+        STUB_PROMOTION_SERVICE.assertNoRequests();
+        STUB_FULFILLMENT_SERVICE.assertNoRequests();
+        STUB_READ_MODEL_SERVICE.assertNoRequests();
+    }
+
+    @Test
+    void rejects_admin_routes_with_customer_role() throws Exception {
+        HttpRequest request = customerRequest("/api/admin/orders?page=0&size=5")
+            .header("X-Correlation-Id", "corr-gateway-admin-forbidden")
+            .GET()
+            .build();
+
+        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+
+        assertThat(response.statusCode()).isEqualTo(403);
+        STUB_ORDER_SERVICE.assertNoRequests();
+        STUB_INVENTORY_SERVICE.assertNoRequests();
+        STUB_PAYMENT_SERVICE.assertNoRequests();
+        STUB_PROMOTION_SERVICE.assertNoRequests();
+        STUB_FULFILLMENT_SERVICE.assertNoRequests();
+        STUB_READ_MODEL_SERVICE.assertNoRequests();
+    }
+
+    @Test
     void routes_admin_order_list_query_to_order_service() throws Exception {
-        HttpRequest request = HttpRequest.newBuilder(
-                gatewayUri("/api/admin/orders?page=0&size=5&status=CREATED&sagaStatus=PAYMENT_DELAYED")
-            )
+        HttpRequest request = adminRequest("/api/admin/orders?page=0&size=5&status=CREATED&sagaStatus=PAYMENT_DELAYED")
             .header("X-Correlation-Id", "corr-gateway-admin-list")
             .GET()
             .build();
@@ -220,7 +261,7 @@ class OrderGatewayControllerIntegrationTest {
 
     @Test
     void routes_admin_order_saga_query_to_order_service() throws Exception {
-        HttpRequest request = HttpRequest.newBuilder(gatewayUri("/api/admin/orders/ord_gateway_delay/saga"))
+        HttpRequest request = adminRequest("/api/admin/orders/ord_gateway_delay/saga")
             .header("X-Correlation-Id", "corr-gateway-admin-saga")
             .GET()
             .build();
@@ -239,7 +280,7 @@ class OrderGatewayControllerIntegrationTest {
 
     @Test
     void routes_admin_order_cancel_command_to_order_service() throws Exception {
-        HttpRequest request = HttpRequest.newBuilder(gatewayUri("/api/admin/orders/ord_gateway_delay/cancel"))
+        HttpRequest request = adminRequest("/api/admin/orders/ord_gateway_delay/cancel")
             .header("Idempotency-Key", "idem-gateway-admin-cancel")
             .header("X-Correlation-Id", "corr-gateway-admin-cancel")
             .POST(HttpRequest.BodyPublishers.noBody())
@@ -260,9 +301,7 @@ class OrderGatewayControllerIntegrationTest {
 
     @Test
     void routes_order_outbox_list_query_to_order_service() throws Exception {
-        HttpRequest request = HttpRequest.newBuilder(
-                gatewayUri("/api/admin/outbox-services/order/events?status=PENDING,FAILED&limit=5&offset=0")
-            )
+        HttpRequest request = adminRequest("/api/admin/outbox-services/order/events?status=PENDING,FAILED&limit=5&offset=0")
             .header("X-Correlation-Id", "corr-gateway-order-outbox")
             .GET()
             .build();
@@ -285,9 +324,7 @@ class OrderGatewayControllerIntegrationTest {
 
     @Test
     void routes_inventory_outbox_retry_command_to_inventory_service() throws Exception {
-        HttpRequest request = HttpRequest.newBuilder(
-                gatewayUri("/api/admin/outbox-services/inventory/events/retry?batchSize=7")
-            )
+        HttpRequest request = adminRequest("/api/admin/outbox-services/inventory/events/retry?batchSize=7")
             .header("X-Correlation-Id", "corr-gateway-inventory-retry")
             .POST(HttpRequest.BodyPublishers.noBody())
             .build();
@@ -310,9 +347,7 @@ class OrderGatewayControllerIntegrationTest {
 
     @Test
     void routes_payment_outbox_failed_requeue_command_to_payment_service() throws Exception {
-        HttpRequest request = HttpRequest.newBuilder(
-                gatewayUri("/api/admin/outbox-services/payment/events/failed/requeue?batchSize=3")
-            )
+        HttpRequest request = adminRequest("/api/admin/outbox-services/payment/events/failed/requeue?batchSize=3")
             .header("X-Correlation-Id", "corr-gateway-payment-requeue")
             .header("X-Operator-Id", "operator-gateway")
             .POST(HttpRequest.BodyPublishers.noBody())
@@ -337,9 +372,7 @@ class OrderGatewayControllerIntegrationTest {
 
     @Test
     void routes_payment_outbox_list_query_to_payment_service() throws Exception {
-        HttpRequest request = HttpRequest.newBuilder(
-                gatewayUri("/api/admin/outbox-services/payment/events?status=FAILED")
-            )
+        HttpRequest request = adminRequest("/api/admin/outbox-services/payment/events?status=FAILED")
             .header("X-Correlation-Id", "corr-gateway-payment-outbox")
             .GET()
             .build();
@@ -394,9 +427,7 @@ class OrderGatewayControllerIntegrationTest {
 
     @Test
     void routes_admin_coupon_usage_history_to_promotion_service() throws Exception {
-        HttpRequest request = HttpRequest.newBuilder(
-                gatewayUri("/api/admin/coupon-usages?couponCode=WELCOME10&status=CONSUMED&page=0&size=20")
-            )
+        HttpRequest request = adminRequest("/api/admin/coupon-usages?couponCode=WELCOME10&status=CONSUMED&page=0&size=20")
             .header("X-Correlation-Id", "corr-gateway-coupon-usages")
             .GET()
             .build();
@@ -419,9 +450,7 @@ class OrderGatewayControllerIntegrationTest {
 
     @Test
     void routes_admin_coupon_usage_history_with_trailing_slash_to_promotion_service() throws Exception {
-        HttpRequest request = HttpRequest.newBuilder(
-                gatewayUri("/api/admin/coupon-usages/?status=RELEASED")
-            )
+        HttpRequest request = adminRequest("/api/admin/coupon-usages/?status=RELEASED")
             .header("X-Correlation-Id", "corr-gateway-coupon-usages-slash")
             .GET()
             .build();
@@ -443,9 +472,7 @@ class OrderGatewayControllerIntegrationTest {
 
     @Test
     void routes_admin_fulfillment_request_history_to_fulfillment_service() throws Exception {
-        HttpRequest request = HttpRequest.newBuilder(
-                gatewayUri("/api/admin/fulfillment-requests?orderId=ord_gateway_fulfillment_001&status=PREPARING&page=0&size=20")
-            )
+        HttpRequest request = adminRequest("/api/admin/fulfillment-requests?orderId=ord_gateway_fulfillment_001&status=PREPARING&page=0&size=20")
             .header("X-Correlation-Id", "corr-gateway-fulfillment-requests")
             .GET()
             .build();
@@ -469,9 +496,7 @@ class OrderGatewayControllerIntegrationTest {
 
     @Test
     void routes_admin_fulfillment_request_history_with_trailing_slash_to_fulfillment_service() throws Exception {
-        HttpRequest request = HttpRequest.newBuilder(
-                gatewayUri("/api/admin/fulfillment-requests/?status=PREPARING")
-            )
+        HttpRequest request = adminRequest("/api/admin/fulfillment-requests/?status=PREPARING")
             .header("X-Correlation-Id", "corr-gateway-fulfillment-requests-slash")
             .GET()
             .build();
@@ -563,9 +588,7 @@ class OrderGatewayControllerIntegrationTest {
 
     @Test
     void routes_admin_order_summary_to_read_model_service() throws Exception {
-        HttpRequest request = HttpRequest.newBuilder(
-                gatewayUri("/api/read-model/admin/orders?status=CONFIRMED&page=1&size=5")
-            )
+        HttpRequest request = adminRequest("/api/read-model/admin/orders?status=CONFIRMED&page=1&size=5")
             .header("X-Correlation-Id", "corr-gateway-read-model-admin")
             .GET()
             .build();
@@ -587,7 +610,7 @@ class OrderGatewayControllerIntegrationTest {
 
     @Test
     void rejects_unknown_outbox_service_without_calling_upstream() throws Exception {
-        HttpRequest request = HttpRequest.newBuilder(gatewayUri("/api/admin/outbox-services/finance/events"))
+        HttpRequest request = adminRequest("/api/admin/outbox-services/finance/events")
             .header("X-Correlation-Id", "corr-gateway-unknown-outbox")
             .GET()
             .build();
@@ -605,6 +628,39 @@ class OrderGatewayControllerIntegrationTest {
 
     private URI gatewayUri(String path) {
         return URI.create("http://localhost:" + gatewayPort + path);
+    }
+
+    private HttpRequest.Builder adminRequest(String path) {
+        return HttpRequest.newBuilder(gatewayUri(path)).header("Authorization", "Bearer admin-token");
+    }
+
+    private HttpRequest.Builder customerRequest(String path) {
+        return HttpRequest.newBuilder(gatewayUri(path)).header("Authorization", "Bearer customer-token");
+    }
+
+    @TestConfiguration
+    static class TestJwtDecoderConfig {
+
+        @Bean
+        @Primary
+        JwtDecoder testJwtDecoder() {
+            return token -> switch (token) {
+                case "admin-token" -> jwt(token, "admin-demo", List.of("ADMIN"));
+                case "customer-token" -> jwt(token, "customer-demo", List.of("CUSTOMER"));
+                default -> throw new BadJwtException("unsupported test token");
+            };
+        }
+
+        private static Jwt jwt(String token, String subject, List<String> roles) {
+            Instant now = Instant.parse("2026-05-15T00:00:00Z");
+            return Jwt.withTokenValue(token)
+                .header("alg", "none")
+                .subject(subject)
+                .issuedAt(now)
+                .expiresAt(now.plusSeconds(3600))
+                .claim("realm_access", Map.of("roles", roles))
+                .build();
+        }
     }
 
     private static final class StubService {

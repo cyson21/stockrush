@@ -4,6 +4,11 @@ server:
 spring:
   application:
     name: gateway
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${STOCKRUSH_SECURITY_ISSUER_URI:http://localhost:28088/realms/stockrush}
 
 stockrush:
   routes:
