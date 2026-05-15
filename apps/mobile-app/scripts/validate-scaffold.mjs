@@ -26,6 +26,8 @@ assert.equal(packageJson.scripts.android, 'expo start --android');
 assert.equal(packageJson.scripts.ios, 'expo start --ios');
 assert.equal(packageJson.scripts['smoke:preflight'], 'node scripts/smoke-preflight.mjs');
 assert.equal(packageJson.scripts['smoke:evidence'], 'node scripts/collect-smoke-evidence.mjs');
+assert.equal(packageJson.scripts['smoke:android:e2e'], 'node scripts/android-uiautomator-smoke.mjs');
+assert.equal(packageJson.scripts['test:smoke-runner'], 'node --test scripts/android-uiautomator-smoke.test.mjs');
 assert.equal(packageJson.scripts['test:scaffold'], 'node scripts/validate-scaffold.mjs');
 assert.equal(packageJson.dependencies.expo, '~54.0.34');
 assert.equal(packageJson.dependencies.react, '19.1.0');
@@ -53,6 +55,8 @@ assert.equal(appConfig.expo.scheme, 'stockrush');
   'src/api/readModel.ts',
   'scripts/smoke-preflight.mjs',
   'scripts/collect-smoke-evidence.mjs',
+  'scripts/android-uiautomator-smoke.mjs',
+  'scripts/android-uiautomator-smoke.test.mjs',
 ].forEach(readText);
 
 const runtimeConfig = readText('src/config/runtime.ts');
@@ -88,10 +92,20 @@ assert.ok(smokePreflight.includes('unsupported target'));
 
 const smokeEvidence = readText('scripts/collect-smoke-evidence.mjs');
 assert.ok(smokeEvidence.includes('npm test'));
+assert.ok(smokeEvidence.includes('npm run test:smoke-runner'));
 assert.ok(smokeEvidence.includes('npm run typecheck'));
 assert.ok(smokeEvidence.includes('npm run test:scaffold'));
 assert.ok(smokeEvidence.includes('node_modules/jest/bin/jest.js'));
 assert.ok(smokeEvidence.includes('node_modules/typescript/bin/tsc'));
 assert.ok(smokeEvidence.includes('smoke:preflight'));
+
+const androidSmoke = readText('scripts/android-uiautomator-smoke.mjs');
+assert.ok(androidSmoke.includes('uiautomator'));
+assert.ok(androidSmoke.includes('mobile-product-list-screen'));
+assert.ok(androidSmoke.includes('mobile-auth-status-label'));
+assert.ok(androidSmoke.includes('mobile-product-card-'));
+assert.ok(androidSmoke.includes('mobile-stock-row-'));
+assert.ok(androidSmoke.includes('mobile-checkout-submit-order-button'));
+assert.ok(androidSmoke.includes('mobile-created-order-saga-status'));
 
 console.log('Mobile scaffold validation passed.');

@@ -9,7 +9,9 @@
     "ios": "expo start --ios",
     "smoke:preflight": "node scripts/smoke-preflight.mjs",
     "smoke:evidence": "node scripts/collect-smoke-evidence.mjs",
+    "smoke:android:e2e": "node scripts/android-uiautomator-smoke.mjs",
     "test": "jest --runInBand",
+    "test:smoke-runner": "node --test scripts/android-uiautomator-smoke.test.mjs",
     "test:scaffold": "node scripts/validate-scaffold.mjs",
     "typecheck": "tsc --noEmit"
   },

@@ -32,6 +32,7 @@ Verification:
 
 ```bash
 npm test
+npm run test:smoke-runner
 npm run typecheck
 npm run test:scaffold
 npm run smoke:preflight -- --api-base-url http://localhost:28080
@@ -79,6 +80,20 @@ Smoke evidence:
 ```
 
 The evidence command runs Jest, TypeScript typecheck, scaffold validation, and preflight in one pass. It exits non-zero only when the hard checks fail; simulator or emulator absence is recorded as a preflight blocker so the remaining environment gap is explicit.
+
+Android UI smoke runner:
+
+```bash
+adb reverse tcp:28080 tcp:28080
+adb reverse tcp:28088 tcp:28088
+npm run smoke:android:e2e -- \
+  --product-code DEMO-E2E-20260516000356-900ada45 \
+  --quantity 1 \
+  --payment-method CARD \
+  --expected-saga-status COMPLETED \
+```
+
+The Android runner uses the built-in `adb shell uiautomator dump` output and the app `testID` values. It does not install packages. It captures XML, screenshots, `report.json`, and `report.md` so failed taps can be compared before and after each selector action.
 
 For Android emulator runs, the app should use `10.0.2.2`, but the preflight health check usually runs from the host shell. In that case pass both URLs:
 
@@ -137,4 +152,4 @@ Recommended API base URLs:
 
 ## Next Implementation Slices
 
-1. Android or iOS protected order smoke evidence using stable selectors.
+1. Run the Android UIAutomator smoke runner on a development build or a stable Expo Go session and attach its evidence report.

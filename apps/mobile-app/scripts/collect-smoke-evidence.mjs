@@ -55,6 +55,7 @@ function hardCheckCommands() {
   if (canSpawn(npmCommand)) {
     return [
       ['npm test', npmCommand, ['test', '--', '--runInBand']],
+      ['npm run test:smoke-runner', npmCommand, ['run', 'test:smoke-runner']],
       ['npm run typecheck', npmCommand, ['run', 'typecheck']],
       ['npm run test:scaffold', npmCommand, ['run', 'test:scaffold']],
     ];
@@ -65,6 +66,7 @@ function hardCheckCommands() {
   if (existsSync(jestScript) && existsSync(tscScript)) {
     return [
       ['jest --runInBand', nodeCommand, [jestScript, '--runInBand']],
+      ['test:smoke-runner', nodeCommand, ['--test', 'scripts/android-uiautomator-smoke.test.mjs']],
       ['tsc --noEmit', nodeCommand, [tscScript, '--noEmit']],
       ['test:scaffold', nodeCommand, ['scripts/validate-scaffold.mjs']],
     ];
@@ -72,6 +74,7 @@ function hardCheckCommands() {
 
   return [
     ['npm test', npmCommand, ['test', '--', '--runInBand']],
+    ['npm run test:smoke-runner', npmCommand, ['run', 'test:smoke-runner']],
     ['npm run typecheck', npmCommand, ['run', 'typecheck']],
     ['npm run test:scaffold', npmCommand, ['run', 'test:scaffold']],
   ];

@@ -60,6 +60,41 @@ Use these `testID` values for automation. Avoid coordinate-only taps.
 11. Wait for `mobile-created-order-summary`.
 12. Wait until `mobile-created-order-saga-status` becomes `COMPLETED`.
 
+## Android UIAutomator Runner
+
+Use the repo runner when an Android emulator is already open and the app is on the product list after Keycloak login. The runner uses Android's built-in UIAutomator XML dump, resolves `testID` values as `resource-id`, taps the center of each resolved node, and records XML/screenshots for every step.
+
+```bash
+cd apps/mobile-app
+adb reverse tcp:28080 tcp:28080
+adb reverse tcp:28088 tcp:28088
+npm run smoke:android:e2e -- \
+  --quantity 1 \
+  --payment-method CARD \
+  --expected-saga-status COMPLETED \
+```
+
+Optional filters:
+
+```bash
+npm run smoke:android:e2e -- \
+  --product-code DEMO-E2E-20260516000356-900ada45 \
+  --sku-id DEMO-E2E-20260516000356-900ada45-S \
+  --coupon-code WELCOME10 \
+  --expected-saga-status ANY_TERMINAL
+```
+
+Expected evidence files:
+
+| File | Purpose |
+|---|---|
+| `report.md` | Human-readable step summary |
+| `report.json` | Structured step summary |
+| `{step}-{attempt}.xml` | UIAutomator tree before each action |
+| `{step}-hit.png` | Screenshot when a selector is found |
+| `{step}-after.png` | Screenshot after tap/input |
+| `failure.txt` | Failure reason when a step times out |
+
 ## Evidence To Capture
 
 - Authenticated app screen after returning from Keycloak.
@@ -71,4 +106,4 @@ Use these `testID` values for automation. Avoid coordinate-only taps.
 
 ## Current Gap
 
-The Android Expo Go login path is verified. The protected order UI path still needs a real emulator/simulator run using these selectors.
+The Android Expo Go login path is verified. The protected order UI path now has an Android UIAutomator runner, but final order creation evidence still depends on a real emulator/simulator run where product tap reaches the React Native handler. If Expo Go keeps ignoring the product tap, use the same runner against an Android development build or iOS simulator to separate Expo Go wrapper behavior from app behavior.
