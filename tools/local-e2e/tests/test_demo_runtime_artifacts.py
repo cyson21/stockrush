@@ -12,6 +12,7 @@ class DemoRuntimeArtifactsTest(unittest.TestCase):
         expected_files = [
             "infra/demo/.env.example",
             "infra/demo/docker-compose.yml",
+            "infra/demo/keycloak/stockrush-realm.json",
             "infra/demo/docker-compose.images.yml",
             "infra/demo/README.md",
             "services/Dockerfile",
@@ -41,6 +42,7 @@ class DemoRuntimeArtifactsTest(unittest.TestCase):
             "kafka:",
             "kafka-init:",
             "kafka-ui:",
+            "keycloak:",
             "gateway:",
             "catalog-service:",
             "inventory-service:",
@@ -67,6 +69,8 @@ class DemoRuntimeArtifactsTest(unittest.TestCase):
             "PROMOTION_SERVICE_URL: http://promotion-service:18085",
             "FULFILLMENT_SERVICE_URL: http://fulfillment-service:18086",
             "READ_MODEL_SERVICE_URL: http://read-model-service:18087",
+            "STOCKRUSH_SECURITY_ISSUER_URI: http://localhost:${KEYCLOAK_HOST_PORT:-28088}/realms/stockrush",
+            "STOCKRUSH_SECURITY_JWK_SET_URI: http://keycloak:8080/realms/stockrush/protocol/openid-connect/certs",
             "STOCKRUSH_KAFKA_LISTENERS_ENABLED: \"true\"",
         ]
 
@@ -98,13 +102,20 @@ class DemoRuntimeArtifactsTest(unittest.TestCase):
             "REDIS_HOST_PORT=26379",
             "KAFKA_HOST_PORT=29092",
             "KAFKA_UI_PORT=29090",
+            "KEYCLOAK_HOST_PORT=28088",
             "GATEWAY_HOST_PORT=28080",
             "CATALOG_HOST_PORT=28081",
+            "INVENTORY_HOST_PORT=28082",
+            "ORDER_HOST_PORT=28083",
+            "PAYMENT_HOST_PORT=28084",
+            "PROMOTION_HOST_PORT=28085",
+            "FULFILLMENT_HOST_PORT=28086",
+            "READ_MODEL_HOST_PORT=28087",
             "CUSTOMER_APP_HOST_PORT=15173",
             "ADMIN_APP_HOST_PORT=15174",
         ]
 
-        self.assertIn("DEMO_ENV_REV=2026-05-14-demo-cicd-v3", env_template)
+        self.assertIn("DEMO_ENV_REV=2026-05-15-security-v1", env_template)
         for port_line in expected_ports:
             with self.subTest(port=port_line):
                 self.assertIn(port_line, env_template)
@@ -119,6 +130,8 @@ class DemoRuntimeArtifactsTest(unittest.TestCase):
                 self.assertIn(env_line, env_template)
 
         self.assertIn("${POSTGRES_HOST_PORT:-25432}:5432", compose)
+        self.assertIn("${KEYCLOAK_HOST_PORT:-28088}:8080", compose)
+        self.assertIn("KC_HOSTNAME: http://localhost:${KEYCLOAK_HOST_PORT:-28088}", compose)
         self.assertIn("${GATEWAY_HOST_PORT:-28080}:18080", compose)
         self.assertIn("${CUSTOMER_APP_HOST_PORT:-15173}:8080", compose)
         self.assertIn("http://127.0.0.1:8080", compose)
@@ -128,6 +141,8 @@ class DemoRuntimeArtifactsTest(unittest.TestCase):
         self.assertIn("--refresh-env", powershell_up)
         self.assertIn("--skip-port-check", powershell_up)
         self.assertIn("Test-DemoPorts", powershell_up)
+        self.assertIn('EXPECTED_ENV_REV="2026-05-15-security-v1"', shell_up)
+        self.assertIn('$ExpectedEnvRev = "2026-05-15-security-v1"', powershell_up)
 
     def test_demo_image_override_targets_ghcr_images(self) -> None:
         image_compose = (ROOT / "infra/demo/docker-compose.images.yml").read_text(encoding="utf-8")
@@ -180,6 +195,9 @@ class DemoRuntimeArtifactsTest(unittest.TestCase):
         self.assertIn("pause kafka", shell_script)
         self.assertIn("unpause kafka", shell_script)
         self.assertIn("--promotion-url", shell_script)
+        self.assertIn("get_keycloak_token", shell_script)
+        self.assertIn("wait_for_keycloak_ready", shell_script)
+        self.assertIn("--admin-bearer-token", shell_script)
         self.assertIn("--relay-mode automatic", shell_script)
         self.assertIn("--orders 12", shell_script)
         self.assertIn("--initial-stock 4", shell_script)
@@ -201,6 +219,12 @@ class DemoRuntimeArtifactsTest(unittest.TestCase):
         self.assertIn("pause kafka", powershell_script)
         self.assertIn("unpause kafka", powershell_script)
         self.assertIn("--promotion-url", powershell_script)
+        self.assertIn("Get-KeycloakToken", powershell_script)
+        self.assertIn("Wait-KeycloakReady", powershell_script)
+        self.assertIn("Invoke-LocalE2E", powershell_script)
+        self.assertIn("Get-Command python", powershell_script)
+        self.assertIn("Get-Command py", powershell_script)
+        self.assertIn("--admin-bearer-token", powershell_script)
         self.assertIn("--relay-mode automatic", powershell_script)
         self.assertIn("--orders 12", powershell_script)
         self.assertIn("--initial-stock 4", powershell_script)
@@ -213,6 +237,16 @@ class DemoRuntimeArtifactsTest(unittest.TestCase):
         self.assertIn("$PromotionPort", powershell_script)
         self.assertIn("/actuator/info", powershell_script)
         self.assertIn("/actuator/metrics", powershell_script)
+
+    def test_keycloak_realm_is_demo_scoped_and_port_override_friendly(self) -> None:
+        realm = (ROOT / "infra/demo/keycloak/stockrush-realm.json").read_text(encoding="utf-8")
+
+        self.assertIn('"clientId": "stockrush-demo-smoke"', realm)
+        self.assertIn('"directAccessGrantsEnabled": true', realm)
+        self.assertIn('"username": "customer.demo@stockrush.local"', realm)
+        self.assertIn('"username": "admin.demo@stockrush.local"', realm)
+        self.assertIn('"http://localhost:*/*"', realm)
+        self.assertIn('"webOrigins": ["+"]', realm)
 
 
     def test_java17_wrappers_are_cross_platform(self) -> None:

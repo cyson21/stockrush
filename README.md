@@ -161,4 +161,4 @@ Windows 11 PowerShell에서는 `.\scripts\demo-up.ps1`, `.\scripts\demo-smoke.ps
 - Promotion Service는 주문 이벤트 기반 쿠폰 사용 상태, Gateway 쿠폰 견적/사용 이력 route, 관리자 사용 이력 화면까지 연결했습니다.
 - Fulfillment Service는 출고 준비 요청 기록, Gateway route, 관리자 출고 상태 화면까지 연결했습니다. carrier/label/tracking 상태는 후속 확장 범위입니다.
 - Read Model Service는 주문 요약 projection, 서비스-local 조회 API, Gateway 조회 route, 조건 검색 가능한 관리자 대시보드까지 연결했습니다. 고객 상품 검색은 Catalog API와 Customer App UI로 먼저 연결했고, 별도 상품 검색 projection은 후속 확장 범위입니다.
-- Gateway 인증/권한은 OAuth2 Resource Server 기반으로 시작했으며, 관리자 API는 `ROLE_ADMIN` 없이는 접근할 수 없습니다. 고객 object-level authorization, 앱 OIDC 로그인, Keycloak demo runtime, 부하 벤치마크, Kafka consumer 병렬성 검증은 후속 확장 범위입니다.
+- Gateway 인증/권한은 OAuth2 Resource Server 기반으로 시작했으며, 관리자 API는 `ROLE_ADMIN` 없이는 접근할 수 없습니다. demo runtime에는 Keycloak realm import와 smoke token 취득 흐름을 연결했습니다. 고객 object-level authorization, 앱 OIDC 로그인, 부하 벤치마크, Kafka consumer 병렬성 검증은 후속 확장 범위입니다.

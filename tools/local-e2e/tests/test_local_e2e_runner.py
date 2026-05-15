@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib.util
 import io
 import json
+import os
 import sys
 import unittest
 from contextlib import redirect_stderr
@@ -482,6 +483,85 @@ class LocalE2ERunnerTest(unittest.TestCase):
         self.assertEqual(args.operator_id, "qa-runner")
         self.assertFalse(args.skip_requeue_failed)
 
+    def test_cli_accepts_admin_bearer_token_option(self) -> None:
+        args = local_e2e_runner.parse_args([
+            "demo-order-flow",
+            "--admin-bearer-token",
+            "Bearer token-abc",
+        ])
+
+        self.assertEqual(args.admin_bearer_token, "Bearer token-abc")
+
+    def test_cli_defaults_admin_bearer_token_from_environment(self) -> None:
+        original = os.environ.get("STOCKRUSH_ADMIN_BEARER_TOKEN")
+        try:
+            os.environ["STOCKRUSH_ADMIN_BEARER_TOKEN"] = "env-token-xyz"
+            args = local_e2e_runner.parse_args(["demo-order-flow"])
+
+            self.assertEqual(args.admin_bearer_token, "env-token-xyz")
+        finally:
+            if original is None:
+                del os.environ["STOCKRUSH_ADMIN_BEARER_TOKEN"]
+            else:
+                os.environ["STOCKRUSH_ADMIN_BEARER_TOKEN"] = original
+
+    def test_admin_bearer_token_is_normalized_in_config(self) -> None:
+        args = local_e2e_runner.parse_args([
+            "demo-order-flow",
+            "--admin-bearer-token",
+            "  Bearer normalize-token  ",
+        ])
+        config = local_e2e_runner.config_from_args(args)
+
+        self.assertEqual(config.admin_bearer_token, "normalize-token")
+
+    def test_admin_auth_headers_adds_bearer_prefix(self) -> None:
+        args = local_e2e_runner.parse_args(["demo-order-flow", "--admin-bearer-token", "normalize-token"])
+        config = local_e2e_runner.config_from_args(args)
+
+        self.assertEqual(
+            local_e2e_runner.admin_auth_headers(config),
+            {"Authorization": "Bearer normalize-token"},
+        )
+
+    def test_admin_auth_headers_without_token_returns_empty(self) -> None:
+        args = local_e2e_runner.parse_args(["demo-order-flow"])
+        config = local_e2e_runner.config_from_args(args)
+
+        self.assertEqual(local_e2e_runner.admin_auth_headers(config), {})
+
+    def test_api_client_get_accepts_headers(self) -> None:
+        captured: dict[str, object] = {}
+
+        class FakeResponse:
+            def __enter__(self) -> "FakeResponse":
+                return self
+
+            def __exit__(self, *_args: object) -> None:
+                return None
+
+            def read(self) -> bytes:
+                return b'{"ok": true}'
+
+        original_urlopen = local_e2e_runner.urllib.request.urlopen
+        try:
+            def fake_urlopen(request: object, timeout: float) -> FakeResponse:
+                captured["timeout"] = timeout
+                captured["request"] = request
+                return FakeResponse()
+
+            local_e2e_runner.urllib.request.urlopen = fake_urlopen
+            client = local_e2e_runner.ApiClient(timeout_seconds=1.5)
+
+            payload = client.get("http://gateway.local/api/admin/outbox", headers={"Authorization": "Bearer t1"})
+        finally:
+            local_e2e_runner.urllib.request.urlopen = original_urlopen
+
+        request = captured["request"]
+        self.assertEqual(payload, {"ok": True})
+        self.assertEqual(captured["timeout"], 1.5)
+        self.assertEqual(request.get_header("Authorization"), "Bearer t1")
+
     def test_cli_accepts_kafka_outage_recovery_command_name(self) -> None:
         args = local_e2e_runner.parse_args([
             "kafka-outage-recovery",
@@ -501,6 +581,99 @@ class LocalE2ERunnerTest(unittest.TestCase):
         self.assertEqual(args.orders, 1)
         self.assertEqual(args.initial_stock, 3)
         self.assertEqual(args.relay_mode, "automatic")
+
+    def test_count_outbox_attaches_admin_bearer_token(self) -> None:
+        args = local_e2e_runner.parse_args([
+            "outbox-recovery",
+            "--admin-bearer-token",
+            "token-456",
+        ])
+        config = local_e2e_runner.config_from_args(args)
+        captured_headers: list[dict[str, str]] = []
+
+        class FakeClient:
+            def get(self, _url: str, headers: Mapping[str, str] | None = None) -> dict[str, list[object]]:
+                captured_headers.append(dict(headers or {}))
+                return {"items": []}
+
+        counts = local_e2e_runner.count_outbox(FakeClient(), config, statuses=("PENDING",))
+
+        self.assertEqual(counts, {"order": 0, "inventory": 0, "payment": 0})
+        self.assertEqual(len(captured_headers), 3)
+        for call_headers in captured_headers:
+            self.assertEqual(call_headers["Authorization"], "Bearer token-456")
+
+    def test_outbox_items_attaches_admin_bearer_token(self) -> None:
+        args = local_e2e_runner.parse_args([
+            "outbox-recovery",
+            "--admin-bearer-token",
+            "token-789",
+        ])
+        config = local_e2e_runner.config_from_args(args)
+        captured_headers: list[dict[str, str]] = []
+
+        class FakeClient:
+            def get(self, _url: str, headers: Mapping[str, str] | None = None) -> dict[str, list[object]]:
+                captured_headers.append(dict(headers or {}))
+                return {"items": []}
+
+        items = local_e2e_runner.outbox_items(FakeClient(), config, "order", statuses=("PENDING",))
+
+        self.assertEqual(items, [])
+        self.assertEqual(len(captured_headers), 1)
+        self.assertEqual(captured_headers[0]["Authorization"], "Bearer token-789")
+
+    def test_relay_wave_attaches_admin_bearer_token(self) -> None:
+        args = local_e2e_runner.parse_args([
+            "same-sku-concurrency",
+            "--admin-bearer-token",
+            "retry-token",
+            "--wait-seconds",
+            "0",
+        ])
+        config = local_e2e_runner.config_from_args(args)
+        posted_headers: list[dict[str, str]] = []
+
+        class FakeClient:
+            def post(
+                self,
+                _url: str,
+                body: Mapping[str, Any] | None = None,
+                headers: Mapping[str, str] | None = None,
+            ) -> dict[str, str]:
+                posted_headers.append(dict(headers or {}))
+                return {}
+
+        local_e2e_runner.relay_wave(FakeClient(), config)
+
+        self.assertEqual(len(posted_headers), 6)
+        for headers in posted_headers:
+            self.assertEqual(headers["Authorization"], "Bearer retry-token")
+
+    def test_cancel_delayed_order_attaches_admin_bearer_token(self) -> None:
+        args = local_e2e_runner.parse_args([
+            "demo-order-flow",
+            "--admin-bearer-token",
+            "cancel-token",
+        ])
+        config = local_e2e_runner.config_from_args(args)
+        posted_headers: list[dict[str, str]] = []
+
+        class FakeClient:
+            def post(
+                self,
+                _url: str,
+                body: Mapping[str, object] | None = None,
+                headers: Mapping[str, str] | None = None,
+            ) -> dict[str, object]:
+                posted_headers.append(dict(headers or {}))
+                return {}
+
+        local_e2e_runner.cancel_delayed_order(FakeClient(), config, "order-1", "sku-1")
+
+        self.assertEqual(len(posted_headers), 1)
+        self.assertEqual(posted_headers[0]["Authorization"], "Bearer cancel-token")
+        self.assertEqual(posted_headers[0]["Idempotency-Key"], "idem-admin-cancel-sku-1-order-1")
 
     def test_docker_compose_action_pauses_named_kafka_service(self) -> None:
         args = local_e2e_runner.parse_args([

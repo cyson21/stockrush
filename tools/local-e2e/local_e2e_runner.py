@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import json
 import subprocess
 import sys
@@ -67,6 +68,7 @@ class ScenarioConfig:
     env_file: str | None = None
     kafka_service: str = "kafka"
     outage_observation_seconds: float = 2.0
+    admin_bearer_token: str | None = None
 
 
 def expected_success_count(initial_stock: int, quantity_per_order: int, order_count: int) -> int:
@@ -117,6 +119,17 @@ def non_blank_text(value: str) -> str:
     if not normalized:
         raise argparse.ArgumentTypeError("must not be blank")
     return normalized
+
+
+def normalize_admin_bearer_token(value: str | None) -> str | None:
+    if not value:
+        return None
+    token = value.strip()
+    if not token:
+        return None
+    if token.startswith("Bearer "):
+        token = token[len("Bearer "):].strip()
+    return token or None
 
 
 def scenario_ids(prefix: str) -> tuple[str, str]:
@@ -432,8 +445,8 @@ class ApiClient:
     def __init__(self, timeout_seconds: float = 30.0) -> None:
         self.timeout_seconds = timeout_seconds
 
-    def get(self, url: str) -> Mapping[str, Any]:
-        return self.request("GET", url)
+    def get(self, url: str, headers: Mapping[str, str] | None = None) -> Mapping[str, Any]:
+        return self.request("GET", url, headers=headers)
 
     def post(self, url: str, body: Mapping[str, Any] | None = None, headers: Mapping[str, str] | None = None) -> Mapping[str, Any]:
         return self.request("POST", url, body=body, headers=headers)
@@ -522,6 +535,13 @@ def retryable_pending_outbox_items(
         if not next_retry_at or parse_utc_instant(str(next_retry_at)) <= reference_time:
             retryable.append(item)
     return retryable
+
+
+def admin_auth_headers(config: ScenarioConfig) -> dict[str, str]:
+    token = config.admin_bearer_token
+    if not token:
+        return {}
+    return {"Authorization": f"Bearer {token}"}
 
 
 def outbox_recovery_snapshot_from_items(
@@ -655,7 +675,9 @@ def count_outbox(
 ) -> dict[str, int]:
     counts: dict[str, int] = {}
     for name in SERVICE_BASES:
-        payload = response_data(client.get(outbox_list_url(config, name, statuses=statuses)))
+        payload = response_data(
+            client.get(outbox_list_url(config, name, statuses=statuses), headers=admin_auth_headers(config))
+        )
         counts[name] = len(payload.get("items", []))
     return counts
 
@@ -672,7 +694,9 @@ def outbox_event_ids(
 ) -> dict[str, set[str]]:
     event_ids: dict[str, set[str]] = {}
     for name in SERVICE_BASES:
-        payload = response_data(client.get(outbox_list_url(config, name, statuses=statuses)))
+        payload = response_data(
+            client.get(outbox_list_url(config, name, statuses=statuses), headers=admin_auth_headers(config))
+        )
         event_ids[name] = {str(item.get("eventId")) for item in payload.get("items", []) if item.get("eventId")}
     return event_ids
 
@@ -684,7 +708,9 @@ def outbox_items(
     *,
     statuses: Sequence[str] = ("PENDING",),
 ) -> list[Mapping[str, Any]]:
-    payload = response_data(client.get(outbox_list_url(config, service, statuses=statuses)))
+    payload = response_data(
+        client.get(outbox_list_url(config, service, statuses=statuses), headers=admin_auth_headers(config))
+    )
     return list(payload.get("items", []))
 
 
@@ -1242,10 +1268,12 @@ def outbox_recovery_headers(
     attempt: int,
     service: str,
 ) -> dict[str, str]:
-    return {
+    headers = {
         "X-Operator-Id": config.operator_id,
         "X-Correlation-Id": f"{correlation_id}-{attempt:02d}-{service}",
     }
+    headers.update(admin_auth_headers(config))
+    return headers
 
 
 def seed_product(client: ApiClient, config: ScenarioConfig, product_code: str) -> None:
@@ -1341,9 +1369,13 @@ def create_order(
 
 
 def cancel_delayed_order(client: ApiClient, config: ScenarioConfig, order_id: str, product_code: str) -> None:
+    headers = {
+        "Idempotency-Key": f"idem-admin-cancel-{product_code}-{order_id}",
+    }
+    headers.update(admin_auth_headers(config))
     client.post(
         f"{config.order_api_url}/api/admin/orders/{order_id}/cancel",
-        headers={"Idempotency-Key": f"idem-admin-cancel-{product_code}-{order_id}"},
+        headers=headers,
     )
 
 
@@ -1464,7 +1496,7 @@ def create_order_with_retryable_replay_pending(
 def relay_wave(client: ApiClient, config: ScenarioConfig) -> None:
     relay_order = ["order", "inventory", "order", "payment", "order", "inventory"]
     for service in relay_order:
-        client.post(outbox_retry_url(config, service))
+        client.post(outbox_retry_url(config, service), headers=admin_auth_headers(config))
         time.sleep(config.wait_seconds)
 
 
@@ -1473,7 +1505,7 @@ def relay_wave_concurrently(client: ApiClient, config: ScenarioConfig) -> None:
 
     def retry_all_services() -> None:
         for service in relay_order:
-            client.post(outbox_retry_url(config, service))
+            client.post(outbox_retry_url(config, service), headers=admin_auth_headers(config))
 
     with ThreadPoolExecutor(max_workers=config.relay_workers) as executor:
         futures = [executor.submit(retry_all_services) for _ in range(config.relay_workers)]
@@ -1546,6 +1578,11 @@ def add_runtime_arguments(
         action="store_true",
         help="Skip the preflight failure when existing PENDING outbox rows are present.",
     )
+    command_parser.add_argument(
+        "--admin-bearer-token",
+        default=os.getenv("STOCKRUSH_ADMIN_BEARER_TOKEN"),
+        help="Admin bearer token for Gateway admin routes. Defaults to STOCKRUSH_ADMIN_BEARER_TOKEN.",
+    )
 
 
 def add_outbox_recovery_arguments(command_parser: argparse.ArgumentParser) -> None:
@@ -1577,6 +1614,11 @@ def add_outbox_recovery_arguments(command_parser: argparse.ArgumentParser) -> No
         "--skip-requeue-failed",
         action="store_true",
         help="Retry pending rows only. FAILED rows remain reported as recovery errors.",
+    )
+    command_parser.add_argument(
+        "--admin-bearer-token",
+        default=os.getenv("STOCKRUSH_ADMIN_BEARER_TOKEN"),
+        help="Admin bearer token for Gateway admin routes. Defaults to STOCKRUSH_ADMIN_BEARER_TOKEN.",
     )
 
 
@@ -1701,6 +1743,7 @@ def config_from_args(args: argparse.Namespace) -> ScenarioConfig:
         env_file=getattr(args, "env_file", None),
         kafka_service=getattr(args, "kafka_service", "kafka"),
         outage_observation_seconds=getattr(args, "outage_observation_seconds", 2.0),
+        admin_bearer_token=normalize_admin_bearer_token(getattr(args, "admin_bearer_token", None)),
     )
 
 

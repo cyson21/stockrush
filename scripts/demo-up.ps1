@@ -4,7 +4,7 @@ $RootDir = Resolve-Path (Join-Path $PSScriptRoot "..")
 $ComposeFile = Join-Path $RootDir "infra/demo/docker-compose.yml"
 $EnvFile = Join-Path $RootDir "infra/demo/.env"
 $EnvExample = Join-Path $RootDir "infra/demo/.env.example"
-$ExpectedEnvRev = "2026-05-14-demo-cicd-v3"
+$ExpectedEnvRev = "2026-05-15-security-v1"
 
 $RefreshEnv = $false
 $SkipPortCheck = $false
@@ -77,6 +77,7 @@ function Test-DemoPorts {
     @{ Name = "REDIS_HOST_PORT"; Default = 26379; Service = "redis"; Target = 6379 },
     @{ Name = "KAFKA_HOST_PORT"; Default = 29092; Service = "kafka"; Target = 9092 },
     @{ Name = "KAFKA_UI_PORT"; Default = 29090; Service = "kafka-ui"; Target = 8080 },
+    @{ Name = "KEYCLOAK_HOST_PORT"; Default = 28088; Service = "keycloak"; Target = 8080 },
     @{ Name = "GATEWAY_HOST_PORT"; Default = 28080; Service = "gateway"; Target = 18080 },
     @{ Name = "CATALOG_HOST_PORT"; Default = 28081; Service = "catalog-service"; Target = 18081 },
     @{ Name = "INVENTORY_HOST_PORT"; Default = 28082; Service = "inventory-service"; Target = 18082 },

@@ -83,7 +83,7 @@ Keycloak demo realm:
   - `customer.demo@stockrush.local` / customer role
   - `admin.demo@stockrush.local` / admin role
 
-Secrets are not committed. Demo-only passwords are supplied through `.env.example` and local environment overrides.
+Demo-only smoke credentials are committed only for the disposable local realm and use `*.demo@stockrush.local` users. Production credentials must be supplied outside the repository.
 
 ## Implementation Phases
 
@@ -98,7 +98,8 @@ Secrets are not committed. Demo-only passwords are supplied through `.env.exampl
 
 - Add Keycloak service to `infra/demo`.
 - Add realm import JSON for demo clients, roles, and users.
-- Add health/preflight checks to demo scripts.
+- Split token issuer and Docker-internal JWKS lookup for Gateway validation.
+- Add health/preflight checks and smoke token acquisition to demo scripts.
 
 ### P9-3. Gateway Resource Server
 
@@ -139,4 +140,3 @@ Secrets are not committed. Demo-only passwords are supplied through `.env.exampl
 - Production mTLS between services.
 - WAF/rate limiting beyond documented follow-up.
 - Passkey-only authentication.
-

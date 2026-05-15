@@ -141,7 +141,7 @@ These are known gaps, not hidden assumptions.
 - Fulfillment Service currently covers `OrderConfirmed` to `PREPARING` request creation, duplicate event handling, service API, Gateway route, and Admin App fulfillment request screen. Carrier assignment, labels, and tracking remain future scope.
 - Read Model Service currently covers order summary projection, service-local customer/admin APIs, Gateway routing, Admin Dashboard metrics and filters, late `OrderCreated` protection, and result-event retry rollback when the summary is missing. Customer product search is currently handled by Catalog API/UI; a separate product search projection and full Kafka retry/DLQ drills remain future scope.
 - Mobile customer app now has the Expo scaffold, Gateway-first API client, product/SKU stock screen tests, coupon quote tests, order creation payload/header tests, order status polling tests, Read Model order history tests, smoke preflight, and a smoke evidence collector. Android/iOS live smoke evidence and screenshots remain future scope until a simulator/emulator target is available.
-- Gateway admin authentication and role authorization are now covered by OAuth2 Resource Server tests. Customer object-level authorization, app OIDC login, and Keycloak-backed demo smoke remain current security gaps.
+- Gateway admin authentication and role authorization are now covered by OAuth2 Resource Server tests. Keycloak-backed demo smoke is wired to acquire admin/customer tokens and pass admin bearer tokens into protected Gateway routes. Customer object-level authorization and app OIDC login remain current security gaps.
 - Customer API documentation is now separated from runbook examples, but inventory customer query docs can still be expanded later.
 
 ## Related Docs

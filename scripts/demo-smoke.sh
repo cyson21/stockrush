@@ -53,8 +53,14 @@ set +a
 check_url() {
   local name="$1"
   local url="$2"
+  local header="${3:-}"
+  local curl_opts=(--max-time 10)
 
-  if curl -fsS --max-time 10 "$url" >/dev/null; then
+  if [[ -n "$header" ]]; then
+    curl_opts+=("-H" "$header")
+  fi
+
+  if curl -fsS "${curl_opts[@]}" "$url" >/dev/null; then
     printf '[ok] %s %s\n' "$name" "$url"
     return
   fi
@@ -62,6 +68,50 @@ check_url() {
   printf '[fail] %s %s\n' "$name" "$url" >&2
   docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" ps >&2 || true
   exit 1
+}
+
+wait_for_keycloak_ready() {
+  local keycloak_host_port="$1"
+  local discovery_url="http://localhost:${keycloak_host_port}/realms/stockrush/.well-known/openid-configuration"
+
+  for attempt in $(seq 1 120); do
+    if curl -fsS --max-time 5 "$discovery_url" >/dev/null; then
+      return 0
+    fi
+
+    printf '[wait] keycloak ready attempt %s/120\n' "$attempt"
+    sleep 1
+  done
+
+  printf '[fail] keycloak realm did not become ready at %s\n' "$discovery_url" >&2
+  docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" ps >&2 || true
+  exit 1
+}
+
+get_keycloak_token() {
+  local keycloak_host_port="$1"
+  local client_id="$2"
+  local username="$3"
+  local password="$4"
+  local response
+  local token
+
+  response="$(curl -fsS --max-time 10 -X POST "http://localhost:${keycloak_host_port}/realms/stockrush/protocol/openid-connect/token" \
+    -H 'Content-Type: application/x-www-form-urlencoded' \
+    --data-urlencode "client_id=${client_id}" \
+    --data-urlencode 'grant_type=password' \
+    --data-urlencode "username=${username}" \
+    --data-urlencode "password=${password}")"
+
+  token="$(printf '%s' "$response" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("access_token", ""))')"
+
+  if [[ -z "$token" ]]; then
+    printf '[fail] failed to parse access token from keycloak response\n' >&2
+    printf '%s\n' "$response" >&2
+    return 1
+  fi
+
+  printf '%s' "$token"
 }
 
 check_actuator_endpoints() {
@@ -85,7 +135,27 @@ check_url "customer-app" "http://localhost:${CUSTOMER_APP_HOST_PORT:-15173}/"
 check_url "admin-app" "http://localhost:${ADMIN_APP_HOST_PORT:-15174}/"
 check_url "catalog-products" "http://localhost:${CATALOG_HOST_PORT:-28081}/api/products?status=ON_SALE"
 check_url "inventory-stocks" "http://localhost:${INVENTORY_HOST_PORT:-28082}/api/stocks"
-check_url "gateway-read-model" "http://localhost:${GATEWAY_HOST_PORT:-28080}/api/read-model/admin/orders?page=0&size=1"
+
+KEYCLOAK_HOST_PORT="${KEYCLOAK_HOST_PORT:-28088}"
+KEYCLOAK_SMOKE_CLIENT_ID="${KEYCLOAK_SMOKE_CLIENT_ID:-stockrush-demo-smoke}"
+KEYCLOAK_SMOKE_ADMIN_USERNAME="${KEYCLOAK_SMOKE_ADMIN_USERNAME:-admin.demo@stockrush.local}"
+KEYCLOAK_SMOKE_ADMIN_PASSWORD="${KEYCLOAK_SMOKE_ADMIN_PASSWORD:-demo-admin-pass}"
+KEYCLOAK_SMOKE_CUSTOMER_USERNAME="${KEYCLOAK_SMOKE_CUSTOMER_USERNAME:-customer.demo@stockrush.local}"
+KEYCLOAK_SMOKE_CUSTOMER_PASSWORD="${KEYCLOAK_SMOKE_CUSTOMER_PASSWORD:-demo-customer-pass}"
+
+wait_for_keycloak_ready "$KEYCLOAK_HOST_PORT"
+
+ADMIN_BEARER_TOKEN="$(get_keycloak_token "$KEYCLOAK_HOST_PORT" "$KEYCLOAK_SMOKE_CLIENT_ID" "$KEYCLOAK_SMOKE_ADMIN_USERNAME" "$KEYCLOAK_SMOKE_ADMIN_PASSWORD")"
+CUSTOMER_BEARER_TOKEN="$(get_keycloak_token "$KEYCLOAK_HOST_PORT" "$KEYCLOAK_SMOKE_CLIENT_ID" "$KEYCLOAK_SMOKE_CUSTOMER_USERNAME" "$KEYCLOAK_SMOKE_CUSTOMER_PASSWORD")"
+
+printf '[ok] obtained admin/customer smoke tokens\n'
+
+check_url "gateway-read-model" "http://localhost:${GATEWAY_HOST_PORT:-28080}/api/read-model/admin/orders?page=0&size=1" "Authorization: Bearer $ADMIN_BEARER_TOKEN"
+
+if [[ -z "$CUSTOMER_BEARER_TOKEN" ]]; then
+  printf '[fail] customer bearer token is empty\n' >&2
+  exit 1
+fi
 
 "$ROOT_DIR/tools/local-e2e/local-e2e" demo-order-flow \
   --catalog-url "http://localhost:${CATALOG_HOST_PORT:-28081}" \
@@ -95,6 +165,7 @@ check_url "gateway-read-model" "http://localhost:${GATEWAY_HOST_PORT:-28080}/api
   --outbox-api-url "http://localhost:${GATEWAY_HOST_PORT:-28080}" \
   --payment-url "http://localhost:${PAYMENT_HOST_PORT:-28084}" \
   --promotion-url "http://localhost:${PROMOTION_HOST_PORT:-28085}" \
+  --admin-bearer-token "$ADMIN_BEARER_TOKEN" \
   --relay-mode automatic \
   --orders 3 \
   --initial-stock 20 \
@@ -111,6 +182,7 @@ if [[ "$skip_burst" != true ]]; then
     --outbox-api-url "http://localhost:${GATEWAY_HOST_PORT:-28080}" \
     --payment-url "http://localhost:${PAYMENT_HOST_PORT:-28084}" \
     --promotion-url "http://localhost:${PROMOTION_HOST_PORT:-28085}" \
+    --admin-bearer-token "$ADMIN_BEARER_TOKEN" \
     --relay-mode automatic \
     --orders 12 \
     --initial-stock 4 \
@@ -134,6 +206,7 @@ if [[ "$kafka_outage" == true ]]; then
     --outbox-api-url "http://localhost:${GATEWAY_HOST_PORT:-28080}" \
     --payment-url "http://localhost:${PAYMENT_HOST_PORT:-28084}" \
     --promotion-url "http://localhost:${PROMOTION_HOST_PORT:-28085}" \
+    --admin-bearer-token "$ADMIN_BEARER_TOKEN" \
     --relay-mode automatic \
     --orders 1 \
     --initial-stock 3 \

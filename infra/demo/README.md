@@ -6,7 +6,7 @@
 
 | Area | Containers |
 |---|---|
-| Infrastructure | PostgreSQL, Redis, Apache Kafka, Kafka UI |
+| Infrastructure | PostgreSQL, Redis, Apache Kafka, Kafka UI, Keycloak |
 | Backend | Gateway, Catalog, Inventory, Order, Payment, Promotion, Fulfillment, Read Model |
 | Web apps | Customer App, Admin App |
 
@@ -58,6 +58,7 @@ WSL2 shell users can use the macOS/Linux shell scripts.
 | Promotion Service | `http://localhost:28085` |
 | Fulfillment Service | `http://localhost:28086` |
 | Read Model Service | `http://localhost:28087` |
+| Keycloak | `http://localhost:28088` |
 | Kafka UI | `http://localhost:29090` |
 
 ## Environment
@@ -80,7 +81,13 @@ Inside the Docker network, services use:
 
 - PostgreSQL: `postgres:5432`
 - Kafka: `kafka:19092`
+- Keycloak: `keycloak:8080`
 - Gateway upstream URLs: Docker service names such as `http://order-service:18083`
+
+Keycloak demo setup:
+
+- Realm import file: `infra/demo/keycloak/stockrush-realm.json`
+- Demo credentials and endpoints are controlled by `infra/demo/.env.example`
 
 ## Web App Routing
 
@@ -95,7 +102,9 @@ The web app containers serve Vite build output through Nginx. Nginx also proxies
 
 ## Current Smoke Coverage
 
-`demo-smoke` checks service Actuator `health`, `info`, and `metrics`, web app roots, direct Catalog/Inventory read endpoints, Gateway Read Model routing, the `demo-order-flow` E2E runner, and the high-volume `burst-idempotency` runner. Use `--skip-burst` for a quicker local check when the burst scenario is not needed.
+`demo-smoke` checks service Actuator `health`, `info`, and `metrics`, web app roots, direct Catalog/Inventory read endpoints, Gateway Read Model routing with admin bearer token, the `demo-order-flow` E2E runner, and the high-volume `burst-idempotency` runner. Use `--skip-burst` for a quicker local check when the burst scenario is not needed.
+
+The smoke flow now requests fresh admin/customer tokens from Keycloak before local-e2e calls, then passes `--admin-bearer-token` to protected admin commands.
 
 The order-flow runner seeds a unique demo product/SKU and coupon, verifies coupon quote through Gateway, creates `CARD`, `FAIL_CARD`, and `DELAY_CARD` orders through Gateway, cancels the delayed order through the admin API, relays service outboxes, and checks final order/stock/outbox state. The `CARD` order must keep the expected `couponCode`, `discountAmount`, and `payableAmount`.
 

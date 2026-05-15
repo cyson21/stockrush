@@ -9,6 +9,7 @@ spring:
       resourceserver:
         jwt:
           issuer-uri: ${STOCKRUSH_SECURITY_ISSUER_URI:http://localhost:28088/realms/stockrush}
+          jwk-set-uri: ${STOCKRUSH_SECURITY_JWK_SET_URI:http://localhost:28088/realms/stockrush/protocol/openid-connect/certs}
 
 stockrush:
   routes:
