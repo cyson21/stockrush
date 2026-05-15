@@ -22,6 +22,7 @@ StockRush는 한정 판매 주문 흐름에서 Kafka, Outbox, Saga를 묶은 엔
 - [로컬 E2E 실행 가이드](docs/runbooks/local-e2e.md)
 - [로컬 인프라 실행 가이드](infra/local/README.md)
 - [이식형 데모 런타임 실행 가이드](infra/demo/README.md)
+- [Docker 정리 Runbook](docs/runbooks/docker-cleanup.md)
 - [고객 앱 가이드](apps/customer-app/README.md)
 - [관리자 앱 가이드](apps/admin-app/README.md)
 - [모바일 앱 가이드](apps/mobile-app/README.md)
