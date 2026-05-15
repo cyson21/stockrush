@@ -68,6 +68,7 @@ Windows 11 PowerShell에서는 `.\scripts\demo-up.ps1`, `.\scripts\demo-smoke.ps
 - [Customer App Flow](docs/architecture/customer-app-flow.md)
 - [Admin App Flow](docs/architecture/admin-app-flow.md)
 - [Mobile App Flow](docs/architecture/mobile-app-flow.md)
+- [Product Discovery](docs/architecture/product-discovery.md)
 - [Event Envelope](docs/architecture/events.md)
 - [Outbox and Consumer Idempotency](docs/architecture/outbox.md)
 - [Observability Baseline](docs/architecture/observability.md)
