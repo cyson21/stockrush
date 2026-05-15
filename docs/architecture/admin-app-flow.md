@@ -69,28 +69,25 @@ Products
 | 상품 목록 | `GET /api/products?status=ON_SALE` | 운영 대상 상품 선택과 재고 조회 기준 |
 | 상품 등록 | `POST /api/admin/products` | 상품코드, 상품명, 판매 상태, 판매가 등록 |
 | 상품 수정 | `PUT /api/admin/products/{productCode}` | 상품명, 판매 상태, 판매가 수정 |
-| 재고 목록 | `GET /api/stocks?productCode={productCode}` | 상품별 SKU 재고와 예약 수량 확인 |
-| 재고 설정 | `PUT /api/stocks/{skuId}` | SKU 기준 재고 수량 설정 또는 신규 SKU 초기화 |
+| 재고 목록 | `GET /api/admin/stocks?productCode={productCode}` | 상품별 SKU 재고와 예약 수량 확인 |
+| 재고 설정 | `PUT /api/admin/stocks/{skuId}` | SKU 기준 재고 수량 설정 또는 신규 SKU 초기화 |
 | Outbox 목록 | `GET /api/admin/outbox-services/{service}/events` | 각 서비스의 pending/failed 이벤트 |
 | Outbox retry | `POST /api/admin/outbox-services/{service}/events/retry` | 각 서비스 relay를 수동 실행 |
 | Outbox failed requeue | `POST /api/admin/outbox-services/{service}/events/failed/requeue` | failed 이벤트를 pending 상태로 되돌려 다음 relay 대상에 포함 |
 
 ## Service Routing
 
-Vite 개발 서버는 서비스별 prefix를 backend service로 proxy한다.
+Vite 개발 서버는 보호된 관리자 경로를 Gateway로 proxy한다.
 
 | Prefix | Target |
 |---|---|
-| `/catalog` | `http://localhost:18081` |
-| `/orders` | `http://localhost:18083` |
-| `/inventory` | `http://localhost:18082` |
-| `/payment` | `http://localhost:18084` |
+| `/api/admin` | `http://localhost:18080` |
 | `/api/admin/outbox-services` | `http://localhost:18080` |
 | `/api/admin/coupon-usages` | `http://localhost:18080` |
 | `/api/admin/fulfillment-requests` | `http://localhost:18080` |
 | `/api/read-model` | `http://localhost:18080` |
 
-배포 또는 gateway 환경에서는 서비스별 API는 `VITE_API_BASE_URL` 또는 서비스별 base URL 환경 변수로 주소를 바꾼다. Outbox 운영 API, 쿠폰 사용 이력 API, 출고 요청 이력 API, Read Model Gateway route는 `VITE_GATEWAY_API_BASE_URL`이 있으면 그 주소를 사용하고, 없으면 same-origin Gateway path를 사용한다.
+배포 또는 gateway 환경에서는 `VITE_GATEWAY_API_BASE_URL`이 있으면 그 주소를 사용하고, 없으면 same-origin Gateway path를 사용한다.
 
 ## Boundaries
 

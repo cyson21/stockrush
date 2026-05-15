@@ -3,6 +3,7 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-nati
 import { ApiClientError } from '../api/client';
 import { listOrderHistory } from '../api/readModel';
 import { getDefaultMemberId } from '../config/runtime';
+import { useAuth } from '../auth/AuthContext';
 import type { OrderSummary } from '../types/api';
 
 type LoadStatus = 'idle' | 'loading' | 'ready' | 'error';
@@ -28,8 +29,15 @@ export default function OrderHistoryScreen() {
   const [status, setStatus] = useState<LoadStatus>('idle');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const memberId = getDefaultMemberId();
+  const { isAuthenticated } = useAuth();
 
   const loadOrders = async () => {
+    if (!isAuthenticated) {
+      setStatus('error');
+      setErrorMessage('로그인 후 주문 내역을 조회할 수 있습니다.');
+      return;
+    }
+
     setStatus('loading');
     setErrorMessage(null);
 
@@ -53,13 +61,17 @@ export default function OrderHistoryScreen() {
 
       <Pressable
         accessibilityRole="button"
-        disabled={status === 'loading'}
+        disabled={status === 'loading' || !isAuthenticated}
         onPress={() => void loadOrders()}
-        style={[styles.secondaryButton, status === 'loading' ? styles.disabledButton : null]}
+        style={[
+          styles.secondaryButton,
+          status === 'loading' || !isAuthenticated ? styles.disabledButton : null,
+        ]}
       >
         <Text style={styles.secondaryButtonText}>{status === 'loading' ? '내역 조회 중' : '내역 새로고침'}</Text>
       </Pressable>
 
+      {!isAuthenticated ? <Text style={styles.errorText}>로그인 후 주문 내역을 조회할 수 있습니다.</Text> : null}
       {status === 'idle' ? <Text style={styles.stateText}>주문 내역 대기</Text> : null}
       {status === 'error' ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
       {status === 'ready' && orders.length === 0 ? <Text style={styles.stateText}>표시할 주문 내역이 없습니다.</Text> : null}

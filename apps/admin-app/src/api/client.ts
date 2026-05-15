@@ -1,4 +1,5 @@
 import type { ApiError, ApiResponse } from '../types/admin';
+import { getStoredAccessToken } from '../auth';
 
 type ServiceName = 'order' | 'inventory' | 'payment' | 'catalog';
 
@@ -71,7 +72,20 @@ export class ApiClientError extends Error {
 }
 
 export async function request<T>(input: RequestInfo | URL, init?: RequestInit): Promise<T> {
-  const response = await fetch(input, init);
+  const authToken = getStoredAccessToken();
+  const headers = new Headers(init?.headers ?? {});
+
+  if (authToken) {
+    headers.set('Authorization', `Bearer ${authToken}`);
+  } else {
+    throw new ApiClientError(401, {
+      code: 'UNAUTHORIZED',
+      message: '인증 토큰이 없습니다.',
+      details: {},
+    });
+  }
+
+  const response = await fetch(input, { ...init, headers });
   let body: ApiResponse<T> | null = null;
 
   try {

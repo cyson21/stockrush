@@ -5,6 +5,10 @@ export default defineConfig({
   plugins: [react()],
   server: {
     proxy: {
+      '/api/admin': {
+        target: 'http://localhost:18080',
+        changeOrigin: true,
+      },
       '/api/admin/outbox-services': {
         target: 'http://localhost:18080',
         changeOrigin: true,
@@ -20,26 +24,6 @@ export default defineConfig({
       '/api/read-model': {
         target: 'http://localhost:18080',
         changeOrigin: true,
-      },
-      '/inventory': {
-        target: 'http://localhost:18082',
-        changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/inventory/, ''),
-      },
-      '/orders': {
-        target: 'http://localhost:18083',
-        changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/orders/, ''),
-      },
-      '/payment': {
-        target: 'http://localhost:18084',
-        changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/payment/, ''),
-      },
-      '/catalog': {
-        target: 'http://localhost:18081',
-        changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/catalog/, ''),
       },
     },
   },

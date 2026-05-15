@@ -2,8 +2,15 @@ import { act, cleanup, render, screen, waitFor, within } from '@testing-library/
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
+import {
+  clearAuthSession,
+  getAuthSession,
+  setAuthSessionForTest,
+} from './auth/oidc';
 
 type ApiMode = 'success' | 'error';
+
+const TEST_ACCESS_TOKEN = 'test-access-token';
 
 const jsonResponse = (body: unknown, status = 200) =>
   Promise.resolve(
@@ -12,6 +19,23 @@ const jsonResponse = (body: unknown, status = 200) =>
       headers: { 'Content-Type': 'application/json' },
     }),
   );
+
+const getAuthorizationHeaderValue = (headers?: HeadersInit): string | null => {
+  if (!headers) {
+    return null;
+  }
+
+  if (headers instanceof Headers) {
+    return headers.get('Authorization');
+  }
+
+  if (Array.isArray(headers)) {
+    const matched = headers.find(([name]) => name.toLowerCase() === 'authorization');
+    return matched ? matched[1] : null;
+  }
+
+  return headers.Authorization ?? headers['authorization'] ?? null;
+};
 
 const errorResponse = (code: string, message: string, status = 500) =>
   jsonResponse({
@@ -201,7 +225,7 @@ describe('Customer order flow', () => {
   const flushMicrotasks = () => new Promise((resolve) => setTimeout(resolve, 0));
 
   const getPollCallCount = (orderId: string, calls: ReadonlyArray<Parameters<typeof fetch>>) =>
-    calls.filter((call) => String(call[0]) === `/orders/api/orders/${orderId}`).length;
+    calls.filter((call) => String(call[0]) === `/api/orders/${orderId}`).length;
 
   const triggerPollUntilProgress = async (orderId: string, intervalCallbacks: Array<() => Promise<unknown> | void>, beforeCount: number) => {
     for (const callback of intervalCallbacks) {
@@ -227,8 +251,11 @@ describe('Customer order flow', () => {
   let pollFailureOrderIds = new Set<string>();
 
   beforeEach(() => {
+    vi.useRealTimers();
     vi.stubGlobal('fetch', fetchMock);
     fetchMock.mockClear();
+    clearAuthSession();
+    setAuthSessionForTest(TEST_ACCESS_TOKEN, 3600);
     quoteMode = 'success';
     productsMode = 'success';
     stocksMode = 'success';
@@ -301,7 +328,7 @@ describe('Customer order flow', () => {
         });
       }
 
-      if (url === '/orders/api/orders' && method === 'POST') {
+      if (url === '/api/orders' && method === 'POST') {
         const requestBody = JSON.parse(String(init?.body)) as {
           couponCode?: string;
           paymentMethod?: string;
@@ -358,8 +385,8 @@ describe('Customer order flow', () => {
         });
       }
 
-      if (url.startsWith('/orders/api/orders/')) {
-        const orderId = url.substring('/orders/api/orders/'.length);
+      if (url.startsWith('/api/orders/')) {
+        const orderId = url.substring('/api/orders/'.length);
         if (pollFailureOrderIds.has(orderId)) {
           return errorResponse('ORDER_STATUS_FAILED', '주문 상태 조회에 실패했습니다.', 503);
         }
@@ -406,7 +433,7 @@ describe('Customer order flow', () => {
     expect(screen.getByText('FAILED')).toBeInTheDocument();
 
     const orderRequest = fetchMock.mock.calls.find(
-      ([url, init]) => url === '/orders/api/orders' && init?.method === 'POST',
+      ([url, init]) => url === '/api/orders' && init?.method === 'POST',
     );
     expect(orderRequest).toBeDefined();
 
@@ -433,7 +460,7 @@ describe('Customer order flow', () => {
     expect(within(statusPanel).getByText('FAIL_CARD')).toBeInTheDocument();
 
     await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledWith('/orders/api/orders/ord_app_001', expect.objectContaining({ method: 'GET' }));
+      expect(fetchMock).toHaveBeenCalledWith('/api/orders/ord_app_001', expect.objectContaining({ method: 'GET' }));
     });
   });
 
@@ -509,7 +536,7 @@ describe('Customer order flow', () => {
 
     const orderRequest = fetchMock.mock.calls.find(
       ([url, init]) =>
-        url === '/orders/api/orders' &&
+        url === '/api/orders' &&
         init?.method === 'POST' &&
         JSON.parse(String(init.body)).paymentMethod === 'DELAY_CARD',
     );
@@ -521,7 +548,7 @@ describe('Customer order flow', () => {
 
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(
-        '/orders/api/orders/ord_app_delay_001',
+        '/api/orders/ord_app_delay_001',
         expect.objectContaining({ method: 'GET' }),
       );
     });
@@ -548,7 +575,7 @@ describe('Customer order flow', () => {
     await user.click(screen.getByRole('button', { name: '주문 생성' }));
 
     const orderRequest = fetchMock.mock.calls.find(
-      ([url, init]) => url === '/orders/api/orders' && init?.method === 'POST',
+      ([url, init]) => url === '/api/orders' && init?.method === 'POST',
     );
     expect(orderRequest).toBeDefined();
     expect(JSON.parse(String(orderRequest?.[1]?.body))).toMatchObject({
@@ -584,7 +611,7 @@ describe('Customer order flow', () => {
     expect(screen.getByText('₩0')).toBeInTheDocument();
     expect(screen.getAllByText('₩12,000').length).toBeGreaterThan(0);
     expect(screen.getByRole('button', { name: '주문 생성' })).toBeDisabled();
-    expect(fetchMock.mock.calls.some(([url, init]) => url === '/orders/api/orders' && init?.method === 'POST')).toBe(false);
+    expect(fetchMock.mock.calls.some(([url, init]) => url === '/api/orders' && init?.method === 'POST')).toBe(false);
   });
 
   it('blocks checkout when coupon quote returns not applied', async () => {
@@ -600,7 +627,7 @@ describe('Customer order flow', () => {
     expect(screen.getByText('할인 금액')).toBeInTheDocument();
     expect(screen.getByText('₩0')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '주문 생성' })).toBeDisabled();
-    expect(fetchMock.mock.calls.some(([url, init]) => url === '/orders/api/orders' && init?.method === 'POST')).toBe(false);
+    expect(fetchMock.mock.calls.some(([url, init]) => url === '/api/orders' && init?.method === 'POST')).toBe(false);
   });
 
   it('initial product list load failure shows alert and blocks checkout', async () => {
@@ -724,7 +751,7 @@ describe('Customer order flow', () => {
 
     await screen.findByText('ord_app_card_001');
     await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledWith('/orders/api/orders/ord_app_card_001', expect.objectContaining({ method: 'GET' }));
+      expect(fetchMock).toHaveBeenCalledWith('/api/orders/ord_app_card_001', expect.objectContaining({ method: 'GET' }));
     });
 
     await triggerPollUntilProgress('ord_app_card_001', intervalCallbacks, 1);
@@ -768,5 +795,76 @@ describe('Customer order flow', () => {
     const payableRow = screen.getByText('결제 예정 금액').parentElement;
     expect(payableRow).toHaveTextContent('₩24,000');
     expect(screen.getByRole('button', { name: '주문 생성' })).toBeEnabled();
+  });
+
+  it('shows 인증 상태 and blocks checkout without an access token', async () => {
+    const user = userEvent.setup();
+    clearAuthSession();
+
+    render(<App />);
+
+    expect(screen.getByText('인증 상태: 미인증')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '로그인' })).toBeInTheDocument();
+
+    await user.click(await screen.findByRole('button', { name: /Limited Hoodie/ }));
+    expect(await screen.findByText('SKU-001')).toBeInTheDocument();
+    await user.type(screen.getByLabelText('수량'), '1');
+    await user.type(screen.getByLabelText('회원 ID'), 'member-portfolio');
+
+    expect(screen.getByRole('button', { name: '주문 생성' })).toBeDisabled();
+    expect(getAuthSession()).toBeNull();
+  });
+
+  it('attaches access token to protected order APIs', async () => {
+    const user = userEvent.setup();
+
+    render(<App />);
+
+    await user.click(await screen.findByRole('button', { name: /Limited Hoodie/ }));
+    expect(await screen.findByText('SKU-001')).toBeInTheDocument();
+    await user.type(screen.getByLabelText('회원 ID'), 'member-portfolio');
+
+    await user.click(screen.getByRole('button', { name: '주문 생성' }));
+
+    await screen.findByText('ord_app_card_001');
+    const createCall = fetchMock.mock.calls.find(
+      ([url, init]) => url === '/api/orders' && init?.method === 'POST',
+    );
+    expect(createCall).toBeDefined();
+    expect(getAuthorizationHeaderValue(createCall?.[1]?.headers)).toBe(`Bearer ${TEST_ACCESS_TOKEN}`);
+
+    await waitFor(() => {
+      expect(
+        fetchMock.mock.calls.some(([url, init]) =>
+          url === '/api/orders/ord_app_card_001' &&
+          init?.method === 'GET' &&
+          getAuthorizationHeaderValue(init?.headers) === `Bearer ${TEST_ACCESS_TOKEN}`,
+        ),
+      ).toBe(true);
+    });
+
+    const catalogCall = fetchMock.mock.calls.find(([url]) => String(url).startsWith('/catalog/api/products'));
+    expect(getAuthorizationHeaderValue(catalogCall?.[1]?.headers)).toBeNull();
+    const stockCall = fetchMock.mock.calls.find(([url]) => String(url) === '/inventory/api/stocks?productCode=LIMITED-001');
+    expect(getAuthorizationHeaderValue(stockCall?.[1]?.headers)).toBeNull();
+  });
+
+  it('clears authentication state after logout', async () => {
+    const user = userEvent.setup();
+
+    render(<App />);
+
+    expect(screen.getByText('인증 상태: 인증됨')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '로그아웃' })).toBeInTheDocument();
+    expect(getAuthSession()).not.toBeNull();
+
+    await user.click(await screen.findByRole('button', { name: /Limited Hoodie/ }));
+    await user.type(screen.getByLabelText('회원 ID'), 'member-portfolio');
+    await user.click(screen.getByRole('button', { name: '로그아웃' }));
+
+    expect(screen.getByText('인증 상태: 미인증')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '로그인' })).toBeInTheDocument();
+    expect(getAuthSession()).toBeNull();
+    expect(screen.getByRole('button', { name: '주문 생성' })).toBeDisabled();
   });
 });

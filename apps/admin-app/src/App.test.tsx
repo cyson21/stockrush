@@ -2,6 +2,7 @@ import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
+import { AUTH_ACCESS_TOKEN_STORAGE_KEY } from './auth';
 
 const toJsonResponse = (body: unknown, status = 200) =>
   Promise.resolve(
@@ -40,12 +41,75 @@ function headerValue(headers: HeadersInit | undefined, name: string): string {
   return normalized.get(name) ?? '';
 }
 
+function isAdminApiCall(input: RequestInfo | URL): boolean {
+  const request = new URL(String(input), 'http://localhost:5173');
+  const pathname = request.pathname;
+  return pathname.startsWith('/orders') || pathname.startsWith('/api') || pathname.startsWith('/inventory') || pathname.startsWith('/catalog');
+}
+
+const TEST_ACCESS_TOKEN = 'test-admin-token';
+
+function createMockStorage(): Storage {
+  const items = new Map<string, string>();
+
+  return {
+    clear() {
+      items.clear();
+    },
+    getItem(key: string) {
+      return items.get(key) ?? null;
+    },
+    key(index: number) {
+      return [...items.keys()][index] ?? null;
+    },
+    removeItem(key: string) {
+      items.delete(key);
+    },
+    setItem(key: string, value: string) {
+      items.set(key, value);
+    },
+    get length() {
+      return items.size;
+    },
+    get [Symbol.toStringTag]() {
+      return 'Storage';
+    },
+  } as Storage;
+}
+
+function ensureMockStorage() {
+  const storage = createMockStorage();
+
+  Object.defineProperty(window, 'localStorage', {
+    value: storage,
+    configurable: true,
+    writable: true,
+  });
+
+  Object.defineProperty(globalThis, 'localStorage', {
+    value: storage,
+    configurable: true,
+    writable: true,
+  });
+}
+
+function setAuthenticatedState() {
+  localStorage.setItem(AUTH_ACCESS_TOKEN_STORAGE_KEY, TEST_ACCESS_TOKEN);
+}
+
+function clearAuthenticatedState() {
+  localStorage.removeItem(AUTH_ACCESS_TOKEN_STORAGE_KEY);
+}
+
 describe('admin app operations', () => {
   const fetchMock = vi.fn<typeof fetch>();
   let defaultRequestHandler: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 
   beforeEach(() => {
+    ensureMockStorage();
     vi.stubGlobal('fetch', fetchMock);
+    fetchMock.mockClear();
+    setAuthenticatedState();
 
     const catalogProducts = [
       {
@@ -73,7 +137,7 @@ describe('admin app operations', () => {
       const method = init?.method ?? 'GET';
       const requestBody = init?.body ? JSON.parse(String(init.body)) : null;
 
-      if (request.pathname === '/orders/api/admin/orders' && method === 'GET') {
+      if (request.pathname === '/api/admin/orders' && method === 'GET') {
         return toJsonResponse(
           buildResponse(true, {
             page: 0,
@@ -108,7 +172,7 @@ describe('admin app operations', () => {
       }
 
       if (
-        request.pathname.startsWith('/orders/api/admin/orders/') &&
+        request.pathname.startsWith('/api/admin/orders/') &&
         request.pathname.endsWith('/saga') &&
         method === 'GET'
       ) {
@@ -310,14 +374,14 @@ describe('admin app operations', () => {
         return toJsonResponse(buildResponse(true, { updated: 1 }), 200);
       }
 
-      if (request.pathname === '/catalog/api/products' && method === 'GET') {
+      if (request.pathname === '/api/admin/products' && method === 'GET') {
         return toJsonResponse(
           buildResponse(true, catalogProducts.filter((product) => request.searchParams.get('status') === product.status)),
           200,
         );
       }
 
-      if (request.pathname === '/catalog/api/admin/products' && method === 'POST') {
+      if (request.pathname === '/api/admin/products' && method === 'POST') {
         const key = headerValue(init?.headers, 'Idempotency-Key');
         expect(key).not.toBe('');
         const payload = requestBody;
@@ -339,7 +403,7 @@ describe('admin app operations', () => {
         );
       }
 
-      if (request.pathname === '/catalog/api/admin/products/LAPTOP-001' && method === 'PUT') {
+      if (request.pathname === '/api/admin/products/LAPTOP-001' && method === 'PUT') {
         const key = headerValue(init?.headers, 'Idempotency-Key');
         expect(key).not.toBe('');
         const payload = requestBody;
@@ -364,7 +428,7 @@ describe('admin app operations', () => {
         );
       }
 
-      if (request.pathname === '/inventory/api/stocks' && method === 'GET') {
+      if (request.pathname === '/api/admin/stocks' && method === 'GET') {
         const productCode = request.searchParams.get('productCode');
         return toJsonResponse(
           buildResponse(
@@ -375,8 +439,8 @@ describe('admin app operations', () => {
         );
       }
 
-      if (request.pathname.startsWith('/inventory/api/stocks/') && method === 'PUT') {
-        const pathSkuId = request.pathname.replace('/inventory/api/stocks/', '');
+      if (request.pathname.startsWith('/api/admin/stocks/') && method === 'PUT') {
+        const pathSkuId = request.pathname.replace('/api/admin/stocks/', '');
         const payload = requestBody as { productCode: string; availableQuantity: number };
         const previous = stockBySku.get(pathSkuId);
         const updated = {
@@ -408,6 +472,7 @@ describe('admin app operations', () => {
     cleanup();
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
+    clearAuthenticatedState();
   });
 
   it('loads orders and fetches selected order saga', async () => {
@@ -420,7 +485,7 @@ describe('admin app operations', () => {
 
     await waitFor(() => {
       const sagaRequests = fetchMock.mock.calls.filter(([url]) =>
-        String(url).includes('/orders/api/admin/orders/ord_admin_002/saga'),
+        String(url).includes('/api/admin/orders/ord_admin_002/saga'),
       );
       expect(sagaRequests.length).toBeGreaterThanOrEqual(1);
     });
@@ -779,7 +844,7 @@ describe('admin app operations', () => {
       const request = new URL(String(input), 'http://localhost:5173');
       const method = init?.method ?? 'GET';
 
-      if (request.pathname === '/orders/api/admin/orders' && method === 'GET') {
+      if (request.pathname === '/api/admin/orders' && method === 'GET') {
         return toJsonResponse(
           buildResponse(true, {
             page: 0,
@@ -802,7 +867,7 @@ describe('admin app operations', () => {
         );
       }
 
-      if (request.pathname === '/orders/api/admin/orders/ord_admin_delay_001/saga' && method === 'GET') {
+      if (request.pathname === '/api/admin/orders/ord_admin_delay_001/saga' && method === 'GET') {
         return toJsonResponse(
           buildResponse(true, {
             orderId: 'ord_admin_delay_001',
@@ -818,7 +883,7 @@ describe('admin app operations', () => {
         );
       }
 
-      if (request.pathname === '/orders/api/admin/orders/ord_admin_delay_001/cancel' && method === 'POST') {
+      if (request.pathname === '/api/admin/orders/ord_admin_delay_001/cancel' && method === 'POST') {
         expect(headerValue(init?.headers, 'Idempotency-Key')).toMatch(/^admin-order-cancel-/);
         return toJsonResponse(
           buildResponse(true, {
@@ -845,7 +910,7 @@ describe('admin app operations', () => {
     expect(screen.getAllByText('PAYMENT_CANCEL_REQUESTED').length).toBeGreaterThanOrEqual(1);
     const cancelCalls = fetchMock.mock.calls.filter(
       ([url, init]) =>
-        String(url).includes('/orders/api/admin/orders/ord_admin_delay_001/cancel') &&
+        String(url).includes('/api/admin/orders/ord_admin_delay_001/cancel') &&
         (init?.method ?? 'GET') === 'POST',
     );
     expect(cancelCalls.length).toBe(1);
@@ -859,7 +924,7 @@ describe('admin app operations', () => {
       const request = new URL(String(input), 'http://localhost:5173');
       const method = init?.method ?? 'GET';
 
-      if (request.pathname === '/orders/api/admin/orders' && method === 'GET') {
+      if (request.pathname === '/api/admin/orders' && method === 'GET') {
         return toJsonResponse(
           buildResponse(true, {
             page: 0,
@@ -882,7 +947,7 @@ describe('admin app operations', () => {
         );
       }
 
-      if (request.pathname === '/orders/api/admin/orders/ord_admin_delay_retry_001/saga' && method === 'GET') {
+      if (request.pathname === '/api/admin/orders/ord_admin_delay_retry_001/saga' && method === 'GET') {
         return toJsonResponse(
           buildResponse(true, {
             orderId: 'ord_admin_delay_retry_001',
@@ -898,7 +963,7 @@ describe('admin app operations', () => {
         );
       }
 
-      if (request.pathname === '/orders/api/admin/orders/ord_admin_delay_retry_001/cancel' && method === 'POST') {
+      if (request.pathname === '/api/admin/orders/ord_admin_delay_retry_001/cancel' && method === 'POST') {
         attempt += 1;
         idempotencyKeys.push(headerValue(init?.headers, 'Idempotency-Key'));
         if (attempt === 1) {
@@ -981,7 +1046,7 @@ describe('admin app operations', () => {
     });
 
     const createCalls = fetchMock.mock.calls.filter(
-      ([url, init]) => String(url).includes('/catalog/api/admin/products') && (init?.method ?? 'GET') === 'POST',
+      ([url, init]) => String(url).includes('/api/admin/products') && (init?.method ?? 'GET') === 'POST',
     );
     expect(createCalls.length).toBe(1);
     const [, createInit] = createCalls[0];
@@ -1009,7 +1074,7 @@ describe('admin app operations', () => {
 
     const updateCalls = fetchMock.mock.calls.filter(
       ([url, init]) =>
-        String(url).includes('/catalog/api/admin/products/LAPTOP-001') && (init?.method ?? 'GET') === 'PUT',
+        String(url).includes('/api/admin/products/LAPTOP-001') && (init?.method ?? 'GET') === 'PUT',
     );
     expect(updateCalls.length).toBe(1);
     const [, updateInit] = updateCalls[0];
@@ -1032,7 +1097,7 @@ describe('admin app operations', () => {
       const request = new URL(String(input), 'http://localhost:5173');
       const method = init?.method ?? 'GET';
 
-      if (request.pathname === '/catalog/api/admin/products' && method === 'POST') {
+      if (request.pathname === '/api/admin/products' && method === 'POST') {
         attempt += 1;
         const key = headerValue(init?.headers, 'Idempotency-Key');
         idempotencyKeys.push(key);
@@ -1096,7 +1161,7 @@ describe('admin app operations', () => {
 
     const stockCalls = fetchMock.mock.calls.filter(
       ([url, init]) =>
-        String(url).includes('/inventory/api/stocks/SKU-001') && (init?.method ?? 'GET') === 'PUT',
+        String(url).includes('/api/admin/stocks/SKU-001') && (init?.method ?? 'GET') === 'PUT',
     );
     expect(stockCalls.length).toBe(1);
     const [, stockInit] = stockCalls[0];
@@ -1127,7 +1192,7 @@ describe('admin app operations', () => {
     });
 
     const stockCalls = fetchMock.mock.calls.filter(
-      ([url, init]) => String(url).includes('/inventory/api/stocks/SKU-NEW') && (init?.method ?? 'GET') === 'PUT',
+      ([url, init]) => String(url).includes('/api/admin/stocks/SKU-NEW') && (init?.method ?? 'GET') === 'PUT',
     );
     expect(stockCalls.length).toBe(1);
     const [, stockInit] = stockCalls[0];
@@ -1140,7 +1205,7 @@ describe('admin app operations', () => {
       const request = new URL(String(input), 'http://localhost:5173');
       const method = init?.method ?? 'GET';
 
-      if (request.pathname === '/orders/api/admin/orders' && method === 'GET') {
+      if (request.pathname === '/api/admin/orders' && method === 'GET') {
         return buildErrorResponse('ORDER_LIST_FAIL', '주문 목록 조회 실패');
       }
 
@@ -1160,7 +1225,7 @@ describe('admin app operations', () => {
       const request = new URL(String(input), 'http://localhost:5173');
       const method = init?.method ?? 'GET';
 
-      if (request.pathname === '/orders/api/admin/orders' && method === 'GET') {
+      if (request.pathname === '/api/admin/orders' && method === 'GET') {
         return toJsonResponse(
           buildResponse(true, {
             page: 0,
@@ -1194,7 +1259,7 @@ describe('admin app operations', () => {
         );
       }
 
-      if (request.pathname === '/orders/api/admin/orders/ord_admin_001/saga' && method === 'GET') {
+      if (request.pathname === '/api/admin/orders/ord_admin_001/saga' && method === 'GET') {
         return toJsonResponse(
           buildResponse(true, {
             orderId: 'ord_admin_001',
@@ -1210,7 +1275,7 @@ describe('admin app operations', () => {
         );
       }
 
-      if (request.pathname === '/orders/api/admin/orders/ord_admin_002/saga' && method === 'GET') {
+      if (request.pathname === '/api/admin/orders/ord_admin_002/saga' && method === 'GET') {
         return buildErrorResponse('SAGA_FETCH_FAILED', '주문 상세 조회 실패');
       }
 
@@ -1238,7 +1303,7 @@ describe('admin app operations', () => {
       const request = new URL(String(input), 'http://localhost:5173');
       const method = init?.method ?? 'GET';
 
-      if (request.pathname === '/orders/api/admin/orders' && method === 'GET') {
+      if (request.pathname === '/api/admin/orders' && method === 'GET') {
         return toJsonResponse(
           buildResponse(true, {
             page: 0,
@@ -1261,7 +1326,7 @@ describe('admin app operations', () => {
         );
       }
 
-      if (request.pathname === '/orders/api/admin/orders/ord_admin_ready_001/saga' && method === 'GET') {
+      if (request.pathname === '/api/admin/orders/ord_admin_ready_001/saga' && method === 'GET') {
         return toJsonResponse(
           buildResponse(true, {
             orderId: 'ord_admin_ready_001',
@@ -1295,7 +1360,7 @@ describe('admin app operations', () => {
       const request = new URL(String(input), 'http://localhost:5173');
       const method = init?.method ?? 'GET';
 
-      if (request.pathname === '/orders/api/admin/orders' && method === 'GET') {
+      if (request.pathname === '/api/admin/orders' && method === 'GET') {
         return toJsonResponse(
           buildResponse(true, {
             page: 0,
@@ -1318,7 +1383,7 @@ describe('admin app operations', () => {
         );
       }
 
-      if (request.pathname === '/orders/api/admin/orders/ord_admin_delay_retry_002/saga' && method === 'GET') {
+      if (request.pathname === '/api/admin/orders/ord_admin_delay_retry_002/saga' && method === 'GET') {
         return toJsonResponse(
           buildResponse(true, {
             orderId: 'ord_admin_delay_retry_002',
@@ -1334,7 +1399,7 @@ describe('admin app operations', () => {
         );
       }
 
-      if (request.pathname === '/orders/api/admin/orders/ord_admin_delay_retry_002/cancel' && method === 'POST') {
+      if (request.pathname === '/api/admin/orders/ord_admin_delay_retry_002/cancel' && method === 'POST') {
         attempt += 1;
         keys.push(headerValue(init?.headers, 'Idempotency-Key'));
 
@@ -1744,11 +1809,11 @@ describe('admin app operations', () => {
       const request = new URL(String(input), 'http://localhost:5173');
       const method = init?.method ?? 'GET';
 
-      if (request.pathname === '/catalog/api/products' && method === 'GET') {
+      if (request.pathname === '/api/admin/products' && method === 'GET') {
         return buildErrorResponse('PRODUCT_LIST_FAIL', '상품 목록 조회 실패');
       }
 
-      if (request.pathname === '/inventory/api/stocks' && method === 'GET') {
+      if (request.pathname === '/api/admin/stocks' && method === 'GET') {
         return buildErrorResponse('STOCK_LIST_FAIL', '재고 조회 실패');
       }
 
@@ -1777,7 +1842,7 @@ describe('admin app operations', () => {
       const request = new URL(String(input), 'http://localhost:5173');
       const method = init?.method ?? 'GET';
 
-      if (request.pathname === '/orders/api/admin/orders' && method === 'GET') {
+      if (request.pathname === '/api/admin/orders' && method === 'GET') {
         callCounts.orders += 1;
       }
 
@@ -1785,7 +1850,7 @@ describe('admin app operations', () => {
         callCounts.outbox += 1;
       }
 
-      if (request.pathname === '/catalog/api/products' && method === 'GET') {
+      if (request.pathname === '/api/admin/products' && method === 'GET') {
         callCounts.products += 1;
       }
 
@@ -1809,5 +1874,88 @@ describe('admin app operations', () => {
     expect(callCounts.products).toBe(1);
     expect(callCounts.orders).toBeGreaterThanOrEqual(2);
     expect(screen.queryByText('evt-order-001')).not.toBeInTheDocument();
+  });
+
+  it('blocks admin app usage when no access token is stored', async () => {
+    const user = userEvent.setup();
+    clearAuthenticatedState();
+    const tokenUrlSearchParams = new URLSearchParams(window.location.search);
+    tokenUrlSearchParams.delete('code');
+    tokenUrlSearchParams.delete('state');
+    window.history.replaceState({}, '', `/${tokenUrlSearchParams.toString() ? `?${tokenUrlSearchParams}` : ''}`);
+
+    render(<App />);
+
+    expect(await screen.findByText('관리자 기능은 로그인 후 이용할 수 있습니다.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '로그인' })).toBeInTheDocument();
+    expect(screen.getByText('상태:')).toBeInTheDocument();
+    expect(screen.getByText('unauthenticated')).toBeInTheDocument();
+    const adminCalls = fetchMock.mock.calls.map(([url]) => url).filter(isAdminApiCall);
+    expect(adminCalls).toHaveLength(0);
+    await expect(user.click(screen.getByRole('button', { name: '로그인' }))).resolves.not.toThrow();
+  });
+
+  it('injects bearer token into admin API requests', async () => {
+    const user = userEvent.setup();
+
+    render(<App />);
+
+    expect(await screen.findByText('ord_admin_001')).toBeInTheDocument();
+
+    const orderCalls = fetchMock.mock.calls.filter(
+      ([url]) => new URL(String(url), 'http://localhost:5173').pathname === '/api/admin/orders',
+    );
+    expect(orderCalls.length).toBeGreaterThan(0);
+    expect(headerValue(orderCalls[0][1]?.headers, 'Authorization')).toBe(`Bearer ${TEST_ACCESS_TOKEN}`);
+
+    await user.click(screen.getByRole('tab', { name: 'Outbox' }));
+    const outboxCalls = fetchMock.mock.calls.filter(
+      ([url]) => new URL(String(url), 'http://localhost:5173').pathname === '/api/admin/outbox-services/order/events',
+    );
+    expect(outboxCalls.length).toBeGreaterThan(0);
+    expect(headerValue(outboxCalls[0][1]?.headers, 'Authorization')).toBe(`Bearer ${TEST_ACCESS_TOKEN}`);
+  });
+
+  it('clears stored token and stops protected API calls after logout', async () => {
+    const user = userEvent.setup();
+
+    render(<App />);
+    expect(await screen.findByText('ord_admin_001')).toBeInTheDocument();
+    expect(await screen.findByText('OrderCancelled')).toBeInTheDocument();
+    expect(localStorage.getItem(AUTH_ACCESS_TOKEN_STORAGE_KEY)).toBe(TEST_ACCESS_TOKEN);
+
+    fetchMock.mockClear();
+    const beforeLogoutCalls = fetchMock.mock.calls.length;
+
+    await user.click(screen.getByRole('button', { name: '로그아웃' }));
+
+    expect(localStorage.getItem(AUTH_ACCESS_TOKEN_STORAGE_KEY)).toBeNull();
+    expect(await screen.findByText('상태:')).toBeInTheDocument();
+    expect(screen.getByText('unauthenticated')).toBeInTheDocument();
+
+    await waitFor(() => {
+      const newCalls = fetchMock.mock.calls.slice(beforeLogoutCalls).map(([url]) => url);
+      expect(newCalls.every((url) => !isAdminApiCall(url))).toBe(true);
+    });
+  });
+
+  it('shows forbidden-ish state when admin APIs deny access', async () => {
+    const user = userEvent.setup();
+    fetchMock.mockImplementation((input, init) => {
+      const request = new URL(String(input), 'http://localhost:5173');
+      const method = init?.method ?? 'GET';
+
+      if (request.pathname === '/api/admin/orders' && method === 'GET') {
+        return buildErrorResponse('FORBIDDEN', '권한이 없습니다.', 403);
+      }
+
+      return defaultRequestHandler(input, init);
+    });
+
+    render(<App />);
+
+    await user.click(screen.getByRole('tab', { name: 'Orders' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('FORBIDDEN: 권한이 없습니다.');
+    expect(screen.getByText('목록을 읽지 못했습니다.')).toBeInTheDocument();
   });
 });

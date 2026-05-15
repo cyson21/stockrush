@@ -104,18 +104,22 @@ Recommended API base URLs:
 |---|---|
 | `EXPO_PUBLIC_API_BASE_URL` | runtime-specific Gateway URL |
 | `EXPO_PUBLIC_MEMBER_ID` | `member-mobile-demo` |
+| `EXPO_PUBLIC_AUTH_ISSUER` | runtime-specific Keycloak realm URL |
+| `EXPO_PUBLIC_AUTH_CLIENT_ID` | `stockrush-mobile` |
+| `EXPO_PUBLIC_AUTH_REDIRECT_URI` | `stockrush://auth/callback` |
 
 ## Current Scope
 
 - Expo SDK 54 blank app baseline
 - Gateway-first API client structure
 - Runtime API base URL strategy for iOS simulator, Android emulator, and physical devices
+- OIDC PKCE login/logout state through Expo Linking
 - Product list screen connected to `GET /api/products?status=ON_SALE`
 - SKU stock lookup for the selected product through `GET /api/stocks?productCode={productCode}`
 - Coupon quote through `POST /api/coupons/quote`
-- Order creation through `POST /api/orders`
-- Order status tracking through `GET /api/orders/{orderId}`
-- Read Model order history through `GET /api/read-model/orders?memberId={memberId}`
+- Authenticated order creation through `POST /api/orders`
+- Authenticated order status tracking through `GET /api/orders/{orderId}`
+- Authenticated Read Model order history through `GET /api/read-model/orders?memberId={memberId}`
 - React Native Testing Library coverage for product loading, stock loading, product error retry, stock error retry, out-of-order stock responses, coupon quote, coupon block, order payload/header, order status polling, and order history refresh
 
 ## Next Implementation Slices

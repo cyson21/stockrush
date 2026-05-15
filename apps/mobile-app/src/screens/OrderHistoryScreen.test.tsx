@@ -1,4 +1,6 @@
+import type { ReactNode } from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { AuthProvider } from '../auth/AuthContext';
 import OrderHistoryScreen from './OrderHistoryScreen';
 
 const response = (body: unknown, status = 200) =>
@@ -11,6 +13,10 @@ const jsonResponse = (body: unknown, status = 200) => Promise.resolve(response(b
 
 describe('OrderHistoryScreen', () => {
   const fetchMock = jest.fn() as jest.MockedFunction<typeof fetch>;
+
+  const renderWithAuth = (ui: ReactNode, token?: string | null) => {
+    return render(<AuthProvider initialAccessToken={token ?? null}>{ui}</AuthProvider>);
+  };
 
   beforeEach(() => {
     fetchMock.mockReset();
@@ -52,7 +58,7 @@ describe('OrderHistoryScreen', () => {
       throw new Error(`Unexpected request: ${url}`);
     });
 
-    render(<OrderHistoryScreen />);
+    renderWithAuth(<OrderHistoryScreen />, 'member-mobile-token');
 
     fireEvent.press(screen.getByText('내역 새로고침'));
 
@@ -68,6 +74,7 @@ describe('OrderHistoryScreen', () => {
           method: 'GET',
           headers: expect.objectContaining({
             'X-Correlation-Id': 'mobile-read-model-member-mobile-demo',
+            Authorization: 'Bearer member-mobile-token',
           }),
         }),
       );
@@ -100,7 +107,7 @@ describe('OrderHistoryScreen', () => {
         }),
       );
 
-    render(<OrderHistoryScreen />);
+    renderWithAuth(<OrderHistoryScreen />, 'member-mobile-token');
 
     fireEvent.press(screen.getByText('내역 새로고침'));
 
@@ -109,5 +116,17 @@ describe('OrderHistoryScreen', () => {
     fireEvent.press(screen.getByText('내역 새로고침'));
 
     expect(await screen.findByText('표시할 주문 내역이 없습니다.')).toBeTruthy();
+  });
+
+  it('blocks order history fetch when not logged in', async () => {
+    renderWithAuth(<OrderHistoryScreen />, null);
+
+    expect(screen.getByText('로그인 후 주문 내역을 조회할 수 있습니다.')).toBeTruthy();
+
+    fireEvent.press(screen.getByText('내역 새로고침'));
+
+    expect(await screen.findByText('주문 내역 대기')).toBeTruthy();
+
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });

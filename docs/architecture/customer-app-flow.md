@@ -30,8 +30,8 @@ Product List
 | 상품 목록 | `GET /api/products?status=ON_SALE` | 판매 중 상품명, 상품 코드, 가격 표시 |
 | SKU 선택 | `GET /api/stocks?productCode={productCode}` | 주문 가능한 SKU와 가용/예약 수량 표시 |
 | 쿠폰 적용 | `POST /api/coupons/quote` | 쿠폰 적용 여부, 할인 금액, 결제 예정 금액 표시 |
-| 주문 생성 | `POST /api/orders` | 회원 ID, 결제수단, 쿠폰 코드, SKU, 수량, 단가로 주문 생성 |
-| 주문 상태 | `GET /api/orders/{orderId}` | 주문 상태, Saga 상태, 결제수단, 주문 라인 표시 |
+| 주문 생성 | `POST /api/orders` | 로그인 후 회원 ID, 결제수단, 쿠폰 코드, SKU, 수량, 단가로 Gateway 주문 생성 |
+| 주문 상태 | `GET /api/orders/{orderId}` | 로그인 후 주문 상태, Saga 상태, 결제수단, 주문 라인 표시 |
 
 ## Request Headers
 
@@ -39,16 +39,17 @@ Product List
 |---|---|---|
 | `Idempotency-Key` | `POST /api/orders` | 중복 주문 생성 방지 |
 | `X-Correlation-Id` | all app requests | 화면에서 시작한 흐름을 서비스 로그와 이벤트 흐름에서 추적 |
+| `Authorization` | `POST /api/orders`, `GET /api/orders/{orderId}` | OIDC PKCE login으로 받은 customer bearer token |
 
 ## Runtime Configuration
 
-개발 환경은 Vite proxy prefix를 기본으로 사용한다. 배포 환경에서는 `VITE_API_BASE_URL` 또는 서비스별 base URL을 지정해 gateway나 분리된 서비스 주소로 연결한다.
+개발 환경은 public 조회 prefix와 Gateway protected path를 함께 사용한다. 배포 환경에서는 `VITE_API_BASE_URL` 또는 서비스별 base URL을 지정해 gateway나 분리된 서비스 주소로 연결한다.
 
 | Prefix | Service |
 |---|---|
 | `/catalog` | Catalog Service |
 | `/inventory` | Inventory Service |
-| `/orders` | Order Service |
+| `/api/orders` | Gateway |
 | `/promotion` | Promotion Service |
 
 ## Status Tracking

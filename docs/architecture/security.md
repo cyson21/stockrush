@@ -140,9 +140,11 @@ Current baseline:
 
 ### P9-6. Client Login
 
-- Add OIDC login/logout to Customer App and Admin App.
-- Add Expo AuthSession PKCE login to Mobile App.
-- Add unauthenticated, forbidden, token expiry, and logout UI tests.
+- Customer App and Admin App have OIDC Authorization Code + PKCE login/logout.
+- Mobile App has Expo Linking based OIDC PKCE login/logout without adding another runtime dependency.
+- Customer protected order APIs and Admin protected APIs attach Bearer tokens.
+- Customer App blocks order submit when unauthenticated. Admin App blocks protected screens when unauthenticated and surfaces forbidden API responses. Mobile App blocks order and history actions when unauthenticated.
+- Gateway owns protected product/stock/order/admin routing so authenticated principal headers are generated at the boundary.
 
 ### P9-7. CI Security Gates
 

@@ -15,10 +15,9 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/inventory/, ''),
       },
-      '/orders': {
-        target: 'http://localhost:18083',
+      '/api/orders': {
+        target: 'http://localhost:18080',
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/orders/, ''),
       },
       '/promotion': {
         target: 'http://localhost:18085',

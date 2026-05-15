@@ -34,6 +34,11 @@ import org.springframework.test.context.DynamicPropertySource;
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 class OrderGatewayControllerIntegrationTest {
 
+    private static final StubService STUB_CATALOG_SERVICE = new StubService(
+        "catalog",
+        "ProductChanged",
+        "stockrush.catalog.events.v1"
+    );
     private static final StubService STUB_ORDER_SERVICE = new StubService(
         "order",
         "OrderCreated",
@@ -72,12 +77,14 @@ class OrderGatewayControllerIntegrationTest {
 
     @DynamicPropertySource
     static void registerProperties(DynamicPropertyRegistry registry) {
+        STUB_CATALOG_SERVICE.start();
         STUB_ORDER_SERVICE.start();
         STUB_INVENTORY_SERVICE.start();
         STUB_PAYMENT_SERVICE.start();
         STUB_PROMOTION_SERVICE.start();
         STUB_FULFILLMENT_SERVICE.start();
         STUB_READ_MODEL_SERVICE.start();
+        registry.add("stockrush.routes.catalog-service-url", STUB_CATALOG_SERVICE::baseUrl);
         registry.add("stockrush.routes.order-service-url", STUB_ORDER_SERVICE::baseUrl);
         registry.add("stockrush.routes.inventory-service-url", STUB_INVENTORY_SERVICE::baseUrl);
         registry.add("stockrush.routes.payment-service-url", STUB_PAYMENT_SERVICE::baseUrl);
@@ -88,6 +95,7 @@ class OrderGatewayControllerIntegrationTest {
 
     @BeforeEach
     void setUp() {
+        STUB_CATALOG_SERVICE.reset();
         STUB_ORDER_SERVICE.reset();
         STUB_INVENTORY_SERVICE.reset();
         STUB_PAYMENT_SERVICE.reset();
@@ -98,6 +106,7 @@ class OrderGatewayControllerIntegrationTest {
 
     @AfterAll
     static void tearDown() {
+        STUB_CATALOG_SERVICE.stop();
         STUB_ORDER_SERVICE.stop();
         STUB_INVENTORY_SERVICE.stop();
         STUB_PAYMENT_SERVICE.stop();
@@ -322,6 +331,196 @@ class OrderGatewayControllerIntegrationTest {
         assertThat(forwarded.method()).isEqualTo("GET");
         assertThat(forwarded.path()).isEqualTo("/api/admin/orders/ord_gateway_delay/saga");
         assertThat(forwarded.firstHeader("X-Correlation-Id")).contains("corr-gateway-admin-saga");
+    }
+
+    @Test
+    void rejects_admin_catalog_routes_without_bearer_token() throws Exception {
+        HttpRequest request = HttpRequest.newBuilder(gatewayUri("/api/admin/products?page=0&size=20"))
+            .header("X-Correlation-Id", "corr-gateway-admin-products-unauthenticated")
+            .GET()
+            .build();
+
+        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+
+        assertThat(response.statusCode()).isEqualTo(401);
+        STUB_CATALOG_SERVICE.assertNoRequests();
+        STUB_INVENTORY_SERVICE.assertNoRequests();
+    }
+
+    @Test
+    void rejects_admin_stock_routes_with_customer_role() throws Exception {
+        HttpRequest request = customerRequest("/api/admin/stocks?productCode=SK-0001&page=0&size=5")
+            .header("X-Correlation-Id", "corr-gateway-admin-stocks-customer")
+            .GET()
+            .build();
+
+        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+
+        assertThat(response.statusCode()).isEqualTo(403);
+        STUB_INVENTORY_SERVICE.assertNoRequests();
+    }
+
+    @Test
+    void routes_admin_catalog_products_list_query_to_catalog_service() throws Exception {
+        HttpRequest request = adminRequest("/api/admin/products?status=ACTIVE&page=0&size=20")
+            .header("X-Correlation-Id", "corr-gateway-admin-products")
+            .GET()
+            .build();
+
+        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.headers().firstValue("X-Correlation-Id")).contains("corr-gateway-admin-products");
+        assertThat(response.body()).contains("\"productCode\":\"PROD-001\"");
+
+        RecordedRequest forwarded = STUB_CATALOG_SERVICE.singleRequest();
+        assertThat(forwarded.method()).isEqualTo("GET");
+        assertThat(forwarded.path()).isEqualTo("/api/products");
+        assertThat(forwarded.query()).contains("status=ACTIVE&page=0&size=20");
+        assertThat(forwarded.firstHeader("X-Operator-Id")).contains("admin-demo");
+        assertThat(forwarded.firstHeader("X-Correlation-Id")).contains("corr-gateway-admin-products");
+        STUB_INVENTORY_SERVICE.assertNoRequests();
+        STUB_ORDER_SERVICE.assertNoRequests();
+        STUB_PROMOTION_SERVICE.assertNoRequests();
+        STUB_FULFILLMENT_SERVICE.assertNoRequests();
+        STUB_READ_MODEL_SERVICE.assertNoRequests();
+    }
+
+    @Test
+    void routes_admin_catalog_product_create_command_to_catalog_service() throws Exception {
+        String requestBody = """
+            {
+              "productCode": "PROD-007",
+              "name": "Gateway Test Product",
+              "salesStatus": "ON_SALE",
+              "listPrice": 12300
+            }
+            """;
+
+        HttpRequest request = adminRequest("/api/admin/products")
+            .header("Content-Type", "application/json")
+            .header("X-Correlation-Id", "corr-gateway-admin-products-create")
+            .header("X-Operator-Id", "spoofed-operator")
+            .POST(HttpRequest.BodyPublishers.ofString(requestBody))
+            .build();
+
+        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+
+        assertThat(response.statusCode()).isEqualTo(201);
+        assertThat(response.headers().firstValue("X-Correlation-Id")).contains("corr-gateway-admin-products-create");
+        assertThat(response.body()).contains("\"productCode\":\"PROD-007\"");
+
+        RecordedRequest forwarded = STUB_CATALOG_SERVICE.singleRequest();
+        assertThat(forwarded.method()).isEqualTo("POST");
+        assertThat(forwarded.path()).isEqualTo("/api/admin/products");
+        assertThat(forwarded.firstHeader("X-Operator-Id")).contains("admin-demo");
+        assertThat(forwarded.firstHeader("X-Correlation-Id")).contains("corr-gateway-admin-products-create");
+        assertThat(forwarded.body()).contains("\"productCode\": \"PROD-007\"");
+        STUB_INVENTORY_SERVICE.assertNoRequests();
+        STUB_ORDER_SERVICE.assertNoRequests();
+        STUB_PROMOTION_SERVICE.assertNoRequests();
+        STUB_FULFILLMENT_SERVICE.assertNoRequests();
+        STUB_READ_MODEL_SERVICE.assertNoRequests();
+    }
+
+    @Test
+    void routes_admin_catalog_product_update_command_to_catalog_service() throws Exception {
+        String requestBody = """
+            {
+              "name": "Gateway Test Product Updated",
+              "salesStatus": "ON_SALE",
+              "listPrice": 15900
+            }
+            """;
+
+        HttpRequest request = adminRequest("/api/admin/products/PROD-007")
+            .header("Content-Type", "application/json")
+            .header("X-Correlation-Id", "corr-gateway-admin-products-update")
+            .header("X-Operator-Id", "spoofed-operator")
+            .PUT(HttpRequest.BodyPublishers.ofString(requestBody))
+            .build();
+
+        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.headers().firstValue("X-Correlation-Id")).contains("corr-gateway-admin-products-update");
+        assertThat(response.body()).contains("\"productCode\":\"PROD-007\"");
+
+        RecordedRequest forwarded = STUB_CATALOG_SERVICE.singleRequest();
+        assertThat(forwarded.method()).isEqualTo("PUT");
+        assertThat(forwarded.path()).isEqualTo("/api/admin/products/PROD-007");
+        assertThat(forwarded.firstHeader("X-Operator-Id")).contains("admin-demo");
+        assertThat(forwarded.firstHeader("X-Correlation-Id")).contains("corr-gateway-admin-products-update");
+        assertThat(forwarded.body()).contains("\"listPrice\": 15900");
+        STUB_INVENTORY_SERVICE.assertNoRequests();
+        STUB_ORDER_SERVICE.assertNoRequests();
+        STUB_PROMOTION_SERVICE.assertNoRequests();
+        STUB_FULFILLMENT_SERVICE.assertNoRequests();
+        STUB_READ_MODEL_SERVICE.assertNoRequests();
+    }
+
+    @Test
+    void routes_admin_stock_list_query_to_inventory_service() throws Exception {
+        HttpRequest request = adminRequest("/api/admin/stocks?productCode=PROD-001&page=0&size=25")
+            .header("X-Correlation-Id", "corr-gateway-admin-stocks")
+            .GET()
+            .build();
+
+        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.headers().firstValue("X-Correlation-Id")).contains("corr-gateway-admin-stocks");
+        assertThat(response.body()).contains("\"skuId\":\"SKU-007\"");
+
+        RecordedRequest forwarded = STUB_INVENTORY_SERVICE.singleRequest();
+        assertThat(forwarded.method()).isEqualTo("GET");
+        assertThat(forwarded.path()).isEqualTo("/api/stocks");
+        assertThat(forwarded.query()).contains("productCode=PROD-001&page=0&size=25");
+        assertThat(forwarded.firstHeader("X-Operator-Id")).contains("admin-demo");
+        assertThat(forwarded.firstHeader("X-Correlation-Id")).contains("corr-gateway-admin-stocks");
+        STUB_CATALOG_SERVICE.assertNoRequests();
+        STUB_ORDER_SERVICE.assertNoRequests();
+        STUB_PROMOTION_SERVICE.assertNoRequests();
+        STUB_FULFILLMENT_SERVICE.assertNoRequests();
+        STUB_READ_MODEL_SERVICE.assertNoRequests();
+    }
+
+    @Test
+    void routes_admin_stock_set_command_to_inventory_service() throws Exception {
+        String requestBody = """
+            {
+              "productCode": "PROD-001",
+              "availableQuantity": 20
+            }
+            """;
+
+        HttpRequest request = adminRequest("/api/admin/stocks/SKU-007")
+            .header("Content-Type", "application/json")
+            .header("Idempotency-Key", "idem-gateway-admin-stock-set")
+            .header("X-Correlation-Id", "corr-gateway-admin-stock-set")
+            .header("X-Operator-Id", "spoofed-operator")
+            .PUT(HttpRequest.BodyPublishers.ofString(requestBody))
+            .build();
+
+        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.headers().firstValue("X-Correlation-Id")).contains("corr-gateway-admin-stock-set");
+        assertThat(response.body()).contains("\"skuId\":\"SKU-007\"");
+        assertThat(response.body()).contains("\"availableQuantity\":20");
+
+        RecordedRequest forwarded = STUB_INVENTORY_SERVICE.singleRequest();
+        assertThat(forwarded.method()).isEqualTo("PUT");
+        assertThat(forwarded.path()).isEqualTo("/api/stocks/SKU-007");
+        assertThat(forwarded.firstHeader("Idempotency-Key")).contains("idem-gateway-admin-stock-set");
+        assertThat(forwarded.firstHeader("X-Operator-Id")).contains("admin-demo");
+        assertThat(forwarded.firstHeader("X-Correlation-Id")).contains("corr-gateway-admin-stock-set");
+        assertThat(forwarded.body()).contains("\"availableQuantity\": 20");
+        STUB_CATALOG_SERVICE.assertNoRequests();
+        STUB_ORDER_SERVICE.assertNoRequests();
+        STUB_PROMOTION_SERVICE.assertNoRequests();
+        STUB_FULFILLMENT_SERVICE.assertNoRequests();
+        STUB_READ_MODEL_SERVICE.assertNoRequests();
     }
 
     @Test
@@ -736,6 +935,9 @@ class OrderGatewayControllerIntegrationTest {
             server.createContext("/api/admin/outbox-events", this::handle);
             server.createContext("/api/admin/coupon-usages", this::handle);
             server.createContext("/api/admin/fulfillment-requests", this::handle);
+            server.createContext("/api/admin/products", this::handle);
+            server.createContext("/api/products", this::handle);
+            server.createContext("/api/stocks", this::handle);
             server.createContext("/api/coupons", this::handle);
             server.createContext("/api/read-model", this::handle);
             server.start();
@@ -788,6 +990,36 @@ class OrderGatewayControllerIntegrationTest {
                 writeJson(exchange, 200, currentCorrelationId(exchange), null, """
                     {"success":true,"data":{"service":"%s","updated":%d},"error":null,"trace":{"correlationId":"%s"}}
                     """.formatted(serviceName, updated, currentCorrelationId(exchange)));
+                return;
+            }
+            if ("GET".equals(exchange.getRequestMethod()) && "/api/products".equals(path)) {
+                writeJson(exchange, 200, currentCorrelationId(exchange), null, """
+                    {"success":true,"data":[{"productCode":"PROD-001","name":"Gateway Product","status":"ON_SALE","listPrice":12300}],"error":null,"trace":{"correlationId":"%s"}}
+                    """.formatted(currentCorrelationId(exchange)));
+                return;
+            }
+            if ("POST".equals(exchange.getRequestMethod()) && "/api/admin/products".equals(path)) {
+                writeJson(exchange, 201, currentCorrelationId(exchange), null, """
+                    {"success":true,"data":{"productCode":"PROD-007","name":"Gateway Test Product","status":"ON_SALE","listPrice":12300},"error":null,"trace":{"correlationId":"%s"}}
+                    """.formatted(currentCorrelationId(exchange)));
+                return;
+            }
+            if ("PUT".equals(exchange.getRequestMethod()) && path.startsWith("/api/admin/products/")) {
+                writeJson(exchange, 200, currentCorrelationId(exchange), null, """
+                    {"success":true,"data":{"productCode":"PROD-007","name":"Gateway Test Product Updated","status":"ON_SALE","listPrice":15900},"error":null,"trace":{"correlationId":"%s"}}
+                    """.formatted(currentCorrelationId(exchange)));
+                return;
+            }
+            if ("GET".equals(exchange.getRequestMethod()) && "/api/stocks".equals(path)) {
+                writeJson(exchange, 200, currentCorrelationId(exchange), null, """
+                    {"success":true,"data":[{"skuId":"SKU-007","productCode":"PROD-001","availableQuantity":20,"reservedQuantity":0,"version":1}],"error":null,"trace":{"correlationId":"%s"}}
+                    """.formatted(currentCorrelationId(exchange)));
+                return;
+            }
+            if ("PUT".equals(exchange.getRequestMethod()) && path.startsWith("/api/stocks/")) {
+                writeJson(exchange, 200, currentCorrelationId(exchange), null, """
+                    {"success":true,"data":{"skuId":"SKU-007","productCode":"PROD-001","availableQuantity":20,"reservedQuantity":0,"version":2},"error":null,"trace":{"correlationId":"%s"}}
+                    """.formatted(currentCorrelationId(exchange)));
                 return;
             }
             if ("POST".equals(exchange.getRequestMethod()) && "/api/orders".equals(path)) {

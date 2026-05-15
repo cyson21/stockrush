@@ -1,4 +1,4 @@
-import { apiUrl, gatewayApiUrl, request } from './client';
+import { gatewayApiUrl, request } from './client';
 import type {
   AdminOrderPage,
   AdminOrderCancelResult,
@@ -27,7 +27,7 @@ export type ReadModelOrderFilters = {
 };
 
 export function listRecentOrders(): Promise<AdminOrderPage> {
-  return request<AdminOrderPage>(apiUrl('order', '/api/admin/orders', { page: '0', size: '20' }));
+  return request<AdminOrderPage>(gatewayApiUrl('/api/admin/orders', { page: '0', size: '20' }));
 }
 
 export function listReadModelAdminOrders(filters: ReadModelOrderFilters = {}): Promise<ReadModelOrderPage> {
@@ -95,11 +95,11 @@ export function listFulfillmentRequests(filters: {
 }
 
 export function getOrderSaga(orderId: string): Promise<AdminOrderSaga> {
-  return request<AdminOrderSaga>(apiUrl('order', `/api/admin/orders/${encodeURIComponent(orderId)}/saga`));
+  return request<AdminOrderSaga>(gatewayApiUrl(`/api/admin/orders/${encodeURIComponent(orderId)}/saga`));
 }
 
 export function cancelDelayedOrder(orderId: string, idempotencyKey: string): Promise<AdminOrderCancelResult> {
-  return request<AdminOrderCancelResult>(apiUrl('order', `/api/admin/orders/${encodeURIComponent(orderId)}/cancel`), {
+  return request<AdminOrderCancelResult>(gatewayApiUrl(`/api/admin/orders/${encodeURIComponent(orderId)}/cancel`), {
     method: 'POST',
     headers: {
       'Idempotency-Key': idempotencyKey,
@@ -108,11 +108,11 @@ export function cancelDelayedOrder(orderId: string, idempotencyKey: string): Pro
 }
 
 export function listCatalogProducts(status: string): Promise<CatalogProduct[]> {
-  return request<CatalogProduct[]>(apiUrl('catalog', '/api/products', { status }));
+  return request<CatalogProduct[]>(gatewayApiUrl('/api/admin/products', { status }));
 }
 
 export function createCatalogProduct(payload: ProductCreatePayload, idempotencyKey: string): Promise<CatalogProduct> {
-  return request<CatalogProduct>(apiUrl('catalog', '/api/admin/products'), {
+  return request<CatalogProduct>(gatewayApiUrl('/api/admin/products'), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -127,7 +127,7 @@ export function updateCatalogProduct(
   payload: ProductUpdatePayload,
   idempotencyKey: string,
 ): Promise<CatalogProduct> {
-  return request<CatalogProduct>(apiUrl('catalog', `/api/admin/products/${encodeURIComponent(productCode)}`), {
+  return request<CatalogProduct>(gatewayApiUrl(`/api/admin/products/${encodeURIComponent(productCode)}`), {
     method: 'PUT',
     headers: {
       'Content-Type': 'application/json',
@@ -138,11 +138,11 @@ export function updateCatalogProduct(
 }
 
 export function listStocksByProductCode(productCode: string): Promise<StockItem[]> {
-  return request<StockItem[]>(apiUrl('inventory', '/api/stocks', { productCode }));
+  return request<StockItem[]>(gatewayApiUrl('/api/admin/stocks', { productCode }));
 }
 
 export function setStockQuantity(skuId: string, payload: StockSetPayload): Promise<StockItem> {
-  return request<StockItem>(apiUrl('inventory', `/api/stocks/${encodeURIComponent(skuId)}`), {
+  return request<StockItem>(gatewayApiUrl(`/api/admin/stocks/${encodeURIComponent(skuId)}`), {
     method: 'PUT',
     headers: {
       'Content-Type': 'application/json',

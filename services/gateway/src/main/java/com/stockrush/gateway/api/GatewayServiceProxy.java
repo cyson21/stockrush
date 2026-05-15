@@ -101,6 +101,7 @@ class GatewayServiceProxy {
 }
 
 enum ServiceRoute {
+    CATALOG,
     ORDER,
     INVENTORY,
     PAYMENT,
@@ -110,6 +111,7 @@ enum ServiceRoute {
 
     static ServiceRoute from(String value) {
         return switch (value) {
+            case "catalog" -> CATALOG;
             case "order" -> ORDER;
             case "inventory" -> INVENTORY;
             case "payment" -> PAYMENT;
@@ -123,6 +125,7 @@ enum ServiceRoute {
 
 @ConfigurationProperties(prefix = "stockrush.routes")
 record GatewayRoutingProperties(
+    String catalogServiceUrl,
     String orderServiceUrl,
     String inventoryServiceUrl,
     String paymentServiceUrl,
@@ -131,6 +134,7 @@ record GatewayRoutingProperties(
     String readModelServiceUrl
 ) {
 
+    private static final String DEFAULT_CATALOG_SERVICE_URL = "http://localhost:18081";
     private static final String DEFAULT_ORDER_SERVICE_URL = "http://localhost:18083";
     private static final String DEFAULT_INVENTORY_SERVICE_URL = "http://localhost:18082";
     private static final String DEFAULT_PAYMENT_SERVICE_URL = "http://localhost:18084";
@@ -139,6 +143,7 @@ record GatewayRoutingProperties(
     private static final String DEFAULT_READ_MODEL_SERVICE_URL = "http://localhost:18087";
 
     GatewayRoutingProperties {
+        catalogServiceUrl = normalize(catalogServiceUrl, DEFAULT_CATALOG_SERVICE_URL);
         orderServiceUrl = normalize(orderServiceUrl, DEFAULT_ORDER_SERVICE_URL);
         inventoryServiceUrl = normalize(inventoryServiceUrl, DEFAULT_INVENTORY_SERVICE_URL);
         paymentServiceUrl = normalize(paymentServiceUrl, DEFAULT_PAYMENT_SERVICE_URL);
@@ -149,6 +154,7 @@ record GatewayRoutingProperties(
 
     String serviceUrl(ServiceRoute service) {
         return switch (service) {
+            case CATALOG -> catalogServiceUrl;
             case ORDER -> orderServiceUrl;
             case INVENTORY -> inventoryServiceUrl;
             case PAYMENT -> paymentServiceUrl;

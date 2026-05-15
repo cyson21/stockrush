@@ -1,6 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { listOnSaleProducts } from './api/catalog';
 import { ApiClientError } from './api/client';
+import {
+  clearAuthSession,
+  completeLoginFromCallback,
+  getAuthToken,
+  startLogin,
+} from './auth/oidc';
 import { listStocks } from './api/inventory';
 import { createOrder, getOrder } from './api/orders';
 import { quoteCoupon } from './api/promotion';
@@ -39,6 +45,7 @@ export default function App() {
   const [quantityInput, setQuantityInput] = useState('1');
   const [memberId, setMemberId] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('CARD');
+  const [authToken, setAuthToken] = useState<string | null>(getAuthToken());
   const [createdOrder, setCreatedOrder] = useState<CreateOrderResponse | null>(null);
   const [orderDetail, setOrderDetail] = useState<OrderDetail | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -47,6 +54,26 @@ export default function App() {
   const [couponQuoteError, setCouponQuoteError] = useState<string | null>(null);
   const [applyingCoupon, setApplyingCoupon] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    completeLoginFromCallback()
+      .then((session) => {
+        if (!cancelled && session?.accessToken) {
+          setAuthToken(session.accessToken);
+        }
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          setMessage(errorMessage(error));
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -176,6 +203,7 @@ export default function App() {
     Boolean(selectedStock) &&
     quantityIsValid &&
     memberId.trim().length > 0 &&
+    Boolean(authToken) &&
     !submitting &&
     !applyingCoupon &&
     !hasBlockedCouponState;
@@ -217,6 +245,10 @@ export default function App() {
       setMessage('상품, SKU, 수량, 회원 ID를 확인하세요.');
       return;
     }
+    if (!authToken) {
+      setMessage('로그인 후 주문을 진행하세요.');
+      return;
+    }
     if (hasBlockedCouponState) {
       setMessage('쿠폰 적용 상태를 확인하세요.');
       return;
@@ -243,6 +275,7 @@ export default function App() {
       const order = await createOrder(payload);
       setCreatedOrder(order);
       setOrderDetail(null);
+      setAuthToken(getAuthToken());
     } catch (error) {
       setCreatedOrder(null);
       setOrderDetail(null);
@@ -252,12 +285,31 @@ export default function App() {
     }
   };
 
+  const login = async () => {
+    try {
+      await startLogin();
+    } catch (error) {
+      setMessage(errorMessage(error));
+    }
+  };
+
+  const logout = () => {
+    clearAuthSession();
+    setAuthToken(null);
+  };
+
   return (
     <main className="app-shell">
       <header className="top-bar">
         <div>
           <p className="eyebrow">StockRush</p>
           <h1>한정 상품 주문</h1>
+        </div>
+        <div className="auth-panel" aria-label="인증 상태">
+          <p>인증 상태: {authToken ? '인증됨' : '미인증'}</p>
+          <button type="button" className="auth-action" onClick={authToken ? logout : login}>
+            {authToken ? '로그아웃' : '로그인'}
+          </button>
         </div>
         <div className="runtime-note">Catalog · Inventory · Order</div>
       </header>

@@ -14,6 +14,7 @@ import { listStocks } from '../api/inventory';
 import { createOrder, getOrder } from '../api/orders';
 import { quoteCoupon } from '../api/promotion';
 import { getDefaultMemberId } from '../config/runtime';
+import { useAuth } from '../auth/AuthContext';
 import type { CreateOrderResponse, OrderDetail, Product, PromotionQuoteResponse, Stock } from '../types/api';
 import OrderHistoryScreen from './OrderHistoryScreen';
 
@@ -62,6 +63,7 @@ export default function ProductListScreen() {
   const [orderPollError, setOrderPollError] = useState<string | null>(null);
   const stockRequestIdRef = useRef(0);
   const memberId = getDefaultMemberId();
+  const { isAuthenticated, accessToken, login, logout } = useAuth();
 
   const quantity = Number(quantityText);
   const quantityIsValid = Number.isInteger(quantity) && quantity >= 1;
@@ -69,6 +71,8 @@ export default function ProductListScreen() {
   const discountAmount = couponQuote?.applied ? couponQuote.discountAmount : 0;
   const payableAmount = couponQuote?.applied ? couponQuote.payAmount : totalAmount;
   const hasBlockedCoupon = Boolean(couponError) || couponQuote?.applied === false;
+  const authStatusLabel = isAuthenticated ? '로그인됨' : '로그인 필요';
+  const tokenPreview = accessToken ? `${accessToken.slice(0, 12)}...` : null;
 
   const loadProducts = useCallback(async () => {
     stockRequestIdRef.current += 1;
@@ -225,6 +229,11 @@ export default function ProductListScreen() {
       return;
     }
 
+    if (!isAuthenticated) {
+      setOrderError('로그인 후 주문할 수 있습니다.');
+      return;
+    }
+
     if (hasBlockedCoupon) {
       setOrderError('쿠폰 적용 상태를 확인하세요.');
       return;
@@ -264,6 +273,28 @@ export default function ProductListScreen() {
           <Text style={styles.eyebrow}>StockRush Mobile</Text>
           <Text style={styles.title}>상품 선택</Text>
           <Text style={styles.subtitle}>판매 중인 상품을 고르고 SKU별 주문 가능 수량을 확인합니다.</Text>
+        </View>
+
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>인증 상태</Text>
+          </View>
+          <Text style={styles.stateText}>{authStatusLabel}</Text>
+          {tokenPreview ? <Text style={styles.tokenText}>토큰 {tokenPreview}</Text> : null}
+
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => {
+              if (isAuthenticated) {
+                void logout();
+              } else {
+                void login();
+              }
+            }}
+            style={styles.secondaryButton}
+          >
+            <Text style={styles.secondaryButtonText}>{isAuthenticated ? '로그아웃' : '로그인'}</Text>
+          </Pressable>
         </View>
 
         <View style={styles.section}>
@@ -443,14 +474,15 @@ export default function ProductListScreen() {
 
               {orderError ? <Text style={styles.errorText}>{orderError}</Text> : null}
               {orderPollError ? <Text style={styles.errorText}>상태 조회 실패: {orderPollError}</Text> : null}
+              {!isAuthenticated ? <Text style={styles.errorText}>로그인 후 주문할 수 있습니다.</Text> : null}
 
               <Pressable
                 accessibilityRole="button"
-                disabled={orderStatus === 'loading' || hasBlockedCoupon || !quantityIsValid}
+                disabled={orderStatus === 'loading' || hasBlockedCoupon || !quantityIsValid || !isAuthenticated}
                 onPress={() => void submitOrder()}
                 style={[
                   styles.primaryButton,
-                  orderStatus === 'loading' || hasBlockedCoupon || !quantityIsValid ? styles.disabledButton : null,
+                  orderStatus === 'loading' || hasBlockedCoupon || !quantityIsValid || !isAuthenticated ? styles.disabledButton : null,
                 ]}
               >
                 <Text style={styles.primaryButtonText}>{orderStatus === 'loading' ? '주문 생성 중' : '주문 생성'}</Text>
@@ -530,6 +562,11 @@ const styles = StyleSheet.create({
     color: '#64748b',
     fontSize: 14,
     lineHeight: 20,
+  },
+  tokenText: {
+    color: '#0f766e',
+    fontSize: 12,
+    lineHeight: 18,
   },
   notice: {
     gap: 10,

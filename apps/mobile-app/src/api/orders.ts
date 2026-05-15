@@ -1,23 +1,28 @@
 import { apiUrl, makeIdempotencyKey, request } from './client';
+import { withAuthHeader } from '../auth/http';
 import type { CreateOrderRequest, CreateOrderResponse, OrderDetail } from '../types/api';
 
-export function createOrder(payload: CreateOrderRequest): Promise<CreateOrderResponse> {
+export async function createOrder(payload: CreateOrderRequest): Promise<CreateOrderResponse> {
+  const headers = await withAuthHeader({
+    'Content-Type': 'application/json',
+    'Idempotency-Key': makeIdempotencyKey('order-create'),
+    'X-Correlation-Id': 'mobile-order-create',
+  });
+
   return request<CreateOrderResponse>(apiUrl('/api/orders'), {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Idempotency-Key': makeIdempotencyKey('order-create'),
-      'X-Correlation-Id': 'mobile-order-create',
-    },
+    headers,
     body: JSON.stringify(payload),
   });
 }
 
-export function getOrder(orderId: string): Promise<OrderDetail> {
+export async function getOrder(orderId: string): Promise<OrderDetail> {
+  const headers = await withAuthHeader({
+    'X-Correlation-Id': `mobile-order-${orderId}`,
+  });
+
   return request<OrderDetail>(apiUrl(`/api/orders/${encodeURIComponent(orderId)}`), {
     method: 'GET',
-    headers: {
-      'X-Correlation-Id': `mobile-order-${orderId}`,
-    },
+    headers,
   });
 }

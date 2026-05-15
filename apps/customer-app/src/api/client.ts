@@ -1,11 +1,12 @@
 import type { ApiError, ApiResponse } from '../types/api';
+import { getAuthorizationHeaders } from '../auth/oidc';
 
 type ServiceName = 'catalog' | 'inventory' | 'orders' | 'promotion';
 
 const defaultServicePrefixes: Record<ServiceName, string> = {
   catalog: '/catalog',
   inventory: '/inventory',
-  orders: '/orders',
+  orders: '',
   promotion: '/promotion',
 };
 
@@ -74,6 +75,13 @@ export async function request<T>(input: RequestInfo | URL, init?: RequestInit): 
   }
 
   return body.data;
+}
+
+export function requestWithAuth<T>(input: RequestInfo | URL, init?: RequestInit): Promise<T> {
+  return request<T>(input, {
+    ...init,
+    headers: getAuthorizationHeaders(init?.headers),
+  });
 }
 
 export function makeIdempotencyKey(): string {

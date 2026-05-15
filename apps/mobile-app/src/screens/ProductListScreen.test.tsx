@@ -1,4 +1,6 @@
+import type { ReactNode } from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { AuthProvider } from '../auth/AuthContext';
 import ProductListScreen from './ProductListScreen';
 
 const response = (body: unknown, status = 200) =>
@@ -26,6 +28,10 @@ function deferredJsonResponse() {
 
 describe('ProductListScreen', () => {
   const fetchMock = jest.fn() as jest.MockedFunction<typeof fetch>;
+
+  const renderWithAuth = (ui: ReactNode, token?: string | null) => {
+    return render(<AuthProvider initialAccessToken={token ?? null}>{ui}</AuthProvider>);
+  };
 
   beforeEach(() => {
     fetchMock.mockReset();
@@ -76,7 +82,7 @@ describe('ProductListScreen', () => {
       throw new Error(`Unexpected request: ${url}`);
     });
 
-    render(<ProductListScreen />);
+    renderWithAuth(<ProductListScreen />);
 
     expect(screen.getByText('상품 목록 조회 중')).toBeTruthy();
     expect(await screen.findByText('Limited Hoodie')).toBeTruthy();
@@ -125,7 +131,7 @@ describe('ProductListScreen', () => {
         ),
       );
 
-    render(<ProductListScreen />);
+    renderWithAuth(<ProductListScreen />);
 
     expect(await screen.findByText('CATALOG_DOWN: catalog unavailable')).toBeTruthy();
 
@@ -179,7 +185,7 @@ describe('ProductListScreen', () => {
         }),
       );
 
-    render(<ProductListScreen />);
+    renderWithAuth(<ProductListScreen />);
 
     fireEvent.press(await screen.findByText('Limited Hoodie'));
 
@@ -231,7 +237,7 @@ describe('ProductListScreen', () => {
       throw new Error(`Unexpected request: ${url}`);
     });
 
-    render(<ProductListScreen />);
+    renderWithAuth(<ProductListScreen />);
 
     fireEvent.press(await screen.findByText('Limited Hoodie'));
     fireEvent.press(await screen.findByText('Second Sneakers'));
@@ -382,7 +388,7 @@ describe('ProductListScreen', () => {
       throw new Error(`Unexpected request: ${url}`);
     });
 
-    render(<ProductListScreen />);
+    renderWithAuth(<ProductListScreen />, 'test-access-token');
 
     fireEvent.press(await screen.findByText('Limited Hoodie'));
     expect(await screen.findByText('LIMITED-001-S')).toBeTruthy();
@@ -403,7 +409,12 @@ describe('ProductListScreen', () => {
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(
         'http://localhost:18080/api/orders/ord_mobile_001',
-        expect.objectContaining({ method: 'GET' }),
+        expect.objectContaining({
+          method: 'GET',
+          headers: expect.objectContaining({
+            Authorization: 'Bearer test-access-token',
+          }),
+        }),
       );
     });
 
@@ -423,6 +434,7 @@ describe('ProductListScreen', () => {
         'Content-Type': 'application/json',
         'Idempotency-Key': expect.stringMatching(/^mobile-order-create-/),
         'X-Correlation-Id': 'mobile-order-create',
+        Authorization: 'Bearer test-access-token',
       }),
     );
     expect(JSON.parse(String(orderRequest?.[1]?.body))).toEqual({
@@ -438,6 +450,64 @@ describe('ProductListScreen', () => {
         },
       ],
     });
+  });
+
+  it('requires authentication before creating orders', async () => {
+    fetchMock.mockImplementation((input) => {
+      const url = String(input);
+
+      if (url === 'http://localhost:18080/api/products?status=ON_SALE') {
+        return jsonResponse({
+          success: true,
+          data: [
+            {
+              productCode: 'LIMITED-001',
+              name: 'Limited Hoodie',
+              status: 'ON_SALE',
+              listPrice: 12000,
+            },
+          ],
+          error: null,
+          trace: { correlationId: 'corr-products' },
+        });
+      }
+
+      if (url === 'http://localhost:18080/api/stocks?productCode=LIMITED-001') {
+        return jsonResponse({
+          success: true,
+          data: [
+            {
+              skuId: 'LIMITED-001-S',
+              productCode: 'LIMITED-001',
+              availableQuantity: 8,
+              reservedQuantity: 2,
+              version: 4,
+            },
+          ],
+          error: null,
+          trace: { correlationId: 'corr-stocks' },
+        });
+      }
+
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    renderWithAuth(<ProductListScreen />, null);
+
+    fireEvent.press(await screen.findByText('Limited Hoodie'));
+    expect(await screen.findByText('LIMITED-001-S')).toBeTruthy();
+
+    expect(screen.getByText('로그인 후 주문할 수 있습니다.')).toBeTruthy();
+
+    const submitButton = screen.getByRole('button', { name: '주문 생성' });
+    expect(submitButton.props.accessibilityState?.disabled).toBe(true);
+    fireEvent.press(screen.getByText('주문 생성'));
+
+    expect(
+      fetchMock.mock.calls.some(
+        ([url, init]) => String(url) === 'http://localhost:18080/api/orders' && init?.method === 'POST',
+      ),
+    ).toBe(false);
   });
 
   it('blocks order creation when coupon quote is not applied', async () => {
@@ -495,7 +565,7 @@ describe('ProductListScreen', () => {
       throw new Error(`Unexpected request: ${url}`);
     });
 
-    render(<ProductListScreen />);
+    renderWithAuth(<ProductListScreen />);
 
     fireEvent.press(await screen.findByText('Limited Hoodie'));
     expect(await screen.findByText('LIMITED-001-S')).toBeTruthy();
@@ -608,7 +678,7 @@ describe('ProductListScreen', () => {
       throw new Error(`Unexpected request: ${url}`);
     });
 
-    render(<ProductListScreen />);
+    renderWithAuth(<ProductListScreen />, 'test-access-token');
 
     fireEvent.press(await screen.findByText('Limited Hoodie'));
     expect(await screen.findByText('LIMITED-001-S')).toBeTruthy();

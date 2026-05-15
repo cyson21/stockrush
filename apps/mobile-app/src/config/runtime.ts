@@ -19,10 +19,31 @@ export const mobileRuntimeLabel = Platform.select({
   default: 'Expo runtime',
 });
 
+function trimValue(value?: string): string {
+  return value?.trim() || '';
+}
+
+function defaultAuthIssuer(): string {
+  const host = Platform.OS === 'android' ? '10.0.2.2:28088' : 'localhost:28088';
+  return `http://${host}/realms/stockrush`;
+}
+
 export function getApiBaseUrl(): string {
   return trimTrailingSlash(configuredApiBaseUrl?.trim() || defaultGatewayUrl());
 }
 
 export function getDefaultMemberId(): string {
   return process.env.EXPO_PUBLIC_MEMBER_ID?.trim() || 'member-mobile-demo';
+}
+
+export function getAuthIssuer(): string {
+  return trimTrailingSlash(trimValue(process.env.EXPO_PUBLIC_AUTH_ISSUER) || defaultAuthIssuer());
+}
+
+export function getAuthClientId(): string {
+  return trimValue(process.env.EXPO_PUBLIC_AUTH_CLIENT_ID) || 'stockrush-mobile';
+}
+
+export function getAuthRedirectUri(): string {
+  return process.env.EXPO_PUBLIC_AUTH_REDIRECT_URI?.trim() || 'stockrush://auth/callback';
 }

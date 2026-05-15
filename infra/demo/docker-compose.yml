@@ -325,6 +325,7 @@ services:
     environment:
       <<: *demo-keycloak
       GATEWAY_PORT: 18080
+      CATALOG_SERVICE_URL: http://catalog-service:18081
       ORDER_SERVICE_URL: http://order-service:18083
       INVENTORY_SERVICE_URL: http://inventory-service:18082
       PAYMENT_SERVICE_URL: http://payment-service:18084
@@ -333,6 +334,8 @@ services:
       READ_MODEL_SERVICE_URL: http://read-model-service:18087
     depends_on:
       keycloak:
+        condition: service_healthy
+      catalog-service:
         condition: service_healthy
       inventory-service:
         condition: service_healthy
@@ -360,6 +363,8 @@ services:
       dockerfile: apps/Dockerfile
       args:
         APP_DIR: customer-app
+        VITE_AUTH_ISSUER: http://localhost:${KEYCLOAK_HOST_PORT:-28088}/realms/stockrush
+        VITE_AUTH_CLIENT_ID: stockrush-customer-web
     depends_on:
       catalog-service:
         condition: service_healthy
@@ -383,6 +388,8 @@ services:
       dockerfile: apps/Dockerfile
       args:
         APP_DIR: admin-app
+        VITE_AUTH_ISSUER: http://localhost:${KEYCLOAK_HOST_PORT:-28088}/realms/stockrush
+        VITE_AUTH_CLIENT_ID: stockrush-admin-web
     depends_on:
       catalog-service:
         condition: service_healthy

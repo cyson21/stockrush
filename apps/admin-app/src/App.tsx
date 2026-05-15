@@ -1,6 +1,15 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { ApiClientError } from './api/client';
 import {
+  buildLoginUrl,
+  clearAccessToken,
+  clearAuthCallbackParams,
+  exchangeCodeForToken,
+  getStoredAccessToken,
+  parseOidcCallback,
+  saveAccessToken,
+} from './auth';
+import {
   cancelDelayedOrder,
   createCatalogProduct,
   getOrderSaga,
@@ -1649,6 +1658,109 @@ function CatalogTab() {
 
 export default function App() {
   const [tab, setTab] = useState<TabId>('orders');
+  const [isProcessingLogin, setIsProcessingLogin] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [accessToken, setAccessToken] = useState<string | null>(() => getStoredAccessToken());
+  const isAuthenticated = accessToken !== null;
+
+  useEffect(() => {
+    const callback = parseOidcCallback();
+    if (!callback || isAuthenticated) {
+      if (accessToken) {
+        clearAuthCallbackParams();
+      }
+      return;
+    }
+
+    let cancelled = false;
+    setIsProcessingLogin(true);
+    setAuthError(null);
+
+    exchangeCodeForToken(callback)
+      .then((tokenResponse) => {
+        if (cancelled) {
+          return;
+        }
+
+        saveAccessToken(tokenResponse.access_token, tokenResponse.expires_in);
+        setAccessToken(tokenResponse.access_token);
+        clearAuthCallbackParams();
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          setAuthError(error instanceof Error ? error.message : '로그인 토큰을 확인하지 못했습니다.');
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setIsProcessingLogin(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const onLogin = async () => {
+    const loginUrl = await buildLoginUrl();
+    window.location.assign(loginUrl);
+  };
+
+  const onLogout = () => {
+    clearAccessToken();
+    setAccessToken(null);
+    setAuthError(null);
+  };
+
+  if (isProcessingLogin) {
+    return (
+      <main className="app-shell">
+        <header className="top-bar">
+          <div>
+            <p className="eyebrow">StockRush</p>
+            <h1>포트폴리오 운영</h1>
+          </div>
+          <p className="runtime-note">OIDC 인증 처리 중</p>
+        </header>
+        <section className="panel-shell">
+          <section className="panel">
+            <p>로그인을 완료하고 있습니다.</p>
+          </section>
+        </section>
+      </main>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return (
+      <main className="app-shell">
+        <header className="top-bar">
+          <div>
+            <p className="eyebrow">StockRush</p>
+            <h1>포트폴리오 운영</h1>
+          </div>
+          <p className="runtime-note">로그인 필요</p>
+        </header>
+        <section className="panel-shell">
+          <section className="panel">
+            {authError && <p className="error-banner">{authError}</p>}
+            <p className="empty-message">
+              관리자 기능은 로그인 후 이용할 수 있습니다.
+            </p>
+            <p>
+              상태: <strong>unauthenticated</strong>
+            </p>
+            <div className="form-actions">
+              <button type="button" className="action-btn" onClick={onLogin}>
+                로그인
+              </button>
+            </div>
+          </section>
+        </section>
+      </main>
+    );
+  }
 
   return (
     <main className="app-shell">
@@ -1657,7 +1769,12 @@ export default function App() {
           <p className="eyebrow">StockRush</p>
           <h1>포트폴리오 운영</h1>
         </div>
-        <p className="runtime-note">Dashboard / Orders / Coupons / Fulfillment / Outbox / Products</p>
+        <p className="runtime-note">
+          상태: <strong>authenticated</strong>{' '}
+          <button type="button" className="secondary-btn" onClick={onLogout}>
+            로그아웃
+          </button>
+        </p>
       </header>
 
       <div className="segmented" role="tablist" aria-label="작업 영역">
