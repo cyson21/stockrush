@@ -8,6 +8,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -42,6 +44,7 @@ class InventoryStockControllerIntegrationTest {
         mockMvc = MockMvcBuilders.webAppContextSetup(webApplicationContext).build();
         jdbcClient.sql("delete from stock_reservations").update();
         jdbcClient.sql("delete from stock_items").update();
+        jdbcClient.sql("delete from admin_actions").update();
         insertStock("SKU-001", "LIMITED-001", 10, 2);
         insertStock("SKU-002", "LIMITED-001", 5, 0);
         insertStock("SKU-003", "LIMITED-002", 7, 1);
@@ -96,6 +99,65 @@ class InventoryStockControllerIntegrationTest {
             .andExpect(jsonPath("$.data.availableQuantity", is(12)))
             .andExpect(jsonPath("$.data.reservedQuantity", is(2)))
             .andExpect(jsonPath("$.trace.correlationId", is("corr-stock-set")));
+    }
+
+    @Test
+    void records_admin_action_with_operator_id_when_set_stock() throws Exception {
+        mockMvc.perform(put("/api/stocks/{skuId}", "SKU-001")
+                .header("X-Correlation-Id", "corr-stock-set-by-operator")
+                .header("X-Operator-Id", "admin-001")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "productCode": "LIMITED-001",
+                      "availableQuantity": 15
+                    }
+                    """))
+            .andExpect(status().isOk())
+            .andExpect(header().string("X-Correlation-Id", "corr-stock-set-by-operator"))
+            .andExpect(jsonPath("$.success", is(true)))
+            .andExpect(jsonPath("$.data.skuId", is("SKU-001")));
+
+        assertEquals(
+            1,
+            queryInt("""
+                select count(*)
+                from admin_actions
+                where action = 'STOCK_QUANTITY_SET'
+                  and target_id = 'SKU-001'
+                  and operator_id = 'admin-001'
+                  and correlation_id = 'corr-stock-set-by-operator'
+                """)
+        );
+    }
+
+    @Test
+    void records_unknown_operator_when_operator_id_header_is_absent() throws Exception {
+        mockMvc.perform(put("/api/stocks/{skuId}", "SKU-001")
+                .header("X-Correlation-Id", "corr-stock-set-unknown")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "productCode": "LIMITED-001",
+                      "availableQuantity": 16
+                    }
+                    """))
+            .andExpect(status().isOk())
+            .andExpect(header().string("X-Correlation-Id", "corr-stock-set-unknown"))
+            .andExpect(jsonPath("$.success", is(true)))
+            .andExpect(jsonPath("$.data.skuId", is("SKU-001")));
+
+        assertEquals(
+            1,
+            queryInt("""
+                select count(*)
+                from admin_actions
+                where action = 'STOCK_QUANTITY_SET'
+                  and target_id = 'SKU-001'
+                  and operator_id = 'unknown'
+                  and correlation_id = 'corr-stock-set-unknown'
+                """)
+        );
     }
 
     @Test
@@ -160,5 +222,9 @@ class InventoryStockControllerIntegrationTest {
             .param("availableQuantity", availableQuantity)
             .param("reservedQuantity", reservedQuantity)
             .update();
+    }
+
+    private int queryInt(String sql) {
+        return jdbcClient.sql(sql).query(Integer.class).single();
     }
 }

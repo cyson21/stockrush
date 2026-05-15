@@ -36,6 +36,7 @@ class AdminOrderCancelControllerIntegrationTest {
     @BeforeEach
     void setUp() {
         mockMvc = MockMvcBuilders.webAppContextSetup(webApplicationContext).build();
+        jdbcClient.sql("delete from admin_actions").update();
         jdbcClient.sql("delete from outbox_events").update();
         jdbcClient.sql("delete from processed_events").update();
         jdbcClient.sql("delete from order_items").update();
@@ -48,7 +49,8 @@ class AdminOrderCancelControllerIntegrationTest {
 
         mockMvc.perform(post("/api/admin/orders/{orderId}/cancel", "ord_cancel_delay_001")
                 .header("Idempotency-Key", "idem-admin-cancel-001")
-                .header("X-Correlation-Id", "corr-admin-cancel-001"))
+                .header("X-Correlation-Id", "corr-admin-cancel-001")
+                .header("X-Operator-Id", "admin-demo"))
             .andExpect(status().isAccepted())
             .andExpect(header().string("X-Correlation-Id", "corr-admin-cancel-001"))
             .andExpect(jsonPath("$.success", is(true)))
@@ -65,6 +67,10 @@ class AdminOrderCancelControllerIntegrationTest {
         assertQuery("ADMIN_CANCEL_REQUESTED", "select payload ->> 'reason' from outbox_events");
         assertQuery("idem-admin-cancel-001", "select idempotency_key from outbox_events");
         assertQuery("corr-admin-cancel-001", "select correlation_id from outbox_events");
+        assertQuery("DELAYED_ORDER_CANCEL_REQUESTED", "select action from admin_actions");
+        assertQuery("ord_cancel_delay_001", "select target_id from admin_actions");
+        assertQuery("admin-demo", "select operator_id from admin_actions");
+        assertQuery("corr-admin-cancel-001", "select correlation_id from admin_actions");
     }
 
     @Test
@@ -86,6 +92,7 @@ class AdminOrderCancelControllerIntegrationTest {
         assertQuery("PAYMENT_CANCEL_REQUESTED", "select saga_status from customer_orders where order_id = 'ord_cancel_retry_001'");
         assertQuery("1", "select count(*)::text from outbox_events");
         assertQuery("idem-admin-cancel-retry-001", "select idempotency_key from outbox_events");
+        assertQuery("unknown", "select operator_id from admin_actions");
     }
 
     @Test

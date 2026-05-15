@@ -2,6 +2,7 @@ package com.stockrush.inventory.api;
 
 import com.stockrush.inventory.application.InventoryStockService;
 import com.stockrush.inventory.application.StockSnapshot;
+import com.stockrush.inventory.infra.audit.AdminActionRepository;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
@@ -21,10 +22,15 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/stocks")
 class InventoryStockController {
 
-    private final InventoryStockService inventoryStockService;
+    private static final String OPERATOR_HEADER_NAME = "X-Operator-Id";
+    private static final String ACTION_STOCK_QUANTITY_SET = "STOCK_QUANTITY_SET";
 
-    InventoryStockController(InventoryStockService inventoryStockService) {
+    private final InventoryStockService inventoryStockService;
+    private final AdminActionRepository adminActionRepository;
+
+    InventoryStockController(InventoryStockService inventoryStockService, AdminActionRepository adminActionRepository) {
         this.inventoryStockService = inventoryStockService;
+        this.adminActionRepository = adminActionRepository;
     }
 
     @GetMapping
@@ -59,12 +65,14 @@ class InventoryStockController {
     ResponseEntity<ApiResponse<StockResponse>> setStock(
         @PathVariable String skuId,
         @RequestHeader(value = CorrelationIds.HEADER_NAME, required = false) String correlationId,
+        @RequestHeader(value = OPERATOR_HEADER_NAME, required = false) String operatorId,
         @Valid @RequestBody SetStockRequest request
     ) {
         String resolvedCorrelationId = CorrelationIds.resolve(correlationId);
         StockResponse stock = StockResponse.from(
             inventoryStockService.setAvailableQuantity(skuId, request.productCode(), request.availableQuantity())
         );
+        adminActionRepository.record(ACTION_STOCK_QUANTITY_SET, stock.skuId(), operatorId, resolvedCorrelationId);
 
         return ResponseEntity.ok()
             .header(CorrelationIds.HEADER_NAME, resolvedCorrelationId)

@@ -64,7 +64,7 @@ Allowed `service` values: `order`, `inventory`, `payment`.
 | Name | Required | Description |
 |---|---:|---|
 | `X-Correlation-Id` | no | trace id echoed by Gateway and upstream service |
-| `X-Operator-Id` | no | operator id stored in `outbox_admin_actions`; defaults to `unknown` |
+| `X-Operator-Id` | Gateway-derived | Gateway overwrites this from the authenticated admin token; direct service calls may omit it and default to `unknown` |
 
 ### Query Parameters
 
@@ -91,7 +91,7 @@ Allowed `service` values: `order`, `inventory`, `payment`.
 | Name | Required | Description |
 |---|---:|---|
 | `X-Correlation-Id` | no | trace id echoed by Gateway and upstream service |
-| `X-Operator-Id` | no | operator id stored in `outbox_admin_actions`; defaults to `unknown` |
+| `X-Operator-Id` | Gateway-derived | Gateway overwrites this from the authenticated admin token; direct service calls may omit it and default to `unknown` |
 
 ### Query Parameters
 
@@ -125,7 +125,7 @@ Each producing service stores retry and requeue requests in `outbox_admin_action
 | `action` | `RETRY_PENDING` or `REQUEUE_FAILED` |
 | `requested_batch_size` | requested batch size |
 | `affected_count` | claimed or updated row count |
-| `operator_id` | value from `X-Operator-Id`, or `unknown` |
+| `operator_id` | Gateway-derived admin principal, or `unknown` for direct service-local calls without the header |
 | `correlation_id` | resolved trace id |
 | `created_at` | DB timestamp |
 
@@ -136,7 +136,7 @@ Each producing service stores retry and requeue requests in `outbox_admin_action
 - Each service publishes through its existing relay service.
 - Retry and requeue actions write an audit row after the service action succeeds.
 - Gateway rejects unknown service values before calling an upstream service.
-- Authentication is still out of scope and must be added before public deployment.
+- Gateway-protected demo routes require an admin bearer token.
 
 ## Local Recovery Runner
 

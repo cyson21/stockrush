@@ -133,8 +133,10 @@ Current baseline:
 
 - Gateway admin routes derive `X-Operator-Id` from the authenticated admin token and overwrite client supplied values.
 - Admin App no longer sends `X-Operator-Id` for outbox retry/requeue; the Gateway owns operator propagation.
-- Service-local outbox admin APIs keep optional `X-Operator-Id` fallback for direct local tooling compatibility.
-- Delayed payment cancel, product mutation, and stock mutation still need explicit audit rows in their owning services.
+- Service-local admin APIs keep optional `X-Operator-Id` fallback for direct local tooling compatibility.
+- Order Service records delayed payment cancel admin actions.
+- Catalog Service records product create/update admin actions.
+- Inventory Service records stock quantity set admin actions.
 
 ### P9-6. Client Login
 
