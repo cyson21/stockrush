@@ -168,8 +168,8 @@ Current baseline:
 
 ## Follow-Up Items
 
-- Live Keycloak browser/mobile smoke evidence remains pending.
-  - 토큰 발급, API 전달 경로는 고정됐으나 브라우저/모바일 실기동 로그인 기반 smoke evidence는 남은 작업이다.
+- Live Keycloak browser smoke evidence is recorded; mobile smoke evidence remains pending.
+  - 모바일 실기동 로그인 기반 smoke evidence는 Android emulator 또는 iOS simulator 준비 후 진행한다.
 - 공개 라우트와 레거시 직접 호출 정책 정리가 보류 중이다.
   - `GET /api/products`, `GET /api/stocks`, `POST /api/coupons/quote`의 공개 정책 범위를 문서에서 정리한다.
   - 로컬 호환을 위한 `memberId` 기반 경로는 단계적으로 폐기할지, direct call 허용 범위를 명확히 제한할지 다음 단계에서 정한다.
