@@ -1,59 +1,123 @@
 # StockRush
 
-StockRush는 한정 판매 주문 흐름에서 Kafka, Outbox, Saga를 묶은 엔드투엔드 동작 중심 포트폴리오 프로젝트입니다.
+[![CI](https://github.com/cyson21/stockrush/actions/workflows/ci.yml/badge.svg)](https://github.com/cyson21/stockrush/actions/workflows/ci.yml)
+[![Release Images](https://github.com/cyson21/stockrush/actions/workflows/release-images.yml/badge.svg)](https://github.com/cyson21/stockrush/actions/workflows/release-images.yml)
+![Java 17](https://img.shields.io/badge/Java-17-007396)
+![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.x-6DB33F)
+![Kafka](https://img.shields.io/badge/Kafka-event%20driven-231F20)
+![React](https://img.shields.io/badge/React-web%20apps-61DAFB)
+![Expo](https://img.shields.io/badge/Expo-mobile-000020)
 
-## 현재 구현/검증 상태(요약)
+StockRush는 한정 판매 커머스에서 주문, 재고, 결제, 쿠폰, 출고, 조회 모델을 분리했을 때 생기는 상태 수렴 문제를 다룬 백엔드 중심 포트폴리오 프로젝트입니다.
 
-이 단계에서 아래 구간은 구현되어 있으며, `CARD`/`FAIL_CARD`/`DELAY_CARD`와 지연 결제 취소는 실제 로컬 서비스와 Kafka로 E2E 확인했습니다.
+단순 CRUD보다 실제 장애 지점이 드러나는 흐름에 집중했습니다. 주문 생성은 바로 끝나지 않고 Kafka, Outbox, Saga, 멱등성 키, 재고 선점, 결제 결과, 관리자 운영 액션을 거쳐 최종 상태로 수렴합니다. 고객 웹, 관리자 웹, Expo 모바일 앱은 이 흐름을 직접 확인하기 위한 얇은 제품 화면입니다.
 
-- 고객 앱(`apps/customer-app`) + 주문 생성/조회 플로우
-- 관리자 앱(`apps/admin-app`) + 운영 화면(상품, 재고, 주문, Saga, Outbox)
-- Catalog / Inventory / Order / Payment API 체인
-- Promotion Service 쿠폰 등록/목록/할인 견적 API와 주문 이벤트 기반 사용 상태 기록
-- Fulfillment Service 주문 완료 이벤트 기반 출고 준비 요청 기록과 관리자 출고 상태 조회
-- Read Model Service 주문 이벤트 기반 고객/관리자 주문 요약 projection
-- 고객 앱 쿠폰 견적 UI와 Order Service 주문 할인 반영
-- Expo React Native 기반 Android/iOS 고객 모바일 앱 scaffold, Gateway-first API client, 상품/SKU 재고 조회, 쿠폰 견적, 주문 생성, 주문 상태 추적, 주문 내역 화면
-- Kafka + 서비스 로컬 Outbox + Saga 상태 전이
-- `CARD` 성공, `FAIL_CARD` 실패/재고 복구, `DELAY_CARD` 지연 결제와 관리자 취소 흐름
+## What to Look At
 
-## 실행 문서
+| 관점 | 볼만한 지점 |
+|---|---|
+| 주문 흐름 | `CARD`, `FAIL_CARD`, `DELAY_CARD` 주문이 서로 다른 Saga 경로로 수렴 |
+| 재고 처리 | 동일 SKU에 주문이 몰릴 때 성공/실패 주문과 최종 재고를 함께 검증 |
+| 이벤트 신뢰성 | 서비스별 Outbox relay, retry, failed requeue, consumer 중복 처리 |
+| 운영 화면 | 관리자 앱에서 상품, 재고, 주문, Saga, Outbox, 쿠폰, 출고 상태를 확인 |
+| 보안 | Keycloak OIDC/PKCE, Gateway JWT 검증, 역할 기반 접근, 고객 주문 소유권 검사 |
+| 실행 환경 | macOS와 Windows 11 모두 Docker Compose 데모 런타임으로 재현 |
+| 검증 방식 | 단위/통합/UI/E2E/Architecture Guard/CI 보안 스캔을 분리해서 운영 |
 
-- [로컬 E2E 실행 가이드](docs/runbooks/local-e2e.md)
-- [로컬 인프라 실행 가이드](infra/local/README.md)
-- [이식형 데모 런타임 실행 가이드](infra/demo/README.md)
-- [Docker 정리 Runbook](docs/runbooks/docker-cleanup.md)
-- [고객 앱 가이드](apps/customer-app/README.md)
-- [관리자 앱 가이드](apps/admin-app/README.md)
-- [모바일 앱 가이드](apps/mobile-app/README.md)
-- [서비스 실행 가이드](services/README.md)
-- [CI/CD 운영 기준](docs/ci-cd.md)
+## Architecture
 
-## 빠른 실행 순서
+```mermaid
+flowchart LR
+  CustomerWeb["Customer Web<br/>React/Vite"]
+  AdminWeb["Admin Web<br/>React/Vite"]
+  Mobile["Mobile App<br/>Expo React Native"]
+  Keycloak["Keycloak<br/>OIDC/PKCE"]
+  Gateway["Gateway<br/>Spring Security Resource Server"]
 
-현재 실행 방식은 개발 모드와 데모 모드로 분리한다.
+  Catalog["Catalog Service"]
+  Inventory["Inventory Service"]
+  Order["Order Service<br/>Saga Orchestrator"]
+  Payment["Payment Service"]
+  Promotion["Promotion Service"]
+  Fulfillment["Fulfillment Service"]
+  ReadModel["Read Model Service"]
 
-개발 모드는 빠른 디버깅을 위해 Docker Compose로 PostgreSQL, Redis, Kafka, Kafka UI만 실행하고, Spring Boot 서비스와 앱은 host 런타임에서 실행한다.
+  Kafka["Kafka"]
+  Postgres[("PostgreSQL<br/>schema per service")]
 
-1. `infra/local`에서 PostgreSQL, Redis, Kafka, Kafka UI를 실행합니다.
-2. gateway, catalog-service, inventory-service, order-service, payment-service를 각각 기동합니다.
-   - 쿠폰 API를 확인할 때는 promotion-service도 함께 기동합니다.
-   - 출고 준비 요청을 확인할 때는 fulfillment-service도 함께 기동합니다.
-   - 주문 요약 projection을 확인할 때는 read-model-service도 함께 기동합니다.
-3. 현재 구현된 React/Vite customer-app과 admin-app을 실행합니다.
-4. 모바일 앱은 `apps/mobile-app`에서 Expo scaffold, API client, 상품/SKU 재고, 쿠폰/주문 생성, 주문 상태 추적, 주문 내역 화면을 확인합니다.
-5. [Local E2E Runbook](docs/runbooks/local-e2e.md)에 따라 `CARD`, `FAIL_CARD`, `DELAY_CARD`, 지연 결제 취소 시나리오를 확인합니다.
+  CustomerWeb --> Keycloak
+  AdminWeb --> Keycloak
+  Mobile --> Keycloak
+  CustomerWeb --> Gateway
+  AdminWeb --> Gateway
+  Mobile --> Gateway
 
-자세한 명령은 실행 문서에 분리했습니다. README는 포트폴리오 설명과 검증 기준을 빠르게 파악하는 진입점으로 유지합니다.
+  Gateway --> Catalog
+  Gateway --> Inventory
+  Gateway --> Order
+  Gateway --> Promotion
+  Gateway --> Fulfillment
+  Gateway --> ReadModel
 
-```bash
-cd infra/local
-docker compose up -d
+  Order <--> Kafka
+  Inventory <--> Kafka
+  Payment <--> Kafka
+  Promotion <--> Kafka
+  Fulfillment <--> Kafka
+  ReadModel <--> Kafka
+
+  Catalog --> Postgres
+  Inventory --> Postgres
+  Order --> Postgres
+  Payment --> Postgres
+  Promotion --> Postgres
+  Fulfillment --> Postgres
+  ReadModel --> Postgres
 ```
 
-서비스와 앱 기동 명령은 [Local E2E Runbook](docs/runbooks/local-e2e.md)과 [서비스 실행 가이드](services/README.md)를 기준으로 실행합니다.
+서비스는 하나의 PostgreSQL 인스턴스를 공유하되 schema를 분리합니다. 사이드 프로젝트에서 운영 비용을 낮추면서도 서비스별 데이터 소유권과 마이그레이션 경계를 드러내기 위한 선택입니다.
 
-데모 모드는 `infra/demo` Docker Compose로 인프라, 백엔드 서비스, 웹앱을 함께 실행해 macOS와 Windows 11에서 재현 가능하게 구성합니다.
+## Main Flow
+
+1. 고객이 Gateway를 통해 주문을 생성합니다. `Idempotency-Key`와 인증 주체가 함께 들어갑니다.
+2. Order Service가 주문과 Outbox 이벤트를 같은 트랜잭션에 저장합니다.
+3. Outbox relay가 Kafka로 재고 예약 command를 발행합니다.
+4. Inventory Service가 SKU 재고를 선점하거나 실패 이벤트를 발행합니다.
+5. 결제 결과에 따라 주문은 `CONFIRMED/COMPLETED`, `CANCELLED/FAILED`, `PAYMENT_DELAYED` 중 하나로 이동합니다.
+6. 쿠폰, 출고, 조회 모델 서비스는 주문 이벤트를 소비해 각자의 상태를 갱신합니다.
+7. 관리자는 지연 결제 취소, Outbox 재처리, 상품/재고 변경 같은 운영 액션을 별도 화면에서 수행합니다.
+
+## Implemented Scope
+
+| 영역 | 구현 내용 |
+|---|---|
+| Backend | Gateway, Catalog, Inventory, Order, Payment, Promotion, Fulfillment, Read Model |
+| Messaging | Kafka topic 기반 command/event 흐름, 서비스별 Outbox, consumer 중복 처리 |
+| Persistence | PostgreSQL schema 분리, Flyway migration, 서비스별 감사 row |
+| Customer Web | 상품 조회, SKU 재고, 쿠폰 견적, 주문 생성, 주문 상태 polling, OIDC 로그인 |
+| Admin Web | 주문/Saga 조회, 상품/재고 관리, 쿠폰 사용 이력, 출고 요청, Outbox 운영, OIDC 로그인 |
+| Mobile | Expo 기반 상품/SKU 조회, 쿠폰 견적, 보호 주문 생성, 상태 추적, 주문 내역 |
+| Security | Keycloak realm import, Gateway JWT 검증, `ROLE_CUSTOMER`/`ROLE_ADMIN`, 고객 주문 소유권 검사 |
+| CI/CD | GitHub Actions, GHCR image publish, Trivy scan, AWS 사용 차단 스크립트 |
+| Local Runtime | 개발용 인프라 compose와 이식형 데모 compose를 분리 |
+
+## Verified Scenarios
+
+| 시나리오 | 확인한 결과 |
+|---|---|
+| 정상 주문 | `CARD` 주문이 `CONFIRMED/COMPLETED`로 수렴 |
+| 결제 실패 | `FAIL_CARD` 주문이 `CANCELLED/FAILED`가 되고 예약 재고 복구 |
+| 지연 결제 | `DELAY_CARD` 주문이 `PAYMENT_DELAYED`에 머문 뒤 관리자 취소로 복구 |
+| 동일 SKU 동시 주문 | 주문 6건, 초기 재고 3개 기준 3건 완료/3건 취소, 최종 재고 `available=0`, `reserved=0` |
+| 대량 요청 + 멱등성 replay | 요청 60회에서 주문 30건 생성, 최종 성공 10건/취소 20건, outbox 잔여분 0 |
+| Kafka 일시 중단 | broker pause 중 outbox 대기 관측, unpause 후 주문/재고/outbox 상태 수렴 |
+| Gateway 보안 | 인증 없음 `401`, 권한 부족 `403`, 고객 주문 소유권 위반 차단 |
+| 모바일 보호 주문 | Android Expo Go에서 Keycloak 로그인 후 주문 `ord_20260515233439_6a5f6b71`이 `CONFIRMED/COMPLETED` 도달 |
+
+
+## Run Locally
+
+데모 모드는 인프라, 백엔드 서비스, 웹앱을 Docker Compose로 함께 띄웁니다. 포트폴리오 시연이나 다른 PC에서 재현할 때는 이 경로가 가장 단순합니다.
 
 ```bash
 ./scripts/demo-up.sh
@@ -61,105 +125,82 @@ docker compose up -d
 ./scripts/demo-down.sh
 ```
 
-Windows 11 PowerShell에서는 `.\scripts\demo-up.ps1`, `.\scripts\demo-smoke.ps1`, `.\scripts\demo-down.ps1`을 사용합니다. 자세한 내용은 [Demo Runtime Guide](infra/demo/README.md)에 둡니다.
+Windows 11 PowerShell에서는 같은 흐름을 아래 스크립트로 실행합니다.
 
-## 핵심 공개 문서
+```powershell
+.\scripts\demo-up.ps1
+.\scripts\demo-smoke.ps1
+.\scripts\demo-down.ps1
+```
 
-- [Phase 1 Commerce Foundation](docs/architecture/phase-1-commerce-foundation.md)
-- [Customer App Flow](docs/architecture/customer-app-flow.md)
-- [Admin App Flow](docs/architecture/admin-app-flow.md)
-- [Mobile App Flow](docs/architecture/mobile-app-flow.md)
-- [Product Discovery](docs/architecture/product-discovery.md)
-- [Event Envelope](docs/architecture/events.md)
-- [Outbox and Consumer Idempotency](docs/architecture/outbox.md)
-- [Observability Baseline](docs/architecture/observability.md)
-- [Test Strategy](docs/test-strategy.md)
-- [Portfolio Summary](docs/portfolio-summary.md)
-- [Troubleshooting](docs/troubleshooting/phase-1-commerce-foundation.md)
-- [Catalog and Inventory API](docs/api/catalog-inventory.md)
-- [Customer Order API](docs/api/customer-orders.md)
-- [Catalog Admin API](docs/api/catalog-admin.md)
-- [Promotion API](docs/api/promotion.md)
-- [Fulfillment API](docs/api/fulfillment.md)
-- [Read Model API](docs/api/read-model.md)
-- [Admin Order API](docs/api/admin-orders.md)
-- [Outbox Admin API](docs/api/outbox-admin.md)
-- [Kafka 기반 MSA 선택 ADR](docs/adr/0001-kafka-based-msa.md)
-- [Development Operations Architecture](docs/architecture/development-operations.md)
-- [AI Development Process](docs/ai-development-process.md)
+서비스를 직접 디버깅할 때는 개발 모드를 사용합니다. PostgreSQL, Redis, Kafka, Kafka UI만 Docker로 띄우고 Spring Boot 서비스와 앱은 host 런타임에서 실행합니다.
 
-## 아키텍처 요약
+```bash
+cd infra/local
+docker compose up -d
+```
 
-| 영역 | 선택 |
+자세한 실행 순서는 [Local E2E Runbook](docs/runbooks/local-e2e.md), [Services Guide](services/README.md), [Demo Runtime Guide](infra/demo/README.md)에 분리했습니다.
+
+## Quality Gates
+
+| Gate | Command |
 |---|---|
-| 서비스 구조 | gateway, catalog-service, inventory-service, order-service, payment-service, promotion-service, fulfillment-service, read-model-service |
-| 비동기 메시징 | Apache Kafka topic 기반 event/command 흐름 |
-| 일관성 처리 | Order Service 중심 Saga Orchestration |
-| 발행 안정성 | 서비스별 Outbox relay와 retry/failed 상태 |
-| 중복 처리 | Consumer processed event 저장 |
-| 데이터 저장 | 단일 PostgreSQL 인스턴스 안의 서비스별 schema |
-| 앱 | React/Vite 고객/관리자 웹앱, Expo React Native 고객 모바일 앱 |
-| AI 개발 운영 | Dev RAG, Project MCP, Spark worker/reviewer, Agent Runner, Architecture Guard |
-| CI/CD | GitHub Actions, GHCR, Docker Compose local deploy |
+| Backend services | `scripts/with-java17.sh mvn test` per service |
+| Customer/Admin web | `npm --prefix apps/customer-app test -- --run`, `npm --prefix apps/admin-app test -- --run` |
+| Mobile app | `npm --prefix apps/mobile-app test`, `npm --prefix apps/mobile-app run typecheck` |
+| Architecture Guard | `./tools/architecture-guard/architecture-guard check` |
+| Demo smoke | `./scripts/demo-smoke.sh` |
+| Kafka outage smoke | `./scripts/demo-smoke.sh --kafka-outage` |
+| Secret scan | `./scripts/check-no-committed-secrets.sh` |
+| AWS usage guard | `./scripts/check-no-aws-usage.sh` |
 
-## 기술 선택 이유
+CI는 서비스 테스트, 웹/모바일 테스트, Architecture Guard, secret scan, Trivy filesystem scan을 실행합니다. `main` 기준 CI가 통과하면 Release Images workflow가 GHCR 이미지를 발행하고 이미지 스캔을 수행합니다.
 
-- Apache Kafka: 주문, 재고, 결제 사이의 비동기 흐름과 재처리 가능성을 보여주기 위해 사용했습니다.
-- Outbox: DB 상태 변경과 Kafka 발행 사이의 실패 지점을 운영자가 확인하고 재시도할 수 있게 만들기 위해 사용했습니다.
-- Saga Orchestration: 주문 상태의 최종 책임을 Order Service에 두고, 재고/결제 결과 이벤트에 따라 다음 흐름을 결정하기 위해 선택했습니다.
-- PostgreSQL schema 분리: 초기 개발 속도를 유지하면서도 서비스별 데이터 소유권을 명확히 하기 위해 사용했습니다.
-- React/Vite 웹앱: 백엔드 흐름을 고객/관리자 관점에서 빠르게 시연할 수 있게 하기 위해 최소 웹앱을 먼저 구현했습니다.
-- Expo React Native 모바일 앱: Android/iOS에서 고객 주문 흐름과 Read Model 기반 주문 내역을 시연할 수 있도록 Gateway-first client 구조를 잡고, 상품/SKU 재고 조회, 쿠폰/주문 생성, 주문 상태 추적, 주문 내역 화면을 연결했습니다.
-- GitHub Actions/GHCR: 개인 AWS 자원을 쓰지 않고도 테스트, 이미지 발행, 로컬 배포를 자동화하기 위해 사용했습니다.
+## Project Map
 
-## 실행 상태에서 확인되는 핵심 포인트
+```text
+apps/
+  customer-app/        React customer web app
+  admin-app/           React admin web app
+  mobile-app/          Expo React Native customer app
+services/
+  gateway/             External API entrypoint and security boundary
+  catalog-service/     Product and SKU catalog
+  inventory-service/   Stock reservation and release
+  order-service/       Order state and Saga orchestration
+  payment-service/     Payment authorization simulation
+  promotion-service/   Coupon quote and usage lifecycle
+  fulfillment-service/ OrderConfirmed to fulfillment request
+  read-model-service/  Customer/admin order summaries
+infra/
+  local/               Development infrastructure
+  demo/                Portable demo runtime
+tools/
+  architecture-guard/  Static project rules
+  local-e2e/           Scenario runner
+```
 
-- 주문 서비스(`order-service`)가 Saga Orchestrator 역할을 하며, Outbox를 통해 Kafka 이벤트를 발행합니다.
-- 재고 서비스는 `InventoryReserved / InventoryReservationFailed / InventoryReservationConfirmed / InventoryReservationReleased`로 결제와 연동해 예약 수량을 보정합니다.
-- 결제 서비스는 `CARD` 승인, `FAIL_CARD` 실패, `DELAY_CARD` 지연, 지연 결제 취소 분기 검증이 가능하며, 주문 상태와 Saga 상태 변화가 연동되어 보입니다.
-- 관리자 앱에서 상품 등록/수정, SKU 재고 설정, 지연 결제 취소, 주문 Saga 추적, Outbox retry와 failed requeue를 한 흐름으로 확인할 수 있습니다.
-- Outbox 운영 액션은 `X-Operator-Id`, `X-Correlation-Id`, batch size, 처리 건수를 서비스별 감사 테이블에 남깁니다.
-- Promotion Service는 쿠폰 등록/목록과 주문 전 할인 견적 계산을 제공하고, 주문 이벤트를 소비해 쿠폰 사용 상태를 기록합니다. Order Service는 주문 생성 시 할인 가격 snapshot을 저장해 결제 예정 금액을 Payment command로 전달합니다.
-- Fulfillment Service는 `OrderConfirmed`를 소비해 주문별 출고 준비 요청을 `PREPARING` 상태로 기록하고, 관리자 출고 상태 조회 API를 제공합니다.
-- Read Model Service는 주문 생성/완료/취소 이벤트를 소비해 `read_model.order_summaries`를 갱신하고 고객 주문 내역과 관리자 주문 요약 API를 제공합니다. 관리자 대시보드는 주문 ID, 회원 ID, 주문 상태, Saga 상태, 쿠폰 코드 조건 검색을 지원합니다.
+## Key Docs
 
-## 대표 시나리오
-
-| 시나리오 | 기대 결과 |
+| 문서 | 내용 |
 |---|---|
-| `CARD` 주문 | 주문 `CONFIRMED`, Saga `COMPLETED`, 예약 재고 확정 |
-| `FAIL_CARD` 주문 | 주문 `CANCELLED`, Saga `FAILED`, 예약 재고 복구 |
-| `DELAY_CARD` 주문 | 주문 `CREATED`, Saga `PAYMENT_DELAYED`, 관리자 취소 가능 |
-| 지연 결제 취소 | `PaymentCancelRequested`와 `PaymentCanceled` 이후 주문 취소 및 재고 복구 |
-| Outbox 운영 | 서비스별 outbox 조회, due `PENDING` 이벤트 retry, `FAILED` 이벤트 requeue |
-| 쿠폰 견적/주문 할인 | 쿠폰 코드와 주문 금액으로 할인액을 산출하고, 주문 생성 후 결제 예정 금액으로 결제 요청 |
-| 쿠폰 사용 복구 | `OrderCreated` 쿠폰 사용 기록 후 `OrderConfirmed`는 사용 완료, `OrderCancelled`는 사용 해제 |
-| 출고 준비 요청 | `OrderConfirmed` 이후 Fulfillment Service가 주문별 출고 준비 요청 기록 |
-| 주문 요약 projection | `OrderCreated` 이후 요약 생성, `OrderConfirmed`/`OrderCancelled` 이후 상태 갱신 |
+| [Portfolio Summary](docs/portfolio-summary.md) | 면접/포트폴리오 설명용 요약 |
+| [Phase 1 Commerce Foundation](docs/architecture/phase-1-commerce-foundation.md) | 주문/재고/결제 중심 구조 |
+| [Security Architecture](docs/architecture/security.md) | OIDC, Gateway 보안, route 정책 |
+| [Outbox and Consumer Idempotency](docs/architecture/outbox.md) | Outbox relay와 중복 처리 기준 |
+| [Event Envelope](docs/architecture/events.md) | Kafka 메시지 envelope |
+| [Test Strategy](docs/test-strategy.md) | 테스트 계층과 시나리오 증거 |
+| [CI/CD 운영 기준](docs/ci-cd.md) | GitHub Actions, GHCR, 로컬 배포 |
+| [AI Development Process](docs/ai-development-process.md) | agent 기반 개발 운영 기록 |
+| [Troubleshooting](docs/troubleshooting/phase-1-commerce-foundation.md) | 구현 중 발견한 문제와 재발 방지 |
 
-## 검증 요약
+## Current Boundaries
 
-- 백엔드는 서비스별 `mvn test`로 API, Outbox relay, Kafka smoke, Saga handler를 검증합니다. 로컬 기본 Java가 17이 아니면 `scripts/with-java17.*` wrapper를 사용합니다.
-- 고객/관리자 앱은 Vitest와 production build로 API 호출 모양, 상태 렌더링, 재시도 키 재사용을 검증합니다.
-- 모바일 앱은 상품/SKU 재고, 쿠폰 견적, 주문 생성, 주문 상태 추적, Read Model 주문 내역 화면을 React Native Testing Library, Jest Expo, TypeScript typecheck, scaffold validation으로 검증했습니다. Android preflight는 demo Gateway health와 AVD 감지까지 통과했고, Android Expo Go 보호 주문 UI smoke에서 Keycloak 로그인 후 주문 `ord_20260515233439_6a5f6b71`이 `CONFIRMED/COMPLETED`로 수렴했습니다. iOS는 full Xcode `simctl` 준비가 필요합니다.
-- `./tools/architecture-guard/architecture-guard check`로 schema ownership, Controller 반환 타입, 이벤트 envelope, Outbox table shape, Gateway/서비스 Correlation ID 전파, Actuator 운영 endpoint 노출을 점검합니다.
-- 실제 로컬 E2E는 [Local E2E Runbook](docs/runbooks/local-e2e.md)의 `CARD`, `FAIL_CARD`, `DELAY_CARD`, 지연 결제 취소 시나리오를 기준으로 재현합니다.
-- Kafka broker 장애 복구는 `./tools/local-e2e/local-e2e kafka-outage-recovery` 또는 `./scripts/demo-smoke.sh --kafka-outage`로 선택 실행합니다.
-- 최근 지연 결제 취소 E2E 증거: `ord_20260513012031_8c06cd49` 주문이 `CREATED/PAYMENT_DELAYED` 도달 후 관리자 취소로 `CANCELLED/FAILED`가 됐고, SKU `DELAY-E2E-102029-S` 재고는 `available=20`, `reserved=0`으로 복구됐습니다.
-- 동일 SKU 최종 상태 E2E 증거: `tools/local-e2e/local-e2e same-sku-concurrency` 실행에서 주문 생성/조회는 Gateway를 경유했고, 주문 6건, 초기 재고 3개 기준 3건 완료/3건 취소, 재고 `available=0`, `reserved=0`, 서비스별 `pendingOutboxDelta=0`을 확인했습니다.
-- Gateway 주문/운영 라우팅 smoke 증거: fake upstream 기준 주문 생성/조회, 관리자 주문 조회/취소, Outbox 조회/재시도/requeue, 쿠폰 견적/사용 이력, Read Model 주문 요약이 method, path, query, body, 핵심 헤더, status, body를 전달하는지 `services/gateway` Maven 테스트로 확인했습니다.
-- Gateway 주문 시나리오 E2E 증거: `GW-E2E-20260513111940-332ba0dc` 기준 `CARD`, `FAIL_CARD`, `DELAY_CARD`, 지연 결제 취소가 Gateway 주문 경로에서 처리됐고, 최종 재고 `available=19`, `reserved=0`, 서비스별 `pendingOutboxDelta=0`을 확인했습니다.
-- Kafka 장애 복구 smoke 증거: `KAFKA-OUTAGE-E2E-20260515014056-84904d76` 기준 Kafka pause 중 주문 `ord_20260514164100_80a5f7f8`가 `CREATED/STARTED`와 order outbox 1건으로 머문 뒤, unpause 후 `CONFIRMED/COMPLETED`, 재고 `available=2`, `reserved=0`, 잔여 outbox 0으로 수렴했습니다.
-- Promotion Service 집중 검증: `PromotionCouponControllerIntegrationTest`로 쿠폰 생성, 상태별 목록, 퍼센트 할인 상한, 최소 주문 금액 미달, 중복 쿠폰 코드 응답을 확인했습니다.
-- 쿠폰 주문 반영 검증: Order Service 테스트로 quote 실패/타임아웃/금액 일관성, 주문 저장 가격 snapshot, Payment command 결제 예정 금액을 확인하고 Customer App Vitest/build로 쿠폰 UI를 확인했습니다.
-- 쿠폰 사용 이벤트 검증: Promotion Service 테스트로 `OrderCreated` 사용 기록, `OrderConfirmed` 사용 완료, `OrderCancelled` 사용 해제와 중복 이벤트 무해 처리를 확인했습니다.
-- 출고 준비 이벤트 검증: Fulfillment Service 테스트로 `OrderConfirmed` 출고 준비 요청 생성과 중복 이벤트 무해 처리를 확인했습니다.
-- 주문 요약 projection 검증: Read Model Service 테스트로 주문 생성/완료/취소 이벤트 처리, JSON consumer dispatch, 고객/관리자 조회 API와 조건 검색을 확인했습니다.
+완료 범위와 남겨둔 범위를 구분해 둡니다.
 
-## 현재 한계
-
-- Gateway는 주문 생성/조회, 관리자 주문 조회/취소, Outbox 조회/재시도/requeue 라우팅 smoke와 동일 SKU runner/runbook의 Gateway 경유 경로까지 검증 범위를 넓혔습니다.
-- Promotion Service는 주문 이벤트 기반 쿠폰 사용 상태, Gateway 쿠폰 견적/사용 이력 route, 관리자 사용 이력 화면까지 연결했습니다.
-- Fulfillment Service는 출고 준비 요청 기록, Gateway route, 관리자 출고 상태 화면까지 연결했습니다. carrier/label/tracking 상태는 후속 확장 범위입니다.
-- Read Model Service는 주문 요약 projection, 서비스-local 조회 API, Gateway 조회 route, 조건 검색 가능한 관리자 대시보드까지 연결했습니다. 고객 상품 검색은 Catalog API와 Customer App UI로 먼저 연결했고, 별도 상품 검색 projection은 후속 확장 범위입니다.
-- Gateway 인증/권한은 OAuth2 Resource Server 기반으로 시작했으며, 관리자 API는 `ROLE_ADMIN`, 고객 주문 API는 `ROLE_CUSTOMER` 없이는 접근할 수 없습니다. demo runtime에는 Keycloak realm import와 smoke token 취득 흐름을 연결했습니다. 고객 주문 생성/상세/주문 내역은 JWT subject 기준으로 동작하고, 다른 고객 주문 조회와 재시도 키 replay는 차단합니다. Customer/Admin Web과 Mobile App은 OIDC PKCE 로그인 상태에서 protected API에 Bearer token을 전달합니다. 공개 API는 Gateway `GET /api/products`, `GET /api/stocks`, `POST /api/coupons/quote`로 제한했고, service-local 직접 호출은 내부/dev 용도로 분리했습니다. 관리자 운영 감사는 Gateway가 인증 주체 기반 operator header를 전달하고, Outbox 운영/지연 결제 취소/상품 변경/재고 변경이 서비스별 감사 row를 남깁니다. 부하 벤치마크와 Kafka consumer 병렬성 검증은 후속 확장 범위입니다.
+- iOS 실기동 증거는 full Xcode `simctl` 환경이 없어 Android Expo Go 증거로 대체했습니다.
+- Fulfillment는 출고 준비 상태까지 구현했고 carrier, label, tracking은 후속 확장 범위입니다.
+- 고객 상품 검색은 Catalog API와 Customer App UI로 처리하며 별도 검색 projection은 만들지 않았습니다.
+- 동일 SKU E2E는 최종 상태 검증 목적입니다. 외부 부하 벤치마크와 Kafka consumer 병렬성 튜닝은 별도 과제로 남겼습니다.
+- 서비스-local 직접 호출은 개발 편의용이고, 포트폴리오 시연의 외부 진입점은 Gateway입니다.
