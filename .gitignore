@@ -41,3 +41,7 @@ data/
 
 # AI run generated scratch files
 .ai-runs/**/scratch/
+
+# Agent-local rule files
+GEMINI.md
+CLAUDE.md
