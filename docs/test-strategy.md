@@ -66,6 +66,7 @@ Web visual smoke uses the demo runtime by default and stores representative scre
 ```bash
 ./scripts/demo-up.sh
 ./scripts/demo-smoke.sh --skip-burst
+node tools/portfolio-demo-data/seed-portfolio-data.mjs
 node tools/web-screenshots/capture-web-screenshots.mjs
 ```
 

@@ -3,6 +3,7 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawn } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 
 const ROOT_DIR = new URL('../..', import.meta.url).pathname.replace(/\/$/, '');
 const SCREENSHOT_DIR = `${ROOT_DIR}/docs/assets/screenshots`;
@@ -18,12 +19,43 @@ const adminUrl = process.env.ADMIN_APP_URL ?? 'http://localhost:15174/';
 const keycloakTokenUrl =
   process.env.KEYCLOAK_TOKEN_URL ??
   'http://localhost:28088/realms/stockrush/protocol/openid-connect/token';
-const gatewayUrl = process.env.GATEWAY_URL ?? 'http://localhost:18080';
+const gatewayUrl = process.env.GATEWAY_URL ?? 'http://localhost:28080';
 const customerUser = process.env.KEYCLOAK_CUSTOMER_USERNAME ?? 'customer.demo@stockrush.local';
 const customerPassword = process.env.KEYCLOAK_CUSTOMER_PASSWORD ?? 'demo-customer-pass';
 const adminUser = process.env.KEYCLOAK_ADMIN_USERNAME ?? 'admin.demo@stockrush.local';
 const adminPassword = process.env.KEYCLOAK_ADMIN_PASSWORD ?? 'demo-admin-pass';
 const smokeClientId = process.env.KEYCLOAK_SMOKE_CLIENT_ID ?? 'stockrush-demo-smoke';
+
+export const adminCaptureTargets = [
+  {
+    key: 'adminDashboard',
+    tabLabel: 'Dashboard',
+    readyText: '주문 대시보드',
+    fileName: 'admin-dashboard-desktop.png',
+    viewport: { width: 1440, height: 1000 },
+  },
+  {
+    key: 'adminCoupons',
+    tabLabel: 'Coupons',
+    readyText: '쿠폰 사용 이력',
+    fileName: 'admin-coupons-desktop.png',
+    viewport: { width: 1440, height: 1000 },
+  },
+  {
+    key: 'adminFulfillment',
+    tabLabel: 'Fulfillment',
+    readyText: '출고 요청 이력',
+    fileName: 'admin-fulfillment-desktop.png',
+    viewport: { width: 1440, height: 1000 },
+  },
+  {
+    key: 'adminOutbox',
+    tabLabel: 'Outbox',
+    readyText: 'Outbox 운영',
+    fileName: 'admin-outbox-desktop.png',
+    viewport: { width: 1440, height: 1000 },
+  },
+];
 
 function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -339,18 +371,16 @@ async function main() {
     );
 
     await setupAdminPage(cdp, adminToken);
-    await clickTab(cdp, 'Dashboard');
-    const adminDashboard = await captureFullPage(
-      cdp,
-      `${SCREENSHOT_DIR}/admin-dashboard-desktop.png`,
-      { width: 1440, height: 1000 },
-    );
-    await clickTab(cdp, 'Outbox');
-    const adminOutbox = await captureFullPage(
-      cdp,
-      `${SCREENSHOT_DIR}/admin-outbox-desktop.png`,
-      { width: 1440, height: 1000 },
-    );
+    const adminScreenshots = {};
+    for (const target of adminCaptureTargets) {
+      await clickTab(cdp, target.tabLabel);
+      await waitForText(cdp, target.readyText);
+      adminScreenshots[target.key] = await captureFullPage(
+        cdp,
+        `${SCREENSHOT_DIR}/${target.fileName}`,
+        target.viewport,
+      );
+    }
 
     cdp.close();
     console.log(JSON.stringify({
@@ -358,8 +388,7 @@ async function main() {
       screenshots: {
         customerDesktop,
         customerMobile,
-        adminDashboard,
-        adminOutbox,
+        ...adminScreenshots,
       },
     }, null, 2));
   } finally {
@@ -376,7 +405,9 @@ async function main() {
   }
 }
 
-main().catch((error) => {
-  console.error(error);
-  process.exit(1);
-});
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  main().catch((error) => {
+    console.error(error);
+    process.exit(1);
+  });
+}

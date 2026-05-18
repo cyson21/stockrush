@@ -5,7 +5,8 @@
 ## Scope
 
 - Customer App desktop/mobile 화면 캡처
-- Admin App Dashboard와 Outbox 화면 캡처
+- Admin App Dashboard, Coupons, Fulfillment, Outbox 화면 캡처
+- 포트폴리오용 데모 데이터 보강
 - 캡처 파일 저장 위치 표준화
 - 주요 텍스트 잘림, 빈 화면, 오류 banner 노출 여부 확인
 
@@ -39,17 +40,32 @@ npm --prefix apps/admin-app run dev
 | `docs/assets/screenshots/customer-home-desktop.png` | 1440 x full page | Customer product and checkout flow |
 | `docs/assets/screenshots/customer-home-mobile.png` | 390 x full page | Customer stacked mobile layout |
 | `docs/assets/screenshots/admin-dashboard-desktop.png` | 1440 x full page | Admin Dashboard metrics and filters |
+| `docs/assets/screenshots/admin-coupons-desktop.png` | 1440 x full page | Admin coupon usage history |
+| `docs/assets/screenshots/admin-fulfillment-desktop.png` | 1440 x full page | Admin fulfillment request history |
 | `docs/assets/screenshots/admin-outbox-desktop.png` | 1440 x full page | Admin Outbox operations |
+
+## Demo Data
+
+Portfolio screenshots use a deterministic seed so Dashboard, Coupons, Fulfillment, and Outbox pages do not render as empty operational screens.
+
+```bash
+node tools/portfolio-demo-data/seed-portfolio-data.mjs
+```
+
+The seed is repeatable. It upserts fixed `pf-ord-*` rows into read model, coupon usage, fulfillment, and failed outbox samples used only for the demo view.
 
 ## Capture Command
 
 The repeatable capture path uses local Chrome DevTools Protocol and writes full-page PNGs.
 
 ```bash
+node tools/portfolio-demo-data/seed-portfolio-data.mjs
 node tools/web-screenshots/capture-web-screenshots.mjs
 ```
 
 The script expects the demo backend and Keycloak to be reachable, and the Customer/Admin web apps to be reachable at the demo web ports. During local UI development, it is acceptable to stop only the demo web containers and run Vite on `15173` and `15174` while keeping the rest of the demo stack up.
+
+When Vite is used on demo web ports, keep a local proxy from `18080` to the demo Gateway port `28080` because the web app dev servers proxy API calls to `18080`.
 
 ## Visual Checks
 

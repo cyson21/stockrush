@@ -323,10 +323,11 @@ hr {
 .events-table th,
 .events-table td {
   border-bottom: 1px solid #e5eaf1;
+  overflow-wrap: break-word;
   padding: 8px;
   text-align: left;
   vertical-align: top;
-  word-break: break-word;
+  word-break: normal;
 }
 
 .events-table th {
@@ -347,6 +348,7 @@ hr {
   min-width: 62px;
   padding: 2px 10px;
   text-align: center;
+  white-space: nowrap;
 }
 
 .status-pill.pending,

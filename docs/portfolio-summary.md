@@ -14,7 +14,7 @@ Order Service가 Saga Orchestrator 역할을 맡고, Inventory Service와 Paymen
 
 React/Vite 고객 웹앱에서는 상품 조회, 주문 생성, 주문 상태 추적을 확인할 수 있고, 관리자 웹앱에서는 상품/재고 관리, Saga 상태 확인, 쿠폰 사용 이력, 출고 요청 이력, Outbox 재시도와 failed requeue, 지연 결제 취소를 다룹니다. Expo React Native 기반 Android/iOS 고객 앱도 Gateway-first로 상품/SKU 재고 조회, 쿠폰 견적, 주문 생성, 상태 추적, Read Model 주문 내역 조회까지 연결했습니다. 개발 운영 기록은 Dev RAG, Project MCP, Spark worker/reviewer, Agent Runner, Architecture Guard로 남겼습니다.
 
-대표 화면은 MUI 기반으로 다시 정리했고, README에는 고객 주문 흐름, 관리자 Dashboard, 관리자 Outbox, 고객 모바일 폭 캡처를 연결했습니다. 캡처 절차는 `docs/runbooks/web-visual-smoke.md`에 정리해 데모 백엔드와 Keycloak 로그인 상태에서 다시 만들 수 있게 했습니다.
+대표 화면은 MUI 기반으로 다시 정리했고, README에는 고객 주문 흐름, 관리자 Dashboard, Coupons, Fulfillment, Outbox, 고객 모바일 폭 캡처를 연결했습니다. 포트폴리오용 데모 시드는 Dashboard 지표, 쿠폰 사용 상태, 출고 요청, failed Outbox 샘플을 반복 실행 가능한 데이터로 채웁니다. 캡처 절차는 `docs/runbooks/web-visual-smoke.md`에 정리해 데모 백엔드와 Keycloak 로그인 상태에서 다시 만들 수 있게 했습니다.
 
 ## 3분 설명
 
