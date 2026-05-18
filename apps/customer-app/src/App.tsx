@@ -433,10 +433,14 @@ export default function App() {
                     }}
                   >
                     <CardActionArea onClick={() => setSelectedProduct(product)} sx={{ p: 1.75 }}>
-                      <Stack direction="row" spacing={2} sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
+                      <Stack
+                        direction={{ xs: 'column', sm: 'row' }}
+                        spacing={1}
+                        sx={{ alignItems: { xs: 'flex-start', sm: 'center' }, justifyContent: 'space-between' }}
+                      >
                         <Box sx={{ minWidth: 0 }}>
                           <Typography sx={{ fontWeight: 800 }}>{product.name}</Typography>
-                          <Typography color="text.secondary" noWrap variant="body2">
+                          <Typography color="text.secondary" sx={{ overflowWrap: 'anywhere' }} variant="body2">
                             {product.productCode}
                           </Typography>
                         </Box>
@@ -460,9 +464,13 @@ export default function App() {
 
               {selectedProduct ? (
                 <Stack spacing={2}>
-                  <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
+                  <Stack
+                    direction={{ xs: 'column', sm: 'row' }}
+                    spacing={0.5}
+                    sx={{ justifyContent: 'space-between' }}
+                  >
                     <Typography color="text.secondary">선택 상품</Typography>
-                    <Typography sx={{ fontWeight: 800, textAlign: 'right' }}>
+                    <Typography sx={{ fontWeight: 800, overflowWrap: 'anywhere', textAlign: { xs: 'left', sm: 'right' } }}>
                       {selectedProduct.name}
                     </Typography>
                   </Stack>
@@ -473,7 +481,12 @@ export default function App() {
                     onChange={(event) => setSelectedSkuId(event.target.value)}
                     select
                     size="small"
-                    slotProps={{ select: { native: true } }}
+                    slotProps={{
+                      select: {
+                        native: true,
+                        sx: { '& select': { textOverflow: 'ellipsis' } },
+                      },
+                    }}
                     value={selectedSkuId}
                   >
                     {stocks.map((stock) => (
@@ -596,8 +609,12 @@ export default function App() {
                   <Stack spacing={1}>
                     {(orderDetail?.items ?? []).map((item) => (
                       <Paper key={`${item.productCode}-${item.skuId}`} elevation={0} sx={{ p: 1.5 }}>
-                        <Stack direction="row" spacing={1} sx={{ justifyContent: 'space-between' }}>
-                          <Typography>{item.skuId}</Typography>
+                        <Stack
+                          direction={{ xs: 'column', sm: 'row' }}
+                          spacing={1}
+                          sx={{ justifyContent: 'space-between' }}
+                        >
+                          <Typography sx={{ overflowWrap: 'anywhere' }}>{item.skuId}</Typography>
                           <Typography>{item.quantity}개</Typography>
                           <Typography sx={{ fontWeight: 800 }}>{formatCurrency(item.lineAmount)}</Typography>
                         </Stack>

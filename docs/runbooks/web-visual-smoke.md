@@ -36,10 +36,20 @@ npm --prefix apps/admin-app run dev
 
 | File | Viewport | Target |
 |---|---|---|
-| `docs/assets/screenshots/customer-home-desktop.png` | 1440 x 1000 | Customer product, checkout, order status |
-| `docs/assets/screenshots/customer-home-mobile.png` | 390 x 1200 | Customer stacked mobile layout |
-| `docs/assets/screenshots/admin-dashboard-desktop.png` | 1440 x 1000 | Admin Dashboard metrics and filters |
-| `docs/assets/screenshots/admin-outbox-desktop.png` | 1440 x 1000 | Admin Outbox operations |
+| `docs/assets/screenshots/customer-home-desktop.png` | 1440 x full page | Customer product and checkout flow |
+| `docs/assets/screenshots/customer-home-mobile.png` | 390 x full page | Customer stacked mobile layout |
+| `docs/assets/screenshots/admin-dashboard-desktop.png` | 1440 x full page | Admin Dashboard metrics and filters |
+| `docs/assets/screenshots/admin-outbox-desktop.png` | 1440 x full page | Admin Outbox operations |
+
+## Capture Command
+
+The repeatable capture path uses local Chrome DevTools Protocol and writes full-page PNGs.
+
+```bash
+node tools/web-screenshots/capture-web-screenshots.mjs
+```
+
+The script expects the demo backend and Keycloak to be reachable, and the Customer/Admin web apps to be reachable at the demo web ports. During local UI development, it is acceptable to stop only the demo web containers and run Vite on `15173` and `15174` while keeping the rest of the demo stack up.
 
 ## Visual Checks
 
@@ -48,6 +58,7 @@ npm --prefix apps/admin-app run dev
 - 버튼 텍스트가 잘리지 않는다.
 - status chip 색상이 상태별로 구분된다.
 - mobile width에서 가로 overflow가 생기지 않는다.
+- desktop screenshot width is `1440px`; mobile screenshot width is `390px`.
 - 민감한 token 전문이 화면에 노출되지 않는다.
 
 ## Verification
