@@ -1,0 +1,556 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: catalog-service
+  labels:
+    app.kubernetes.io/name: catalog-service
+    app.kubernetes.io/part-of: stockrush
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: catalog-service
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: catalog-service
+        app.kubernetes.io/part-of: stockrush
+    spec:
+      containers:
+        - name: catalog-service
+          image: ghcr.io/cyson21/stockrush-catalog-service:latest-demo
+          ports:
+            - name: http
+              containerPort: 18081
+          envFrom:
+            - configMapRef:
+                name: stockrush-demo-config
+            - secretRef:
+                name: stockrush-demo-secret
+          env:
+            - name: SERVER_PORT
+              value: "18081"
+            - name: CATALOG_SERVICE_PORT
+              value: "18081"
+            - name: SPRING_DATASOURCE_URL
+              value: jdbc:postgresql://postgres:5432/stockrush?currentSchema=catalog
+            - name: SPRING_FLYWAY_SCHEMAS
+              value: catalog
+            - name: SPRING_FLYWAY_DEFAULT_SCHEMA
+              value: catalog
+            - name: SPRING_JPA_HIBERNATE_DDL_AUTO
+              value: validate
+            - name: SPRING_JPA_OPEN_IN_VIEW
+              value: "false"
+          readinessProbe:
+            httpGet:
+              path: /actuator/health
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 30
+          livenessProbe:
+            httpGet:
+              path: /actuator/health
+              port: http
+            initialDelaySeconds: 60
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 6
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: catalog-service
+  labels:
+    app.kubernetes.io/name: catalog-service
+    app.kubernetes.io/part-of: stockrush
+spec:
+  selector:
+    app.kubernetes.io/name: catalog-service
+  ports:
+    - name: http
+      port: 18081
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: inventory-service
+  labels:
+    app.kubernetes.io/name: inventory-service
+    app.kubernetes.io/part-of: stockrush
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: inventory-service
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: inventory-service
+        app.kubernetes.io/part-of: stockrush
+    spec:
+      containers:
+        - name: inventory-service
+          image: ghcr.io/cyson21/stockrush-inventory-service:latest-demo
+          ports:
+            - name: http
+              containerPort: 18082
+          envFrom:
+            - configMapRef:
+                name: stockrush-demo-config
+            - secretRef:
+                name: stockrush-demo-secret
+          env:
+            - name: SERVER_PORT
+              value: "18082"
+            - name: INVENTORY_SERVICE_PORT
+              value: "18082"
+            - name: SPRING_DATASOURCE_URL
+              value: jdbc:postgresql://postgres:5432/stockrush?currentSchema=inventory
+            - name: SPRING_FLYWAY_SCHEMAS
+              value: inventory
+            - name: SPRING_FLYWAY_DEFAULT_SCHEMA
+              value: inventory
+            - name: SPRING_JPA_HIBERNATE_DDL_AUTO
+              value: validate
+            - name: SPRING_JPA_OPEN_IN_VIEW
+              value: "false"
+            - name: STOCKRUSH_OUTBOX_RELAY_ENABLED
+              value: "true"
+            - name: STOCKRUSH_OUTBOX_RELAY_FIXED_DELAY_MS
+              value: "3000"
+            - name: STOCKRUSH_OUTBOX_RELAY_INITIAL_DELAY_MS
+              value: "1000"
+            - name: STOCKRUSH_OUTBOX_RELAY_BATCH_SIZE
+              value: "50"
+          readinessProbe:
+            httpGet:
+              path: /actuator/health
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 30
+          livenessProbe:
+            httpGet:
+              path: /actuator/health
+              port: http
+            initialDelaySeconds: 60
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 6
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: inventory-service
+  labels:
+    app.kubernetes.io/name: inventory-service
+    app.kubernetes.io/part-of: stockrush
+spec:
+  selector:
+    app.kubernetes.io/name: inventory-service
+  ports:
+    - name: http
+      port: 18082
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: order-service
+  labels:
+    app.kubernetes.io/name: order-service
+    app.kubernetes.io/part-of: stockrush
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: order-service
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: order-service
+        app.kubernetes.io/part-of: stockrush
+    spec:
+      containers:
+        - name: order-service
+          image: ghcr.io/cyson21/stockrush-order-service:latest-demo
+          ports:
+            - name: http
+              containerPort: 18083
+          envFrom:
+            - configMapRef:
+                name: stockrush-demo-config
+            - secretRef:
+                name: stockrush-demo-secret
+          env:
+            - name: SERVER_PORT
+              value: "18083"
+            - name: ORDER_SERVICE_PORT
+              value: "18083"
+            - name: SPRING_DATASOURCE_URL
+              value: jdbc:postgresql://postgres:5432/stockrush?currentSchema=orders
+            - name: SPRING_FLYWAY_SCHEMAS
+              value: orders
+            - name: SPRING_FLYWAY_DEFAULT_SCHEMA
+              value: orders
+            - name: SPRING_JPA_HIBERNATE_DDL_AUTO
+              value: validate
+            - name: SPRING_JPA_OPEN_IN_VIEW
+              value: "false"
+            - name: STOCKRUSH_CLIENTS_PROMOTION_SERVICE_URL
+              value: http://promotion-service:18085
+            - name: STOCKRUSH_OUTBOX_RELAY_ENABLED
+              value: "true"
+            - name: STOCKRUSH_OUTBOX_RELAY_FIXED_DELAY_MS
+              value: "3000"
+            - name: STOCKRUSH_OUTBOX_RELAY_INITIAL_DELAY_MS
+              value: "1000"
+            - name: STOCKRUSH_OUTBOX_RELAY_BATCH_SIZE
+              value: "50"
+          readinessProbe:
+            httpGet:
+              path: /actuator/health
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 30
+          livenessProbe:
+            httpGet:
+              path: /actuator/health
+              port: http
+            initialDelaySeconds: 60
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 6
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: order-service
+  labels:
+    app.kubernetes.io/name: order-service
+    app.kubernetes.io/part-of: stockrush
+spec:
+  selector:
+    app.kubernetes.io/name: order-service
+  ports:
+    - name: http
+      port: 18083
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: payment-service
+  labels:
+    app.kubernetes.io/name: payment-service
+    app.kubernetes.io/part-of: stockrush
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: payment-service
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: payment-service
+        app.kubernetes.io/part-of: stockrush
+    spec:
+      containers:
+        - name: payment-service
+          image: ghcr.io/cyson21/stockrush-payment-service:latest-demo
+          ports:
+            - name: http
+              containerPort: 18084
+          envFrom:
+            - configMapRef:
+                name: stockrush-demo-config
+            - secretRef:
+                name: stockrush-demo-secret
+          env:
+            - name: SERVER_PORT
+              value: "18084"
+            - name: PAYMENT_SERVICE_PORT
+              value: "18084"
+            - name: SPRING_DATASOURCE_URL
+              value: jdbc:postgresql://postgres:5432/stockrush?currentSchema=payment
+            - name: SPRING_FLYWAY_SCHEMAS
+              value: payment
+            - name: SPRING_FLYWAY_DEFAULT_SCHEMA
+              value: payment
+            - name: SPRING_JPA_HIBERNATE_DDL_AUTO
+              value: validate
+            - name: SPRING_JPA_OPEN_IN_VIEW
+              value: "false"
+            - name: STOCKRUSH_OUTBOX_RELAY_ENABLED
+              value: "true"
+            - name: STOCKRUSH_OUTBOX_RELAY_FIXED_DELAY_MS
+              value: "3000"
+            - name: STOCKRUSH_OUTBOX_RELAY_INITIAL_DELAY_MS
+              value: "1000"
+            - name: STOCKRUSH_OUTBOX_RELAY_BATCH_SIZE
+              value: "50"
+          readinessProbe:
+            httpGet:
+              path: /actuator/health
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 30
+          livenessProbe:
+            httpGet:
+              path: /actuator/health
+              port: http
+            initialDelaySeconds: 60
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 6
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: payment-service
+  labels:
+    app.kubernetes.io/name: payment-service
+    app.kubernetes.io/part-of: stockrush
+spec:
+  selector:
+    app.kubernetes.io/name: payment-service
+  ports:
+    - name: http
+      port: 18084
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: promotion-service
+  labels:
+    app.kubernetes.io/name: promotion-service
+    app.kubernetes.io/part-of: stockrush
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: promotion-service
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: promotion-service
+        app.kubernetes.io/part-of: stockrush
+    spec:
+      containers:
+        - name: promotion-service
+          image: ghcr.io/cyson21/stockrush-promotion-service:latest-demo
+          ports:
+            - name: http
+              containerPort: 18085
+          envFrom:
+            - configMapRef:
+                name: stockrush-demo-config
+            - secretRef:
+                name: stockrush-demo-secret
+          env:
+            - name: SERVER_PORT
+              value: "18085"
+            - name: PROMOTION_SERVICE_PORT
+              value: "18085"
+            - name: PROMOTION_KAFKA_LISTENERS_ENABLED
+              value: "true"
+            - name: SPRING_DATASOURCE_URL
+              value: jdbc:postgresql://postgres:5432/stockrush?currentSchema=promotion
+            - name: SPRING_FLYWAY_SCHEMAS
+              value: promotion
+            - name: SPRING_FLYWAY_DEFAULT_SCHEMA
+              value: promotion
+            - name: SPRING_JPA_HIBERNATE_DDL_AUTO
+              value: validate
+            - name: SPRING_JPA_OPEN_IN_VIEW
+              value: "false"
+          readinessProbe:
+            httpGet:
+              path: /actuator/health
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 30
+          livenessProbe:
+            httpGet:
+              path: /actuator/health
+              port: http
+            initialDelaySeconds: 60
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 6
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: promotion-service
+  labels:
+    app.kubernetes.io/name: promotion-service
+    app.kubernetes.io/part-of: stockrush
+spec:
+  selector:
+    app.kubernetes.io/name: promotion-service
+  ports:
+    - name: http
+      port: 18085
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fulfillment-service
+  labels:
+    app.kubernetes.io/name: fulfillment-service
+    app.kubernetes.io/part-of: stockrush
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: fulfillment-service
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: fulfillment-service
+        app.kubernetes.io/part-of: stockrush
+    spec:
+      containers:
+        - name: fulfillment-service
+          image: ghcr.io/cyson21/stockrush-fulfillment-service:latest-demo
+          ports:
+            - name: http
+              containerPort: 18086
+          envFrom:
+            - configMapRef:
+                name: stockrush-demo-config
+            - secretRef:
+                name: stockrush-demo-secret
+          env:
+            - name: SERVER_PORT
+              value: "18086"
+            - name: FULFILLMENT_SERVICE_PORT
+              value: "18086"
+            - name: FULFILLMENT_KAFKA_LISTENERS_ENABLED
+              value: "true"
+            - name: SPRING_DATASOURCE_URL
+              value: jdbc:postgresql://postgres:5432/stockrush?currentSchema=fulfillment
+            - name: SPRING_FLYWAY_SCHEMAS
+              value: fulfillment
+            - name: SPRING_FLYWAY_DEFAULT_SCHEMA
+              value: fulfillment
+            - name: SPRING_JPA_HIBERNATE_DDL_AUTO
+              value: validate
+            - name: SPRING_JPA_OPEN_IN_VIEW
+              value: "false"
+          readinessProbe:
+            httpGet:
+              path: /actuator/health
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 30
+          livenessProbe:
+            httpGet:
+              path: /actuator/health
+              port: http
+            initialDelaySeconds: 60
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 6
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: fulfillment-service
+  labels:
+    app.kubernetes.io/name: fulfillment-service
+    app.kubernetes.io/part-of: stockrush
+spec:
+  selector:
+    app.kubernetes.io/name: fulfillment-service
+  ports:
+    - name: http
+      port: 18086
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: read-model-service
+  labels:
+    app.kubernetes.io/name: read-model-service
+    app.kubernetes.io/part-of: stockrush
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: read-model-service
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: read-model-service
+        app.kubernetes.io/part-of: stockrush
+    spec:
+      containers:
+        - name: read-model-service
+          image: ghcr.io/cyson21/stockrush-read-model-service:latest-demo
+          ports:
+            - name: http
+              containerPort: 18087
+          envFrom:
+            - configMapRef:
+                name: stockrush-demo-config
+            - secretRef:
+                name: stockrush-demo-secret
+          env:
+            - name: SERVER_PORT
+              value: "18087"
+            - name: READ_MODEL_SERVICE_PORT
+              value: "18087"
+            - name: READ_MODEL_KAFKA_LISTENERS_ENABLED
+              value: "true"
+            - name: SPRING_DATASOURCE_URL
+              value: jdbc:postgresql://postgres:5432/stockrush?currentSchema=read_model
+            - name: SPRING_FLYWAY_SCHEMAS
+              value: read_model
+            - name: SPRING_FLYWAY_DEFAULT_SCHEMA
+              value: read_model
+            - name: SPRING_JPA_HIBERNATE_DDL_AUTO
+              value: validate
+            - name: SPRING_JPA_OPEN_IN_VIEW
+              value: "false"
+          readinessProbe:
+            httpGet:
+              path: /actuator/health
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 30
+          livenessProbe:
+            httpGet:
+              path: /actuator/health
+              port: http
+            initialDelaySeconds: 60
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 6
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: read-model-service
+  labels:
+    app.kubernetes.io/name: read-model-service
+    app.kubernetes.io/part-of: stockrush
+spec:
+  selector:
+    app.kubernetes.io/name: read-model-service
+  ports:
+    - name: http
+      port: 18087
+      targetPort: http

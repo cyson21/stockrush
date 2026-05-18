@@ -20,6 +20,10 @@ push / pull request
      -> pull GHCR images
      -> docker compose up with image override
      -> demo smoke
+  -> Local Kubernetes Deploy (optional)
+     -> create kind cluster
+     -> apply Kubernetes manifests
+     -> kind smoke
 ```
 
 ## GitHub Actions
@@ -92,6 +96,30 @@ Windows 11 PowerShell:
 ```powershell
 .\scripts\deploy-local.ps1 --login --tag latest-demo
 ```
+
+## 로컬 Kubernetes 배포
+
+Kubernetes를 보여줘야 할 때는 `kind` 경로를 사용한다. 이 경로도 클라우드 자원을 쓰지 않고 현재 PC의 Docker Desktop 자원만 사용한다.
+
+```bash
+./scripts/kind-up.sh --tag latest-demo
+./scripts/kind-smoke.sh
+./scripts/kind-down.sh
+```
+
+구성 파일은 `infra/k8s/base`와 `infra/k8s/kind`에 있다. `base`는 Deployment, Service, Job, ConfigMap, Secret을 담고, `kind` overlay는 GHCR image tag를 로컬 데모 기준으로 맞춘다.
+
+Compose 배포와 kind 배포의 차이:
+
+| 구분 | Docker Compose | kind Kubernetes |
+|---|---|---|
+| 목적 | 가장 빠른 포트폴리오 데모 | Kubernetes 배포 구조 확인 |
+| 실행 단위 | container service | Deployment, Service, Job |
+| 이미지 | GHCR image | GHCR image |
+| 주요 검증 | `demo-smoke` | `kind-smoke` |
+| 클라우드 자원 | 사용 안 함 | 사용 안 함 |
+
+상세 runbook은 [Kubernetes kind Demo](runbooks/kubernetes-kind.md)에 둔다.
 
 ## AWS 차단 기준
 

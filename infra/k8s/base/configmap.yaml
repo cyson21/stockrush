@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: stockrush-demo-config
+data:
+  POSTGRES_DB: stockrush
+  POSTGRES_HOST: postgres
+  POSTGRES_PORT: "5432"
+  KAFKA_BOOTSTRAP_SERVERS: kafka:19092
+  SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:19092
+  STOCKRUSH_KAFKA_LISTENERS_ENABLED: "true"
+  STOCKRUSH_SECURITY_ISSUER_URI: http://localhost:38088/realms/stockrush
+  STOCKRUSH_SECURITY_JWK_SET_URI: http://keycloak:8080/realms/stockrush/protocol/openid-connect/certs
+  CATALOG_SERVICE_URL: http://catalog-service:18081
+  ORDER_SERVICE_URL: http://order-service:18083
+  INVENTORY_SERVICE_URL: http://inventory-service:18082
+  PAYMENT_SERVICE_URL: http://payment-service:18084
+  PROMOTION_SERVICE_URL: http://promotion-service:18085
+  FULFILLMENT_SERVICE_URL: http://fulfillment-service:18086
+  READ_MODEL_SERVICE_URL: http://read-model-service:18087

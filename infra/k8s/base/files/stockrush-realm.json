@@ -1,0 +1,137 @@
+{
+  "realm": "stockrush",
+  "enabled": true,
+  "displayName": "StockRush Demo",
+  "roles": {
+    "realm": [
+      {
+        "name": "CUSTOMER",
+        "description": "Customer role",
+        "composite": false,
+        "clientRole": false,
+        "containerId": "stockrush"
+      },
+      {
+        "name": "ADMIN",
+        "description": "Admin role",
+        "composite": false,
+        "clientRole": false,
+        "containerId": "stockrush"
+      }
+    ]
+  },
+  "users": [
+    {
+      "username": "customer.demo@stockrush.local",
+      "enabled": true,
+      "email": "customer.demo@stockrush.local",
+      "emailVerified": true,
+      "firstName": "Customer",
+      "lastName": "Demo",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "demo-customer-pass",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "CUSTOMER"
+      ]
+    },
+    {
+      "username": "admin.demo@stockrush.local",
+      "enabled": true,
+      "email": "admin.demo@stockrush.local",
+      "emailVerified": true,
+      "firstName": "Admin",
+      "lastName": "Demo",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "demo-admin-pass",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "ADMIN"
+      ]
+    }
+  ],
+  "clients": [
+    {
+      "clientId": "stockrush-customer-web",
+      "name": "stockrush-customer-web",
+      "enabled": true,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "publicClient": true,
+      "protocol": "openid-connect",
+      "attributes": {
+        "pkce.code.challenge.method": "S256"
+      },
+      "redirectUris": [
+        "http://localhost:15173/*",
+        "http://localhost:*/*"
+      ],
+      "webOrigins": ["+"]
+    },
+    {
+      "clientId": "stockrush-admin-web",
+      "name": "stockrush-admin-web",
+      "enabled": true,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "publicClient": true,
+      "protocol": "openid-connect",
+      "attributes": {
+        "pkce.code.challenge.method": "S256"
+      },
+      "redirectUris": [
+        "http://localhost:15174/*",
+        "http://localhost:*/*"
+      ],
+      "webOrigins": ["+"]
+    },
+    {
+      "clientId": "stockrush-mobile",
+      "name": "stockrush-mobile",
+      "enabled": true,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "publicClient": true,
+      "protocol": "openid-connect",
+      "attributes": {
+        "pkce.code.challenge.method": "S256"
+      },
+      "redirectUris": [
+        "stockrush://*",
+        "exp://*",
+        "http://localhost:*/*"
+      ],
+      "webOrigins": ["+"]
+    },
+    {
+      "clientId": "stockrush-demo-smoke",
+      "name": "stockrush-demo-smoke",
+      "enabled": true,
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": true,
+      "serviceAccountsEnabled": false,
+      "publicClient": true,
+      "protocol": "openid-connect",
+      "attributes": {
+        "pkce.code.challenge.method": "S256"
+      },
+      "redirectUris": ["*"],
+      "webOrigins": ["*"]
+    }
+  ]
+}

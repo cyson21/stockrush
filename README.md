@@ -115,7 +115,7 @@ flowchart LR
 | Mobile | Expo 기반 상품/SKU 조회, 쿠폰 견적, 보호 주문 생성, 상태 추적, 주문 내역 |
 | Security | Keycloak realm import, Gateway JWT 검증, `ROLE_CUSTOMER`/`ROLE_ADMIN`, 고객 주문 소유권 검사 |
 | CI/CD | GitHub Actions, GHCR image publish, Trivy scan, AWS 사용 차단 스크립트 |
-| Local Runtime | 개발용 인프라 compose와 이식형 데모 compose를 분리 |
+| Local Runtime | 개발용 인프라 compose, 이식형 데모 compose, 선택형 kind Kubernetes 런타임 |
 
 ## Verified Scenarios
 
@@ -158,6 +158,16 @@ docker compose up -d
 
 자세한 실행 순서는 [Local E2E Runbook](docs/runbooks/local-e2e.md), [Services Guide](services/README.md), [Demo Runtime Guide](infra/demo/README.md)에 분리했습니다.
 
+Kubernetes 배포 흐름을 확인할 때는 `kind` 런타임을 사용합니다. GHCR 이미지를 로컬 Kubernetes 클러스터에 배포하고 Gateway, 웹앱, Keycloak endpoint를 smoke로 확인합니다.
+
+```bash
+./scripts/kind-up.sh --tag latest-demo
+./scripts/kind-smoke.sh
+./scripts/kind-down.sh
+```
+
+자세한 순서는 [Kubernetes kind Demo](docs/runbooks/kubernetes-kind.md)에 정리했습니다.
+
 ## Verification
 
 | Gate | Command |
@@ -167,6 +177,7 @@ docker compose up -d
 | Mobile app | `npm --prefix apps/mobile-app test`, `npm --prefix apps/mobile-app run typecheck` |
 | Architecture Guard | `./tools/architecture-guard/architecture-guard check` |
 | Demo smoke | `./scripts/demo-smoke.sh` |
+| Kubernetes smoke | `./scripts/kind-smoke.sh` |
 | Kafka outage smoke | `./scripts/demo-smoke.sh --kafka-outage` |
 | Secret scan | `./scripts/check-no-committed-secrets.sh` |
 | AWS usage guard | `./scripts/check-no-aws-usage.sh` |
@@ -192,6 +203,7 @@ services/
 infra/
   local/               Development infrastructure
   demo/                Portable demo runtime
+  k8s/                 Kubernetes manifests for local kind runtime
 tools/
   architecture-guard/  Static project rules
   local-e2e/           Scenario runner

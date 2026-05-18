@@ -1,0 +1,27 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: stockrush
+resources:
+  - namespace.yaml
+  - configmap.yaml
+  - secret.yaml
+  - postgres.yaml
+  - redis.yaml
+  - kafka.yaml
+  - kafka-init.yaml
+  - keycloak.yaml
+  - backend.yaml
+  - gateway.yaml
+  - web.yaml
+configMapGenerator:
+  - name: postgres-init-schemas
+    files:
+      - 01-create-schemas.sql=files/01-create-schemas.sql
+  - name: kafka-topics-script
+    files:
+      - topics.sh=files/topics.sh
+  - name: keycloak-realm
+    files:
+      - stockrush-realm.json=files/stockrush-realm.json
+generatorOptions:
+  disableNameSuffixHash: true

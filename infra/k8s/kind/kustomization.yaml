@@ -1,0 +1,25 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../base
+images:
+  - name: ghcr.io/cyson21/stockrush-catalog-service
+    newTag: latest-demo
+  - name: ghcr.io/cyson21/stockrush-inventory-service
+    newTag: latest-demo
+  - name: ghcr.io/cyson21/stockrush-order-service
+    newTag: latest-demo
+  - name: ghcr.io/cyson21/stockrush-payment-service
+    newTag: latest-demo
+  - name: ghcr.io/cyson21/stockrush-promotion-service
+    newTag: latest-demo
+  - name: ghcr.io/cyson21/stockrush-fulfillment-service
+    newTag: latest-demo
+  - name: ghcr.io/cyson21/stockrush-read-model-service
+    newTag: latest-demo
+  - name: ghcr.io/cyson21/stockrush-gateway
+    newTag: latest-demo
+  - name: ghcr.io/cyson21/stockrush-customer-app
+    newTag: latest-demo
+  - name: ghcr.io/cyson21/stockrush-admin-app
+    newTag: latest-demo
