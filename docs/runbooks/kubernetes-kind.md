@@ -57,8 +57,8 @@ package visibility가 public이면 로그인 없이 pull할 수 있다.
 - `stockrush` kind cluster 생성
 - `stockrush` namespace 생성
 - GHCR token 파일 또는 로컬 Docker 로그인 정보를 Kubernetes image pull secret으로 연결
-- PostgreSQL, Redis, Kafka, Keycloak 배포
-- Gateway, 7개 backend service, customer/admin web app 배포
+- PostgreSQL, Redis, Kafka, Keycloak을 먼저 배포하고 준비 상태 대기
+- Gateway, 7개 backend service, customer/admin web app을 이후 배포
 - Kafka topic 초기화 Job 완료 대기
 - 모든 Deployment rollout 대기
 
@@ -149,5 +149,6 @@ kubectl -n stockrush logs job/kafka-init --tail=200
 - GHCR image가 private이고 Docker login이 없으면 `ImagePullBackOff`가 발생한다.
 - GHCR image가 private이면 `~/.config/stockrush/github-token` 또는 Docker login 정보가 필요하다.
 - 기존 Docker Compose 데모가 떠 있으면 CPU와 image pull 시간이 크게 늘 수 있다.
+- 앱보다 인프라를 먼저 띄우도록 구성해 초기 CrashLoop와 CPU 급등을 줄인다.
 - `latest-demo`가 기대한 커밋이 아니면 `git-<short-sha>` 태그로 다시 실행한다.
 - 처음 실행은 PostgreSQL, Keycloak, backend image pull 때문에 몇 분 걸릴 수 있다.

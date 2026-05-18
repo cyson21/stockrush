@@ -62,7 +62,7 @@ spec:
               command:
                 - sh
                 - -ec
-                - /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:19092 --list >/dev/null 2>&1
+                - nc -z localhost 19092
             periodSeconds: 10
             timeoutSeconds: 10
             failureThreshold: 20
@@ -71,7 +71,7 @@ spec:
               command:
                 - sh
                 - -ec
-                - /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:19092 --list >/dev/null 2>&1
+                - nc -z localhost 19092
             initialDelaySeconds: 30
             periodSeconds: 20
             timeoutSeconds: 10

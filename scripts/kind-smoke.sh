@@ -52,7 +52,7 @@ wait_for_url() {
   local url="$2"
 
   for attempt in $(seq 1 60); do
-    if curl -fsS --max-time 5 "$url" >/dev/null; then
+    if curl -fsS --max-time 5 "$url" >/dev/null 2>&1; then
       printf '[ok] %s %s\n' "$name" "$url"
       return
     fi
@@ -72,6 +72,21 @@ start_port_forward() {
   PIDS="$PIDS $!"
 }
 
+wait_for_deployment() {
+  local name="$1"
+  local timeout="${2:-600s}"
+
+  kubectl -n "$NAMESPACE" rollout status "deployment/${name}" --timeout="$timeout"
+}
+
+wait_for_all_deployments() {
+  local name
+
+  for name in $(kubectl -n "$NAMESPACE" get deployment -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}' | sort); do
+    wait_for_deployment "$name"
+  done
+}
+
 trap cleanup EXIT
 
 require_command kind
@@ -87,7 +102,7 @@ kubectl config use-context "kind-${CLUSTER_NAME}" >/dev/null
 kubectl get namespace "$NAMESPACE" >/dev/null
 
 kubectl -n "$NAMESPACE" wait --for=condition=complete job/kafka-init --timeout=300s
-kubectl -n "$NAMESPACE" rollout status deployment --all --timeout=600s
+wait_for_all_deployments
 
 start_port_forward gateway 38080:18080
 start_port_forward customer-app 35173:8080

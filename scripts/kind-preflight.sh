@@ -112,6 +112,14 @@ check_manifest() {
   require_rendered_text "$rendered" "stockrush-gateway:${IMAGE_TAG}" "Gateway image tag ${IMAGE_TAG}"
   require_rendered_text "$rendered" 'KAFKA_CONTROLLER_QUORUM_VOTERS' 'Kafka KRaft controller setting'
   require_rendered_text "$rendered" '1@localhost:29093' 'Kafka local controller voter'
+  test -f "$ROOT_DIR/infra/k8s/base/postgres.yaml"
+  printf '[ok] infra phase source postgres\n'
+  test -f "$ROOT_DIR/infra/k8s/base/keycloak.yaml"
+  printf '[ok] infra phase source keycloak\n'
+  test -f "$ROOT_DIR/infra/k8s/base/backend.yaml"
+  printf '[ok] apps phase source backend\n'
+  test -f "$ROOT_DIR/infra/k8s/base/gateway.yaml"
+  printf '[ok] apps phase source gateway\n'
 
   printf '[ok] rendered manifest lines: %s\n' "$(wc -l < "$rendered" | tr -d ' ')"
 }

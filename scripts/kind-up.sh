@@ -53,6 +53,16 @@ render_manifest() {
   kubectl kustomize "$ROOT_DIR/infra/k8s/kind" | sed "s|:latest-demo|:${IMAGE_TAG}|g"
 }
 
+render_file() {
+  local file="$1"
+  sed "s|:latest-demo|:${IMAGE_TAG}|g" "$file"
+}
+
+apply_namespaced_file() {
+  local file="$1"
+  render_file "$file" | kubectl -n "$NAMESPACE" apply -f -
+}
+
 load_image_if_present() {
   local image="$1"
 
@@ -154,6 +164,58 @@ apply_ghcr_pull_secret_if_available() {
   patch_default_serviceaccount_for_pull_secret
 }
 
+apply_file_configmaps() {
+  kubectl -n "$NAMESPACE" create configmap postgres-init-schemas \
+    --from-file=01-create-schemas.sql="$ROOT_DIR/infra/k8s/base/files/01-create-schemas.sql" \
+    --dry-run=client -o yaml | kubectl apply -f -
+
+  kubectl -n "$NAMESPACE" create configmap kafka-topics-script \
+    --from-file=topics.sh="$ROOT_DIR/infra/k8s/base/files/topics.sh" \
+    --dry-run=client -o yaml | kubectl apply -f -
+
+  kubectl -n "$NAMESPACE" create configmap keycloak-realm \
+    --from-file=stockrush-realm.json="$ROOT_DIR/infra/k8s/base/files/stockrush-realm.json" \
+    --dry-run=client -o yaml | kubectl apply -f -
+}
+
+apply_infrastructure() {
+  kubectl apply -f "$ROOT_DIR/infra/k8s/base/namespace.yaml"
+  apply_namespaced_file "$ROOT_DIR/infra/k8s/base/configmap.yaml"
+  apply_namespaced_file "$ROOT_DIR/infra/k8s/base/secret.yaml"
+  apply_file_configmaps
+  apply_namespaced_file "$ROOT_DIR/infra/k8s/base/postgres.yaml"
+  apply_namespaced_file "$ROOT_DIR/infra/k8s/base/redis.yaml"
+  apply_namespaced_file "$ROOT_DIR/infra/k8s/base/kafka.yaml"
+  apply_namespaced_file "$ROOT_DIR/infra/k8s/base/keycloak.yaml"
+  apply_namespaced_file "$ROOT_DIR/infra/k8s/base/kafka-init.yaml"
+}
+
+apply_applications() {
+  apply_namespaced_file "$ROOT_DIR/infra/k8s/base/backend.yaml"
+  apply_namespaced_file "$ROOT_DIR/infra/k8s/base/gateway.yaml"
+  apply_namespaced_file "$ROOT_DIR/infra/k8s/base/web.yaml"
+}
+
+wait_for_deployment() {
+  local name="$1"
+  local timeout="${2:-900s}"
+
+  printf '[kind] waiting for deployment/%s\n' "$name"
+  if ! kubectl -n "$NAMESPACE" rollout status "deployment/${name}" --timeout="$timeout"; then
+    kubectl -n "$NAMESPACE" describe "deployment/${name}" || true
+    kubectl -n "$NAMESPACE" logs "deployment/${name}" --tail=200 || true
+    exit 1
+  fi
+}
+
+wait_for_all_deployments() {
+  local name
+
+  for name in $(kubectl -n "$NAMESPACE" get deployment -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}' | sort); do
+    wait_for_deployment "$name"
+  done
+}
+
 require_command docker
 require_command kind
 require_command kubectl
@@ -175,8 +237,12 @@ wait_for_default_serviceaccount
 apply_ghcr_pull_secret_if_available
 kubectl -n "$NAMESPACE" delete job kafka-init --ignore-not-found >/dev/null
 
-printf '[kind] applying StockRush manifests with image tag %s\n' "$IMAGE_TAG"
-render_manifest | kubectl apply -f -
+printf '[kind] applying StockRush infrastructure manifests with image tag %s\n' "$IMAGE_TAG"
+apply_infrastructure
+
+wait_for_deployment postgres
+wait_for_deployment redis
+wait_for_deployment kafka
 
 printf '[kind] waiting for kafka-init job\n'
 if ! kubectl -n "$NAMESPACE" wait --for=condition=complete job/kafka-init --timeout=900s; then
@@ -184,6 +250,11 @@ if ! kubectl -n "$NAMESPACE" wait --for=condition=complete job/kafka-init --time
   exit 1
 fi
 
+wait_for_deployment keycloak
+
+printf '[kind] applying StockRush application manifests with image tag %s\n' "$IMAGE_TAG"
+apply_applications
+
 printf '[kind] waiting for deployments\n'
-kubectl -n "$NAMESPACE" rollout status deployment --all --timeout=900s
+wait_for_all_deployments
 kubectl -n "$NAMESPACE" get pods
