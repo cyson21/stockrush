@@ -29,6 +29,7 @@
 
 - 개발 모드: `infra/local` Docker Compose로 PostgreSQL/Redis/Kafka만 실행하고, Spring Boot 서비스와 앱은 host에서 실행한다.
 - 데모 모드: `infra/demo` Docker Compose로 인프라, 백엔드, 웹앱을 함께 실행한다. 데모 모드는 개발 모드와 동시에 띄우기 쉽도록 별도 host port 대역(`28080~28087`, `15173~15174`, `25432`, `26379`, `29092`, `29090`)을 쓴다. macOS/Windows 11 실행법은 `infra/demo/README.md`에 둔다.
+- 웹 화면 캡처와 시각 점검 절차는 [Web Visual Smoke Runbook](web-visual-smoke.md)에 둔다.
 
 ## Infrastructure
 

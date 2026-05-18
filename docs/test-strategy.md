@@ -23,6 +23,7 @@ StockRush 테스트 전략은 한정 판매 주문 흐름에서 서비스별 도
 | Outbox relay | `PENDING` claim, Kafka publish, retry, `PUBLISHED`/`FAILED` 전이와 자동 scheduler 실행 기준을 확인 | `services/order-service/src/test/java/com/stockrush/order/infra/outbox/OutboxRelayServiceIntegrationTest.java`, `services/order-service/src/test/java/com/stockrush/order/config/OutboxRelaySchedulerTest.java`, `services/inventory-service/src/test/java/com/stockrush/inventory/infra/outbox/InventoryOutboxRelayServiceIntegrationTest.java`, `services/inventory-service/src/test/java/com/stockrush/inventory/config/OutboxRelaySchedulerTest.java`, `services/payment-service/src/test/java/com/stockrush/payment/infra/outbox/PaymentOutboxRelayServiceIntegrationTest.java`, `services/payment-service/src/test/java/com/stockrush/payment/config/OutboxRelaySchedulerTest.java` |
 | Kafka smoke | 실제 로컬 Kafka에 publish/consume이 되는지 확인 | `services/inventory-service/src/test/java/com/stockrush/inventory/infra/kafka/InventoryKafkaSmokeIntegrationTest.java`, `services/payment-service/src/test/java/com/stockrush/payment/infra/kafka/PaymentKafkaSmokeIntegrationTest.java` |
 | UI behavior | 고객/관리자 앱의 API 호출, 쿠폰 견적 표시, 상태 렌더링, 버튼별 오류/disabled 상태, 재시도 키 재사용 확인 | `apps/customer-app/src/App.test.tsx`, `apps/admin-app/src/App.test.tsx` |
+| Web visual smoke | 고객/관리자 앱의 desktop/mobile layout, 주요 텍스트 노출, 빈 화면 여부, 스크린샷 산출 확인 | `docs/runbooks/web-visual-smoke.md`, `docs/assets/screenshots/` |
 | Mobile behavior | Android/iOS 고객 앱의 API 호출과 화면 상태 렌더링, smoke 준비 상태 확인 | `apps/mobile-app/src/screens/ProductListScreen.test.tsx`, `apps/mobile-app/src/screens/OrderHistoryScreen.test.tsx`, `apps/mobile-app/scripts/collect-smoke-evidence.mjs` |
 | Gateway routing smoke | Gateway가 공개 상품/재고 조회, 주문 생성/조회, 관리자 주문 조회/취소, Outbox 조회/재시도/requeue, 쿠폰/출고/Read Model 조회 요청을 대상 서비스로 전달하는지 확인 | `services/gateway/src/test/java/com/stockrush/gateway/api/OrderGatewayControllerIntegrationTest.java` |
 | Gateway security | Gateway가 admin/customer route 인증/권한을 적용하고 `401`/`403`/성공 라우팅, trusted subject header 전파를 구분하는지 확인 | `services/gateway/src/test/java/com/stockrush/gateway/api/OrderGatewayControllerIntegrationTest.java` |
@@ -59,6 +60,15 @@ npm --prefix apps/customer-app run build
 npm --prefix apps/admin-app test -- --run
 npm --prefix apps/admin-app run build
 ```
+
+Web visual smoke uses the demo runtime by default and stores representative screenshots under `docs/assets/screenshots`.
+
+```bash
+./scripts/demo-up.sh
+./scripts/demo-smoke.sh --skip-burst
+```
+
+Detailed capture targets are tracked in [Web Visual Smoke Runbook](runbooks/web-visual-smoke.md).
 
 Mobile verification runs inside `apps/mobile-app`.
 

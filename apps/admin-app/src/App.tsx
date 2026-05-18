@@ -1,4 +1,18 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  AppBar,
+  Box,
+  Button as MuiButton,
+  Container,
+  CssBaseline,
+  Paper,
+  Tab,
+  Tabs,
+  ThemeProvider,
+  Toolbar,
+  Typography,
+  createTheme,
+} from '@mui/material';
 import { ApiClientError } from './api/client';
 import {
   buildLoginUrl,
@@ -50,6 +64,73 @@ type SubmitState = 'idle' | 'loading' | 'ready' | 'error';
 type ProductSubmitMode = 'create' | 'update';
 
 const SALES_STATUS_OPTIONS = ['ON_SALE', 'STOPPED'] as const;
+const adminTheme = createTheme({
+  palette: {
+    primary: {
+      main: '#1f2b7a',
+    },
+    secondary: {
+      main: '#0f766e',
+    },
+  },
+  typography: {
+    fontFamily: [
+      'Inter',
+      'ui-sans-serif',
+      'system-ui',
+      '-apple-system',
+      'BlinkMacSystemFont',
+      '"Segoe UI"',
+      'sans-serif',
+    ].join(', '),
+  },
+});
+
+const SHELL_TABS: { id: TabId; label: string }[] = [
+  { id: 'dashboard', label: 'Dashboard' },
+  { id: 'orders', label: 'Orders' },
+  { id: 'coupons', label: 'Coupons' },
+  { id: 'fulfillment', label: 'Fulfillment' },
+  { id: 'outbox', label: 'Outbox' },
+  { id: 'products', label: 'Products' },
+];
+
+function AppHeader({
+  isAuthenticatedState,
+  onLogout,
+}: {
+  isAuthenticatedState: 'processing' | 'authenticated' | 'unauthenticated';
+  onLogout?: () => void;
+}) {
+  const isAuthenticated = isAuthenticatedState === 'authenticated';
+  return (
+    <AppBar position="static" color="default" elevation={1}>
+      <Toolbar sx={{ minHeight: 72, gap: 2, justifyContent: 'space-between' }}>
+        <Box>
+          <Typography variant="overline" color="secondary">
+            StockRush
+          </Typography>
+          <Typography variant="h6" component="h1" sx={{ color: 'text.primary' }}>
+            운영 콘솔
+          </Typography>
+        </Box>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+          {isAuthenticated ? (
+            <Typography variant="body2" color="text.secondary">
+              상태:
+              <strong style={{ marginLeft: 4 }}>authenticated</strong>
+            </Typography>
+          ) : null}
+          {isAuthenticated && onLogout ? (
+            <MuiButton size="small" variant="outlined" onClick={onLogout}>
+              로그아웃
+            </MuiButton>
+          ) : null}
+        </Box>
+      </Toolbar>
+    </AppBar>
+  );
+}
 
 function errorMessage(error: unknown): string {
   if (error instanceof ApiClientError && error.apiError) {
@@ -1661,6 +1742,7 @@ export default function App() {
   const [isProcessingLogin, setIsProcessingLogin] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
   const [accessToken, setAccessToken] = useState<string | null>(() => getStoredAccessToken());
+  const authCallbackStartedRef = useRef(false);
   const isAuthenticated = accessToken !== null;
 
   useEffect(() => {
@@ -1672,34 +1754,26 @@ export default function App() {
       return;
     }
 
-    let cancelled = false;
+    if (authCallbackStartedRef.current) {
+      return;
+    }
+
+    authCallbackStartedRef.current = true;
     setIsProcessingLogin(true);
     setAuthError(null);
 
     exchangeCodeForToken(callback)
       .then((tokenResponse) => {
-        if (cancelled) {
-          return;
-        }
-
         saveAccessToken(tokenResponse.access_token, tokenResponse.expires_in);
         setAccessToken(tokenResponse.access_token);
         clearAuthCallbackParams();
       })
       .catch((error) => {
-        if (!cancelled) {
-          setAuthError(error instanceof Error ? error.message : '로그인 토큰을 확인하지 못했습니다.');
-        }
+        setAuthError(error instanceof Error ? error.message : '로그인 토큰을 확인하지 못했습니다.');
       })
       .finally(() => {
-        if (!cancelled) {
-          setIsProcessingLogin(false);
-        }
+        setIsProcessingLogin(false);
       });
-
-    return () => {
-      cancelled = true;
-    };
   }, []);
 
   const onLogin = async () => {
@@ -1713,140 +1787,100 @@ export default function App() {
     setAuthError(null);
   };
 
+  const renderPanel = () => {
+    switch (tab) {
+      case 'dashboard':
+        return <DashboardTab />;
+      case 'orders':
+        return <OrdersTab />;
+      case 'coupons':
+        return <CouponUsageTab />;
+      case 'fulfillment':
+        return <FulfillmentRequestTab />;
+      case 'outbox':
+        return <OutboxTab />;
+      default:
+        return <CatalogTab />;
+    }
+  };
+
+  const onTabChange = (_event: unknown, nextTab: TabId) => {
+    setTab(nextTab);
+  };
+
   if (isProcessingLogin) {
     return (
-      <main className="app-shell">
-        <header className="top-bar">
-          <div>
-            <p className="eyebrow">StockRush</p>
-            <h1>포트폴리오 운영</h1>
-          </div>
-          <p className="runtime-note">OIDC 인증 처리 중</p>
-        </header>
-        <section className="panel-shell">
-          <section className="panel">
-            <p>로그인을 완료하고 있습니다.</p>
-          </section>
-        </section>
-      </main>
+      <ThemeProvider theme={adminTheme}>
+        <CssBaseline />
+        <Box sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>
+          <AppHeader isAuthenticatedState="processing" />
+          <Container maxWidth="lg" sx={{ pt: 3 }}>
+            <Paper variant="outlined" sx={{ borderRadius: 2, p: 3 }}>
+              <p>로그인을 완료하고 있습니다.</p>
+            </Paper>
+          </Container>
+        </Box>
+      </ThemeProvider>
     );
   }
 
   if (!isAuthenticated) {
     return (
-      <main className="app-shell">
-        <header className="top-bar">
-          <div>
-            <p className="eyebrow">StockRush</p>
-            <h1>포트폴리오 운영</h1>
-          </div>
-          <p className="runtime-note">로그인 필요</p>
-        </header>
-        <section className="panel-shell">
-          <section className="panel">
-            {authError && <p className="error-banner">{authError}</p>}
-            <p className="empty-message">
-              관리자 기능은 로그인 후 이용할 수 있습니다.
-            </p>
-            <p>
-              상태: <strong>unauthenticated</strong>
-            </p>
-            <div className="form-actions">
-              <button type="button" className="action-btn" onClick={onLogin}>
+      <ThemeProvider theme={adminTheme}>
+        <CssBaseline />
+        <Box sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>
+          <AppHeader isAuthenticatedState="unauthenticated" />
+          <Container maxWidth="lg" sx={{ pt: 3 }}>
+            <Paper variant="outlined" sx={{ borderRadius: 2, p: 3 }}>
+              {authError && <p className="error-banner">{authError}</p>}
+              <p className="empty-message">관리자 기능은 로그인 후 이용할 수 있습니다.</p>
+              <p>
+                상태: <strong>unauthenticated</strong>
+              </p>
+              <MuiButton variant="contained" size="small" onClick={onLogin} sx={{ mt: 1.5 }}>
                 로그인
-              </button>
-            </div>
-          </section>
-        </section>
-      </main>
+              </MuiButton>
+            </Paper>
+          </Container>
+        </Box>
+      </ThemeProvider>
     );
   }
 
   return (
-    <main className="app-shell">
-      <header className="top-bar">
-        <div>
-          <p className="eyebrow">StockRush</p>
-          <h1>포트폴리오 운영</h1>
-        </div>
-        <p className="runtime-note">
-          상태: <strong>authenticated</strong>{' '}
-          <button type="button" className="secondary-btn" onClick={onLogout}>
-            로그아웃
-          </button>
-        </p>
-      </header>
+    <ThemeProvider theme={adminTheme}>
+      <CssBaseline />
+      <Box sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>
+        <AppHeader isAuthenticatedState="authenticated" onLogout={onLogout} />
 
-      <div className="segmented" role="tablist" aria-label="작업 영역">
-        <button
-          type="button"
-          role="tab"
-          aria-selected={tab === 'dashboard'}
-          className={tab === 'dashboard' ? 'segment selected' : 'segment'}
-          onClick={() => setTab('dashboard')}
-        >
-          Dashboard
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={tab === 'orders'}
-          className={tab === 'orders' ? 'segment selected' : 'segment'}
-          onClick={() => setTab('orders')}
-        >
-          Orders
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={tab === 'coupons'}
-          className={tab === 'coupons' ? 'segment selected' : 'segment'}
-          onClick={() => setTab('coupons')}
-        >
-          Coupons
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={tab === 'fulfillment'}
-          className={tab === 'fulfillment' ? 'segment selected' : 'segment'}
-          onClick={() => setTab('fulfillment')}
-        >
-          Fulfillment
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={tab === 'outbox'}
-          className={tab === 'outbox' ? 'segment selected' : 'segment'}
-          onClick={() => setTab('outbox')}
-        >
-          Outbox
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={tab === 'products'}
-          className={tab === 'products' ? 'segment selected' : 'segment'}
-          onClick={() => setTab('products')}
-        >
-          Products
-        </button>
-      </div>
+        <Container maxWidth="lg" sx={{ pt: 3 }}>
+          <Paper
+            elevation={1}
+            sx={{
+              borderRadius: 2,
+              mb: 2,
+              overflow: 'hidden',
+            }}
+          >
+            <Tabs
+              value={tab}
+              onChange={onTabChange}
+              aria-label="작업 영역"
+              variant="scrollable"
+              scrollButtons="auto"
+              sx={{ px: 1 }}
+            >
+              {SHELL_TABS.map((item) => (
+                <Tab key={item.id} value={item.id} label={item.label} />
+              ))}
+            </Tabs>
+          </Paper>
 
-      {tab === 'dashboard' ? (
-        <DashboardTab />
-      ) : tab === 'orders' ? (
-        <OrdersTab />
-      ) : tab === 'coupons' ? (
-        <CouponUsageTab />
-      ) : tab === 'fulfillment' ? (
-        <FulfillmentRequestTab />
-      ) : tab === 'outbox' ? (
-        <OutboxTab />
-      ) : (
-        <CatalogTab />
-      )}
-    </main>
+          <Paper variant="outlined" sx={{ borderRadius: 2, p: 2 }}>
+            {renderPanel()}
+          </Paper>
+        </Container>
+      </Box>
+    </ThemeProvider>
   );
 }

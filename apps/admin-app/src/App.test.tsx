@@ -1,3 +1,4 @@
+import { StrictMode } from 'react';
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -135,6 +136,11 @@ describe('admin app operations', () => {
     defaultRequestHandler = (input, init) => {
       const request = new URL(String(input), 'http://localhost:5173');
       const method = init?.method ?? 'GET';
+
+      if (request.pathname === '/realms/stockrush/protocol/openid-connect/token' && method === 'POST') {
+        return toJsonResponse({ access_token: 'issued-admin-token', expires_in: 3600 }, 200);
+      }
+
       const requestBody = init?.body ? JSON.parse(String(init.body)) : null;
 
       if (request.pathname === '/api/admin/orders' && method === 'GET') {
@@ -1893,6 +1899,28 @@ describe('admin app operations', () => {
     const adminCalls = fetchMock.mock.calls.map(([url]) => url).filter(isAdminApiCall);
     expect(adminCalls).toHaveLength(0);
     await expect(user.click(screen.getByRole('button', { name: '로그인' }))).resolves.not.toThrow();
+  });
+
+  it('completes OIDC callback once under React StrictMode', async () => {
+    clearAuthenticatedState();
+    localStorage.setItem('stockrush-admin-oidc-state', 'callback-state');
+    localStorage.setItem('stockrush-admin-oidc-code-verifier', 'callback-verifier');
+    window.history.replaceState({}, '', '/?code=callback-code&state=callback-state');
+
+    render(
+      <StrictMode>
+        <App />
+      </StrictMode>,
+    );
+
+    expect(await screen.findByText('ord_admin_001')).toBeInTheDocument();
+    expect(screen.queryByText('잘못된 로그인 상태입니다.')).not.toBeInTheDocument();
+    expect(localStorage.getItem(AUTH_ACCESS_TOKEN_STORAGE_KEY)).toBe('issued-admin-token');
+
+    const tokenCalls = fetchMock.mock.calls.filter(
+      ([url]) => String(url) === 'http://localhost:28088/realms/stockrush/protocol/openid-connect/token',
+    );
+    expect(tokenCalls).toHaveLength(1);
   });
 
   it('injects bearer token into admin API requests', async () => {

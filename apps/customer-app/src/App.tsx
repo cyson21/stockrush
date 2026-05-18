@@ -1,4 +1,21 @@
 import { useEffect, useMemo, useState } from 'react';
+import {
+  Alert,
+  Box,
+  Button,
+  Card,
+  CardActionArea,
+  Chip,
+  Container,
+  CssBaseline,
+  Divider,
+  Paper,
+  Stack,
+  TextField,
+  ThemeProvider,
+  Typography,
+  createTheme,
+} from '@mui/material';
 import { listOnSaleProducts } from './api/catalog';
 import { ApiClientError } from './api/client';
 import {
@@ -16,6 +33,28 @@ type LoadState = 'idle' | 'loading' | 'ready' | 'error';
 
 const terminalSagaStatuses = new Set(['COMPLETED', 'FAILED']);
 const maxStatusPollingFailures = 3;
+const appTheme = createTheme({
+  palette: {
+    mode: 'light',
+    primary: {
+      main: '#155e75',
+    },
+    secondary: {
+      main: '#4f46e5',
+    },
+    background: {
+      default: '#f4f7fb',
+      paper: '#ffffff',
+    },
+  },
+  shape: {
+    borderRadius: 8,
+  },
+  typography: {
+    fontFamily:
+      'Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+  },
+});
 
 function formatCurrency(value: number): string {
   return new Intl.NumberFormat('ko-KR', {
@@ -299,220 +338,307 @@ export default function App() {
   };
 
   return (
-    <main className="app-shell">
-      <header className="top-bar">
-        <div>
-          <p className="eyebrow">StockRush</p>
-          <h1>한정 상품 주문</h1>
-        </div>
-        <div className="auth-panel" aria-label="인증 상태">
-          <p>인증 상태: {authToken ? '인증됨' : '미인증'}</p>
-          <button type="button" className="auth-action" onClick={authToken ? logout : login}>
-            {authToken ? '로그아웃' : '로그인'}
-          </button>
-        </div>
-        <div className="runtime-note">Catalog · Inventory · Order</div>
-      </header>
+    <ThemeProvider theme={appTheme}>
+      <CssBaseline />
+      <Box component="main" sx={{ minHeight: '100vh', py: { xs: 3, md: 5 } }}>
+        <Container maxWidth="xl">
+          <Paper
+            component="header"
+            elevation={0}
+            sx={{
+              alignItems: { xs: 'flex-start', md: 'center' },
+              border: '1px solid',
+              borderColor: 'divider',
+              display: 'flex',
+              flexDirection: { xs: 'column', md: 'row' },
+              gap: 2,
+              justifyContent: 'space-between',
+              mb: 3,
+              p: { xs: 2, md: 3 },
+            }}
+          >
+            <Box>
+              <Typography color="primary" sx={{ fontWeight: 800, letterSpacing: 0 }} variant="overline">
+                StockRush
+              </Typography>
+              <Typography component="h1" sx={{ fontWeight: 900 }} variant="h4">
+                한정 상품 주문
+              </Typography>
+              <Typography color="text.secondary" sx={{ mt: 0.75 }} variant="body2">
+                Catalog · Inventory · Order
+              </Typography>
+            </Box>
+            <Stack
+              direction={{ xs: 'column', sm: 'row' }}
+              spacing={1}
+              sx={{ alignItems: { xs: 'flex-start', sm: 'center' } }}
+            >
+              <Chip
+                color={authToken ? 'success' : 'default'}
+                label={`인증 상태: ${authToken ? '인증됨' : '미인증'}`}
+                variant={authToken ? 'filled' : 'outlined'}
+              />
+              <Button onClick={authToken ? logout : login} type="button" variant="contained">
+                {authToken ? '로그아웃' : '로그인'}
+              </Button>
+            </Stack>
+          </Paper>
 
-      {message && (
-        <div className="error-banner" role="alert">
-          {message}
-        </div>
-      )}
-
-      <section className="workspace" aria-label="고객 주문 흐름">
-        <section className="catalog-pane" aria-label="상품 목록">
-          <div className="section-heading">
-            <h2>상품</h2>
-            <span>{productsState === 'loading' ? '불러오는 중' : `${products.length}개`}</span>
-          </div>
-          <label className="field">
-            <span>상품 검색</span>
-            <input
-              value={productQuery}
-              onChange={(event) => setProductQuery(event.target.value)}
-              placeholder="상품명 또는 코드 검색"
-            />
-          </label>
-          <div className="product-list">
-            {products.map((product) => (
-              <button
-                className={selectedProduct?.productCode === product.productCode ? 'product-row selected' : 'product-row'}
-                key={product.productCode}
-                onClick={() => setSelectedProduct(product)}
-                type="button"
-              >
-                <span>
-                  <strong>{product.name}</strong>
-                  <small>{product.productCode}</small>
-                </span>
-                <span className="price">{formatCurrency(product.listPrice)}</span>
-              </button>
-            ))}
-          </div>
-        </section>
-
-        <section className="checkout-pane" aria-label="주문 생성">
-          <div className="section-heading">
-            <h2>주문</h2>
-            <span>{selectedProduct ? selectedProduct.status : '상품 선택 필요'}</span>
-          </div>
-
-          {selectedProduct ? (
-            <>
-              <div className="summary-row">
-                <span>선택 상품</span>
-                <strong>{selectedProduct.name}</strong>
-              </div>
-
-              <label className="field">
-                <span>SKU</span>
-                <select value={selectedSkuId} onChange={(event) => setSelectedSkuId(event.target.value)}>
-                  {stocks.map((stock) => (
-                    <option key={stock.skuId} value={stock.skuId}>
-                      {stock.skuId}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              {selectedStock && (
-                <div className="stock-strip">
-                  <span>선택됨</span>
-                  <span>가용 {selectedStock.availableQuantity}</span>
-                  <span>예약 {selectedStock.reservedQuantity}</span>
-                </div>
-              )}
-
-              <label className="field">
-                <span>수량</span>
-                <input
-                  min={1}
-                  inputMode="numeric"
-                  type="number"
-                  value={quantityInput}
-                  onChange={(event) => setQuantityInput(event.target.value)}
-                />
-              </label>
-
-              <label className="field">
-                <span>회원 ID</span>
-                <input value={memberId} onChange={(event) => setMemberId(event.target.value)} placeholder="member-1" />
-              </label>
-
-              <label className="field">
-                <span>쿠폰 코드</span>
-                <input
-                  value={couponCode}
-                  onChange={(event) => {
-                    setCouponCode(event.target.value);
-                    setCouponQuote(null);
-                    setCouponQuoteError(null);
-                  }}
-                  placeholder="WELCOME10"
-                />
-              </label>
-
-              <button
-                className="primary-action"
-                disabled={applyingCoupon || couponCode.trim().length === 0 || !selectedProduct || totalAmount <= 0}
-                onClick={applyCouponQuote}
-                type="button"
-              >
-                {applyingCoupon ? '쿠폰 적용 중' : '쿠폰 적용'}
-              </button>
-
-              {couponQuote && (
-                <div className="summary-row">
-                  <span>쿠폰 적용</span>
-                  <strong>{`쿠폰 적용: ${couponStatusLabel}`}</strong>
-                </div>
-              )}
-
-              {couponQuoteError && (
-                <div className="error-banner" role="alert">
-                  {couponQuoteError}
-                </div>
-              )}
-
-              <label className="field">
-                <span>결제수단</span>
-                <select value={paymentMethod} onChange={(event) => setPaymentMethod(event.target.value)}>
-                  <option value="CARD">CARD</option>
-                  <option value="FAIL_CARD">FAIL_CARD</option>
-                  <option value="DELAY_CARD">DELAY_CARD</option>
-                </select>
-              </label>
-
-              <div className="summary-row total">
-                <span>주문 금액</span>
-                <strong>{formatCurrency(totalAmount)}</strong>
-              </div>
-              <div className="summary-row total">
-                <span>할인 금액</span>
-                <strong>{formatCurrency(discountAmount)}</strong>
-              </div>
-              <div className="summary-row total">
-                <span>결제 예정 금액</span>
-                <strong>{formatCurrency(payableAmount)}</strong>
-              </div>
-
-              <button className="primary-action" disabled={!canSubmitOrder} onClick={submitOrder} type="button">
-                {submitting ? '처리 중' : '주문 생성'}
-              </button>
-            </>
-          ) : (
-            <p className="empty-note">상품을 선택하면 재고와 주문 입력을 확인할 수 있습니다.</p>
+          {message && (
+            <Alert role="alert" severity="error" sx={{ mb: 2 }}>
+              {message}
+            </Alert>
           )}
-        </section>
 
-        <section className="status-pane" aria-label="주문 상태" aria-live="polite" role="region">
-          <div className="section-heading">
-            <h2>상태</h2>
-            <span>{createdOrder ? '추적 중' : '대기'}</span>
-          </div>
-
-          {createdOrder ? (
-            <>
-              <div className="status-grid">
-                <div>
-                  <span>주문번호</span>
-                  <strong>{createdOrder.orderId}</strong>
-                </div>
-                <div>
-                  <span>주문 상태</span>
-                  <strong className={statusClass(orderDetail?.status ?? createdOrder.status)}>
-                    {orderDetail?.status ?? createdOrder.status}
-                  </strong>
-                </div>
-                <div>
-                  <span>Saga 상태</span>
-                  <strong className={statusClass(orderDetail?.sagaStatus ?? createdOrder.sagaStatus)}>
-                    {orderDetail?.sagaStatus ?? createdOrder.sagaStatus}
-                  </strong>
-                </div>
-                <div>
-                  <span>결제수단</span>
-                  <strong>{orderDetail?.paymentMethod ?? createdOrder.paymentMethod}</strong>
-                </div>
-              </div>
-
-              <div className="order-lines">
-                {(orderDetail?.items ?? []).map((item) => (
-                  <div className="order-line" key={`${item.productCode}-${item.skuId}`}>
-                    <span>{item.skuId}</span>
-                    <span>{item.quantity}개</span>
-                    <strong>{formatCurrency(item.lineAmount)}</strong>
-                  </div>
+          <Box
+            aria-label="고객 주문 흐름"
+            component="section"
+            sx={{
+              display: 'grid',
+              gap: 2,
+              gridTemplateColumns: {
+                xs: '1fr',
+                lg: 'minmax(280px, 0.9fr) minmax(340px, 1.1fr) minmax(320px, 1fr)',
+              },
+            }}
+          >
+            <Paper aria-label="상품 목록" component="section" elevation={0} sx={{ p: 2.5 }}>
+              <Stack direction="row" spacing={1} sx={{ justifyContent: 'space-between', mb: 2 }}>
+                <Typography component="h2" sx={{ fontWeight: 800 }} variant="h6">
+                  상품
+                </Typography>
+                <Chip
+                  label={productsState === 'loading' ? '불러오는 중' : `${products.length}개`}
+                  size="small"
+                  variant="outlined"
+                />
+              </Stack>
+              <TextField
+                fullWidth
+                label="상품 검색"
+                onChange={(event) => setProductQuery(event.target.value)}
+                placeholder="상품명 또는 코드 검색"
+                size="small"
+                value={productQuery}
+              />
+              <Stack spacing={1.25} sx={{ mt: 2 }}>
+                {products.map((product) => (
+                  <Card
+                    key={product.productCode}
+                    elevation={0}
+                    sx={{
+                      border: '1px solid',
+                      borderColor: selectedProduct?.productCode === product.productCode ? 'primary.main' : 'divider',
+                      overflow: 'hidden',
+                    }}
+                  >
+                    <CardActionArea onClick={() => setSelectedProduct(product)} sx={{ p: 1.75 }}>
+                      <Stack direction="row" spacing={2} sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
+                        <Box sx={{ minWidth: 0 }}>
+                          <Typography sx={{ fontWeight: 800 }}>{product.name}</Typography>
+                          <Typography color="text.secondary" noWrap variant="body2">
+                            {product.productCode}
+                          </Typography>
+                        </Box>
+                        <Typography color="secondary.main" sx={{ fontWeight: 900, whiteSpace: 'nowrap' }}>
+                          {formatCurrency(product.listPrice)}
+                        </Typography>
+                      </Stack>
+                    </CardActionArea>
+                  </Card>
                 ))}
-              </div>
-            </>
-          ) : (
-            <p className="empty-note">주문 생성 후 진행 상태가 표시됩니다.</p>
-          )}
-        </section>
-      </section>
-    </main>
+              </Stack>
+            </Paper>
+
+            <Paper aria-label="주문 생성" component="section" elevation={0} sx={{ p: 2.5 }}>
+              <Stack direction="row" spacing={1} sx={{ justifyContent: 'space-between', mb: 2 }}>
+                <Typography component="h2" sx={{ fontWeight: 800 }} variant="h6">
+                  주문
+                </Typography>
+                <Chip label={selectedProduct ? selectedProduct.status : '상품 선택 필요'} size="small" />
+              </Stack>
+
+              {selectedProduct ? (
+                <Stack spacing={2}>
+                  <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
+                    <Typography color="text.secondary">선택 상품</Typography>
+                    <Typography sx={{ fontWeight: 800, textAlign: 'right' }}>
+                      {selectedProduct.name}
+                    </Typography>
+                  </Stack>
+
+                  <TextField
+                    fullWidth
+                    label="SKU"
+                    onChange={(event) => setSelectedSkuId(event.target.value)}
+                    select
+                    size="small"
+                    slotProps={{ select: { native: true } }}
+                    value={selectedSkuId}
+                  >
+                    {stocks.map((stock) => (
+                      <option key={stock.skuId} value={stock.skuId}>
+                        {stock.skuId}
+                      </option>
+                    ))}
+                  </TextField>
+
+                  {selectedStock && (
+                    <Alert role="status" severity="success" variant="outlined">
+                      선택됨 · 가용 {selectedStock.availableQuantity} · 예약 {selectedStock.reservedQuantity}
+                    </Alert>
+                  )}
+
+                  <TextField
+                    fullWidth
+                    inputMode="numeric"
+                    label="수량"
+                    onChange={(event) => setQuantityInput(event.target.value)}
+                    size="small"
+                    slotProps={{ htmlInput: { min: 1 } }}
+                    type="number"
+                    value={quantityInput}
+                  />
+
+                  <TextField
+                    fullWidth
+                    label="회원 ID"
+                    onChange={(event) => setMemberId(event.target.value)}
+                    placeholder="member-1"
+                    size="small"
+                    value={memberId}
+                  />
+
+                  <TextField
+                    fullWidth
+                    label="쿠폰 코드"
+                    onChange={(event) => {
+                      setCouponCode(event.target.value);
+                      setCouponQuote(null);
+                      setCouponQuoteError(null);
+                    }}
+                    placeholder="WELCOME10"
+                    size="small"
+                    value={couponCode}
+                  />
+
+                  <Button
+                    disabled={applyingCoupon || couponCode.trim().length === 0 || !selectedProduct || totalAmount <= 0}
+                    onClick={applyCouponQuote}
+                    type="button"
+                    variant="outlined"
+                  >
+                    {applyingCoupon ? '쿠폰 적용 중' : '쿠폰 적용'}
+                  </Button>
+
+                  {couponQuote && (
+                    <Alert role="status" severity="info">{`쿠폰 적용: ${couponStatusLabel}`}</Alert>
+                  )}
+
+                  {couponQuoteError && (
+                    <Alert role="alert" severity="error">
+                      {couponQuoteError}
+                    </Alert>
+                  )}
+
+                  <TextField
+                    fullWidth
+                    label="결제수단"
+                    onChange={(event) => setPaymentMethod(event.target.value)}
+                    select
+                    size="small"
+                    slotProps={{ select: { native: true } }}
+                    value={paymentMethod}
+                  >
+                    <option value="CARD">CARD</option>
+                    <option value="FAIL_CARD">FAIL_CARD</option>
+                    <option value="DELAY_CARD">DELAY_CARD</option>
+                  </TextField>
+
+                  <Divider />
+                  <SummaryLine label="주문 금액" value={formatCurrency(totalAmount)} />
+                  <SummaryLine label="할인 금액" value={formatCurrency(discountAmount)} />
+                  <SummaryLine label="결제 예정 금액" value={formatCurrency(payableAmount)} strong />
+
+                  <Button disabled={!canSubmitOrder} onClick={submitOrder} size="large" type="button" variant="contained">
+                    {submitting ? '처리 중' : '주문 생성'}
+                  </Button>
+                </Stack>
+              ) : (
+                <Typography color="text.secondary">상품을 선택하면 재고와 주문 입력을 확인할 수 있습니다.</Typography>
+              )}
+            </Paper>
+
+            <Paper
+              aria-label="주문 상태"
+              aria-live="polite"
+              component="section"
+              elevation={0}
+              role="region"
+              sx={{ p: 2.5 }}
+            >
+              <Stack direction="row" spacing={1} sx={{ justifyContent: 'space-between', mb: 2 }}>
+                <Typography component="h2" sx={{ fontWeight: 800 }} variant="h6">
+                  상태
+                </Typography>
+                <Chip label={createdOrder ? '추적 중' : '대기'} size="small" />
+              </Stack>
+
+              {createdOrder ? (
+                <Stack spacing={2}>
+                  <Box sx={{ display: 'grid', gap: 1.25, gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' }}>
+                    <StatusCard label="주문번호" value={createdOrder.orderId} />
+                    <StatusCard label="주문 상태" value={orderDetail?.status ?? createdOrder.status} />
+                    <StatusCard label="Saga 상태" value={orderDetail?.sagaStatus ?? createdOrder.sagaStatus} />
+                    <StatusCard label="결제수단" value={orderDetail?.paymentMethod ?? createdOrder.paymentMethod} />
+                  </Box>
+
+                  <Stack spacing={1}>
+                    {(orderDetail?.items ?? []).map((item) => (
+                      <Paper key={`${item.productCode}-${item.skuId}`} elevation={0} sx={{ p: 1.5 }}>
+                        <Stack direction="row" spacing={1} sx={{ justifyContent: 'space-between' }}>
+                          <Typography>{item.skuId}</Typography>
+                          <Typography>{item.quantity}개</Typography>
+                          <Typography sx={{ fontWeight: 800 }}>{formatCurrency(item.lineAmount)}</Typography>
+                        </Stack>
+                      </Paper>
+                    ))}
+                  </Stack>
+                </Stack>
+              ) : (
+                <Typography color="text.secondary">주문 생성 후 진행 상태가 표시됩니다.</Typography>
+              )}
+            </Paper>
+          </Box>
+        </Container>
+      </Box>
+    </ThemeProvider>
+  );
+}
+
+function SummaryLine({ label, value, strong = false }: { label: string; value: string; strong?: boolean }) {
+  return (
+    <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
+      <Typography color="text.secondary">{label}</Typography>
+      <Typography sx={{ fontWeight: strong ? 900 : 700 }}>{value}</Typography>
+    </Stack>
+  );
+}
+
+function StatusCard({ label, value }: { label: string; value: string }) {
+  return (
+    <Paper elevation={0} sx={{ bgcolor: 'grey.50', minHeight: 78, p: 1.5 }}>
+      <Typography color="text.secondary" variant="body2">
+        {label}
+      </Typography>
+      <Typography
+        className={statusClass(value)}
+        component="strong"
+        sx={{ display: 'block', fontWeight: 900, mt: 0.5, overflowWrap: 'anywhere' }}
+      >
+        {value}
+      </Typography>
+    </Paper>
   );
 }
 
