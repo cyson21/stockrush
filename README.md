@@ -177,6 +177,7 @@ Kubernetes 배포 흐름을 확인할 때는 `kind` 런타임을 사용합니다
 | Mobile app | `npm --prefix apps/mobile-app test`, `npm --prefix apps/mobile-app run typecheck` |
 | Architecture Guard | `./tools/architecture-guard/architecture-guard check` |
 | Demo smoke | `./scripts/demo-smoke.sh` |
+| Kubernetes preflight | `./scripts/kind-preflight.sh --tag latest-demo` |
 | Kubernetes smoke | `./scripts/kind-smoke.sh` |
 | Kafka outage smoke | `./scripts/demo-smoke.sh --kafka-outage` |
 | Secret scan | `./scripts/check-no-committed-secrets.sh` |

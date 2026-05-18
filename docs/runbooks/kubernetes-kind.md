@@ -34,6 +34,16 @@ docker login ghcr.io -u cyson21 --password-stdin < ~/.config/stockrush/github-to
 
 package visibility가 public이면 로그인 없이 pull할 수 있다.
 
+## 기동 전 점검
+
+실제 cluster를 만들기 전에 아래 명령으로 도구, Docker daemon, GHCR 인증 후보, 기존 StockRush 컨테이너, manifest 렌더링을 확인한다.
+
+```bash
+./scripts/kind-preflight.sh --tag latest-demo
+```
+
+이 명령은 Kubernetes 리소스를 생성하지 않는다.
+
 ## 실행
 
 기본 태그는 `latest-demo`다.
@@ -46,7 +56,7 @@ package visibility가 public이면 로그인 없이 pull할 수 있다.
 
 - `stockrush` kind cluster 생성
 - `stockrush` namespace 생성
-- 로컬 Docker 로그인 정보를 Kubernetes image pull secret으로 연결
+- GHCR token 파일 또는 로컬 Docker 로그인 정보를 Kubernetes image pull secret으로 연결
 - PostgreSQL, Redis, Kafka, Keycloak 배포
 - Gateway, 7개 backend service, customer/admin web app 배포
 - Kafka topic 초기화 Job 완료 대기
@@ -57,6 +67,14 @@ package visibility가 public이면 로그인 없이 pull할 수 있다.
 ```bash
 ./scripts/kind-up.sh --tag git-abc1234
 ```
+
+현재 Docker에 같은 태그의 이미지가 있고 registry pull 시간을 줄이고 싶으면 아래처럼 실행한다.
+
+```bash
+STOCKRUSH_KIND_LOAD_LOCAL_IMAGES=true ./scripts/kind-up.sh --tag latest-demo
+```
+
+Docker Desktop 이미지 저장 방식에 따라 `kind load`가 실패할 수 있다. 이 경우 스크립트는 경고를 출력하고 registry pull로 계속 진행한다.
 
 ## 점검
 
@@ -129,5 +147,7 @@ kubectl -n stockrush logs job/kafka-init --tail=200
 
 - Docker Desktop이 꺼져 있으면 cluster 생성이 실패한다.
 - GHCR image가 private이고 Docker login이 없으면 `ImagePullBackOff`가 발생한다.
+- GHCR image가 private이면 `~/.config/stockrush/github-token` 또는 Docker login 정보가 필요하다.
+- 기존 Docker Compose 데모가 떠 있으면 CPU와 image pull 시간이 크게 늘 수 있다.
 - `latest-demo`가 기대한 커밋이 아니면 `git-<short-sha>` 태그로 다시 실행한다.
 - 처음 실행은 PostgreSQL, Keycloak, backend image pull 때문에 몇 분 걸릴 수 있다.

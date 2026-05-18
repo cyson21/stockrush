@@ -102,6 +102,7 @@ Windows 11 PowerShell:
 Kubernetes를 보여줘야 할 때는 `kind` 경로를 사용한다. 이 경로도 클라우드 자원을 쓰지 않고 현재 PC의 Docker Desktop 자원만 사용한다.
 
 ```bash
+./scripts/kind-preflight.sh --tag latest-demo
 ./scripts/kind-up.sh --tag latest-demo
 ./scripts/kind-smoke.sh
 ./scripts/kind-down.sh
@@ -116,7 +117,7 @@ Compose 배포와 kind 배포의 차이:
 | 목적 | 가장 빠른 포트폴리오 데모 | Kubernetes 배포 구조 확인 |
 | 실행 단위 | container service | Deployment, Service, Job |
 | 이미지 | GHCR image | GHCR image |
-| 주요 검증 | `demo-smoke` | `kind-smoke` |
+| 주요 검증 | `demo-smoke` | `kind-preflight`, `kind-smoke` |
 | 클라우드 자원 | 사용 안 함 | 사용 안 함 |
 
 상세 runbook은 [Kubernetes kind Demo](runbooks/kubernetes-kind.md)에 둔다.
