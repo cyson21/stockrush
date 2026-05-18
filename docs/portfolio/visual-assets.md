@@ -6,14 +6,23 @@
 
 | 파일 | 용도 |
 |---|---|
-| `docs/assets/architecture/stockrush-architecture.svg` | 원본. 문구나 배치 수정 시 이 파일을 수정한다. |
-| `docs/assets/architecture/stockrush-architecture.png` | README, Notion, 발표 자료에 바로 넣는 이미지. |
+| `docs/assets/architecture/stockrush-architecture.svg` | 전체 구조 대표 이미지 원본 |
+| `docs/assets/architecture/stockrush-architecture.png` | README, Notion, 발표 자료에 바로 넣는 대표 이미지 |
+| `docs/assets/architecture/stockrush-saga-flow.svg` | 주문 성공/실패/지연 결제 취소 흐름 원본 |
+| `docs/assets/architecture/stockrush-saga-flow.png` | Saga 설명용 PNG |
+| `docs/assets/architecture/stockrush-outbox-recovery.svg` | Outbox relay, retry, requeue, consumer 중복 처리 원본 |
+| `docs/assets/architecture/stockrush-outbox-recovery.png` | 복구 흐름 설명용 PNG |
+| `docs/assets/architecture/stockrush-security-boundary.svg` | Keycloak, Gateway, 신뢰 헤더, 권한 경계 원본 |
+| `docs/assets/architecture/stockrush-security-boundary.png` | 보안 설명용 PNG |
+| `docs/assets/architecture/stockrush-cicd-runtime.svg` | GitHub Actions, GHCR, Docker Compose, kind 흐름 원본 |
+| `docs/assets/architecture/stockrush-cicd-runtime.png` | CI/CD와 실행 환경 설명용 PNG |
+| `tools/portfolio-visuals/generate-portfolio-visuals.mjs` | 보조 시각 자료 SVG 생성 스크립트 |
 
-이 방식은 외부 서비스에 의존하지 않고, Git diff로 변경 이력을 추적할 수 있다는 장점이 있다. 포트폴리오 README처럼 공개 저장소에서 바로 보여줄 자료에는 이 방식이 가장 단순하다.
+이 방식은 외부 서비스에 의존하지 않고 문서/자산 변경 이력을 추적하기 쉽다. 포트폴리오 README처럼 공개 저장소에서 바로 보여줄 자료에는 이 방식이 가장 단순하다.
 
 ## Figma/Canva는 언제 쓰나
 
-현재 아키텍처 이미지는 자체 SVG로 충분하다. 다만 아래 상황에서는 Figma나 Canva를 쓰는 편이 낫다.
+현재 이미지는 자체 SVG로 충분하다. 다만 아래 상황에서는 Figma나 Canva를 쓰는 편이 낫다.
 
 | 도구 | 쓰기 좋은 상황 |
 |---|---|
@@ -34,13 +43,29 @@
 macOS Chrome이 설치된 환경에서는 아래 방식으로 PNG를 다시 만든다.
 
 ```bash
+node tools/portfolio-visuals/generate-portfolio-visuals.mjs
+
 /Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome \
   --headless \
   --disable-gpu \
   --no-sandbox \
   --screenshot=docs/assets/architecture/stockrush-architecture.png \
   --window-size=1600,1040 \
-  file:///Users/chanyang.son/Documents/MiniProject1/docs/assets/architecture/stockrush-architecture.svg
+  "file://$PWD/docs/assets/architecture/stockrush-architecture.svg"
+
+for svg in docs/assets/architecture/stockrush-saga-flow.svg \
+  docs/assets/architecture/stockrush-outbox-recovery.svg \
+  docs/assets/architecture/stockrush-security-boundary.svg \
+  docs/assets/architecture/stockrush-cicd-runtime.svg; do
+  png="${svg%.svg}.png"
+  /Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome \
+    --headless \
+    --disable-gpu \
+    --no-sandbox \
+    --screenshot="$png" \
+    --window-size=1400,900 \
+    "file://$PWD/$svg"
+done
 ```
 
 다른 PC에서는 SVG를 브라우저로 열어 1600x1040 기준으로 export하거나, Figma/Canva에 SVG를 가져온 뒤 PNG로 내보내면 된다.

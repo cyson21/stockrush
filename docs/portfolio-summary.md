@@ -11,6 +11,7 @@ StockRush는 한정 판매 커머스 주문 흐름을 MSA, Apache Kafka, Outbox,
 ![StockRush 아키텍처](assets/architecture/stockrush-architecture.png)
 
 원본 SVG와 발표 자료 활용 기준은 `docs/portfolio/visual-assets.md`에 둔다. README에는 같은 PNG를 연결해 GitHub 첫 화면에서 구조를 바로 확인할 수 있게 했다.
+Saga, Outbox, 보안, CI/CD 보조 이미지는 `docs/portfolio/visual-story.md`에서 함께 확인한다.
 
 ## 1분 설명
 
