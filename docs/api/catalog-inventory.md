@@ -1,6 +1,6 @@
 # Catalog and Inventory API
 
-이 문서는 고객 앱의 상품 탐색과 SKU 재고 조회, 관리자 앱의 SKU 수량 설정에 필요한 Catalog / Inventory API를 정리한다.
+고객 앱의 상품 탐색과 SKU 재고 조회, 관리자 앱의 SKU 수량 설정에 필요한 Catalog / Inventory API를 정리한다.
 
 공통 응답과 헤더 규칙은 [Common API Response](common.md)를 따른다.
 
@@ -74,7 +74,7 @@
 |---|---:|---|
 | `productCode` | no | 지정하면 해당 상품의 SKU 재고만 반환한다. 고객 앱은 선택 상품 코드로 조회한다. |
 
-`productCode`를 생략하면 전체 SKU 재고 목록이 반환된다. 고객 화면에서는 선택 상품의 SKU만 보여주기 위해 항상 상품 코드를 전달한다.
+`productCode`를 생략하면 전체 SKU 재고 목록이 반환된다. 고객 화면에서는 선택 상품의 SKU만 표시하기 위해 항상 상품 코드를 전달한다.
 
 ### Response
 

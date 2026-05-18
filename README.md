@@ -8,13 +8,13 @@
 ![React](https://img.shields.io/badge/React-web%20apps-61DAFB)
 ![Expo](https://img.shields.io/badge/Expo-mobile-000020)
 
-StockRush는 한정 판매 커머스에서 주문, 재고, 결제, 쿠폰, 출고, 조회 모델을 분리했을 때 생기는 상태 수렴 문제를 다룬 백엔드 중심 포트폴리오 프로젝트입니다.
+StockRush는 한정 판매 커머스에서 주문, 재고, 결제, 쿠폰, 출고, 조회 모델을 분리했을 때 생기는 상태 수렴 문제를 다룬 백엔드 중심 프로젝트입니다.
 
 단순 CRUD보다 실제 장애 지점이 드러나는 흐름에 집중했습니다. 주문 생성은 바로 끝나지 않고 Kafka, Outbox, Saga, 멱등성 키, 재고 선점, 결제 결과, 관리자 운영 액션을 거쳐 최종 상태로 수렴합니다. 고객 웹, 관리자 웹, Expo 모바일 앱은 이 흐름을 직접 확인하기 위한 얇은 제품 화면입니다.
 
-## What to Look At
+## Highlights
 
-| 관점 | 볼만한 지점 |
+| 관점 | 핵심 내용 |
 |---|---|
 | 주문 흐름 | `CARD`, `FAIL_CARD`, `DELAY_CARD` 주문이 서로 다른 Saga 경로로 수렴 |
 | 재고 처리 | 동일 SKU에 주문이 몰릴 때 성공/실패 주문과 최종 재고를 함께 검증 |
@@ -117,7 +117,7 @@ flowchart LR
 
 ## Run Locally
 
-데모 모드는 인프라, 백엔드 서비스, 웹앱을 Docker Compose로 함께 띄웁니다. 포트폴리오 시연이나 다른 PC에서 재현할 때는 이 경로가 가장 단순합니다.
+데모 모드는 인프라, 백엔드 서비스, 웹앱을 Docker Compose로 함께 띄웁니다. 다른 PC에서 같은 흐름을 재현할 때는 이 경로가 가장 단순합니다.
 
 ```bash
 ./scripts/demo-up.sh
@@ -142,7 +142,7 @@ docker compose up -d
 
 자세한 실행 순서는 [Local E2E Runbook](docs/runbooks/local-e2e.md), [Services Guide](services/README.md), [Demo Runtime Guide](infra/demo/README.md)에 분리했습니다.
 
-## Quality Gates
+## Verification
 
 | Gate | Command |
 |---|---|
@@ -185,7 +185,7 @@ tools/
 
 | 문서 | 내용 |
 |---|---|
-| [Portfolio Summary](docs/portfolio-summary.md) | 면접/포트폴리오 설명용 요약 |
+| [Portfolio Summary](docs/portfolio-summary.md) | 구조와 검증 범위 요약 |
 | [Phase 1 Commerce Foundation](docs/architecture/phase-1-commerce-foundation.md) | 주문/재고/결제 중심 구조 |
 | [Security Architecture](docs/architecture/security.md) | OIDC, Gateway 보안, route 정책 |
 | [Outbox and Consumer Idempotency](docs/architecture/outbox.md) | Outbox relay와 중복 처리 기준 |
@@ -195,7 +195,7 @@ tools/
 | [AI Development Process](docs/ai-development-process.md) | agent 기반 개발 운영 기록 |
 | [Troubleshooting](docs/troubleshooting/phase-1-commerce-foundation.md) | 구현 중 발견한 문제와 재발 방지 |
 
-## Current Boundaries
+## Boundaries
 
 완료 범위와 남겨둔 범위를 구분해 둡니다.
 
@@ -203,4 +203,4 @@ tools/
 - Fulfillment는 출고 준비 상태까지 구현했고 carrier, label, tracking은 후속 확장 범위입니다.
 - 고객 상품 검색은 Catalog API와 Customer App UI로 처리하며 별도 검색 projection은 만들지 않았습니다.
 - 동일 SKU E2E는 최종 상태 검증 목적입니다. 외부 부하 벤치마크와 Kafka consumer 병렬성 튜닝은 별도 과제로 남겼습니다.
-- 서비스-local 직접 호출은 개발 편의용이고, 포트폴리오 시연의 외부 진입점은 Gateway입니다.
+- 서비스-local 직접 호출은 개발 편의용이고, 외부 진입점은 Gateway입니다.

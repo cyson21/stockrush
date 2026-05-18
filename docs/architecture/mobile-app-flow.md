@@ -1,13 +1,13 @@
 # Mobile App Flow
 
-StockRush 모바일 앱은 Android/iOS 설치형 고객 앱으로 계획한다. 구현 기술은 Expo React Native와 TypeScript를 우선 사용한다. 목적은 네이티브 모바일 UX 자체의 깊이보다, Kafka/Saga/Read Model 백엔드 흐름을 실제 모바일 클라이언트에서 끝까지 시연하는 것이다.
+StockRush 모바일 앱은 Android/iOS 설치형 고객 앱으로 계획한다. 구현 기술은 Expo React Native와 TypeScript를 우선 사용한다. 목적은 네이티브 모바일 UX 자체의 깊이보다, Kafka/Saga/Read Model 백엔드 흐름을 실제 모바일 클라이언트에서 끝까지 확인하는 것이다.
 
 ## Scope
 
 - 고객용 앱만 만든다.
 - 관리자 기능은 기존 React/Vite Admin App에 유지한다.
 - Android와 iOS는 하나의 Expo React Native 코드베이스로 대응한다.
-- 초기 배포 목표는 Expo Go 또는 development build에서 로컬/개발 API를 호출하는 시연 가능한 앱이다.
+- 초기 배포 목표는 Expo Go 또는 development build에서 로컬/개발 API를 호출하는 앱이다.
 
 ## Screen Flow
 

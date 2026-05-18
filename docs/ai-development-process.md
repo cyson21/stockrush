@@ -8,7 +8,7 @@ StockRush는 AI를 코드 생산 보조 도구로만 쓰지 않고, Dev RAG → 
 - 필요한 맥락을 검색해 Context Pack으로 고정하고, 증거 기반 결정을 남긴다.
 - AI 작업자(Spark worker)와 리뷰어(Spark reviewer) 역할을 분리해 책임을 구분한다.
 - 코드, 문서, 운영 정합성은 테스트와 Architecture Guard로 순차 검증한다.
-- 실행 기록을 남겨 포트폴리오 설명이 가능한 결과물을 만든다.
+- 실행 기록을 남겨 변경 근거와 검증 결과를 추적 가능하게 만든다.
 
 ## 구성 요소
 
@@ -52,7 +52,7 @@ StockRush는 AI를 코드 생산 보조 도구로만 쓰지 않고, Dev RAG → 
 
 ## 공개 기준
 
-실행 기록의 원문은 내부 증적이다. 포트폴리오에는 공개 가능한 항목만 공개한다.
+실행 기록의 원문은 내부 증적이다. 외부 문서에는 공개 가능한 항목만 옮긴다.
 
 - 작업 목표
 - 사용한 맥락의 범주
@@ -103,7 +103,7 @@ StockRush는 AI를 코드 생산 보조 도구로만 쓰지 않고, Dev RAG → 
 - Architecture Guard: API, 이벤트, 아웃박스 중심으로 여러 run에서 통과 기록.
 - 브라우저 확인: admin-app desktop/390px/320px 화면과 proxy/API 응답을 레이아웃·응답 관점에서 pass 처리.
 
-## 면접용 요약
+## 요약
 
 ### 1분 요약
 
@@ -115,4 +115,4 @@ StockRush는 AI를 코드 생산 보조 도구로만 쓰지 않고, Dev RAG → 
 
 특히 order/catalog/inventory/payment/admin-app/customer-app 작업을 분리해서 진행했고, Spark worker와 reviewer를 분리해 구현과 리뷰를 병렬 수행하면서 책임 경계를 명확히 했습니다.
 
-모든 주요 단위는 테스트 게이트와 `architecture-guard check` 및 브라우저 확인을 거쳐야만 다음 단계로 넘어가며, 이 구조 덕분에 면접에서 ‘누가 무엇을 왜 어떻게 검증했는지’를 실증 기반으로 설명할 수 있습니다.”
+모든 주요 단위는 테스트 게이트와 `architecture-guard check` 및 브라우저 확인을 거쳐야만 다음 단계로 넘어가며, 이 구조 덕분에 변경 이유와 검증 결과가 실행 기록에 남습니다.”

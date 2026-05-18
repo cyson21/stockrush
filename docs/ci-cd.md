@@ -67,7 +67,7 @@ Docker login 성공은 package pull 권한을 보장하지 않는다. `deploy-lo
 
 - Fine-grained PAT라면 repository access에 `cyson21/stockrush`가 포함되어 있는지 확인한다.
 - package 권한에 `Read`가 포함되어 있는지 확인한다.
-- 외부 시연용이면 GitHub package visibility를 public으로 바꿔 토큰 없이 pull 가능한 상태인지 확인한다.
+- 외부 공유용이면 GitHub package visibility를 public으로 바꿔 토큰 없이 pull 가능한 상태인지 확인한다.
 
 배포:
 
@@ -103,7 +103,7 @@ Windows 11 PowerShell:
 
 ## 운영상 주의
 
-- private repository의 GHCR package는 기본적으로 private일 수 있다. 외부 시연 전에 package visibility를 확인한다.
+- private repository의 GHCR package는 기본적으로 private일 수 있다. 외부 공유 전에 package visibility를 확인한다.
 - 로컬 배포 토큰에 `read:packages`가 없으면 `deploy-local`은 image manifest preflight에서 중단한다.
 - `latest-demo`는 편의 태그이므로 이력 추적과 문제 재현에는 `git-<short-sha>` 태그를 우선 사용한다.
 - self-hosted runner는 아직 사용하지 않는다. 추가할 경우 protected branch, 수동 dispatch, 전용 runner label을 먼저 설정한다.

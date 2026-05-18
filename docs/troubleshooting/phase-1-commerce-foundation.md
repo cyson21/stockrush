@@ -1,6 +1,6 @@
 # Phase 1 Commerce Foundation Troubleshooting
 
-이 문서는 StockRush Phase 1/2 구현 중 확인한 문제와, 현재 의도적으로 남긴 검증 공백을 면접에서 설명할 수 있는 형태로 정리한다.
+StockRush Phase 1/2 구현 중 확인한 문제와 현재 의도적으로 남긴 검증 공백을 기록한다.
 
 ## 읽는 기준
 
@@ -132,7 +132,7 @@
 | 재발 방지 | 공개 배포 전 checklist에 인증/권한 테스트와 관리자 API 접근 제어 확인을 필수 항목으로 추가 |
 | 근거 | [Outbox Admin API](../api/outbox-admin.md), [Test Strategy](../test-strategy.md), [README](../../README.md) |
 
-## 면접에서 피해야 할 주장
+## 오해 소지가 있는 주장
 
 - “모든 API 경로를 Gateway 기준으로 검증했다.”
   - 주문 생성/조회, 관리자 주문 조회/취소, Outbox 운영 API는 Gateway smoke와 runbook 기준을 갖췄지만, 고객 상품/재고 및 관리자 상품/재고 일부 경로는 앱 proxy와 서비스 포트 검증도 함께 남아 있다.

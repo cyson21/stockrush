@@ -1,6 +1,6 @@
 # Admin App Flow
 
-Admin App은 StockRush 운영 시나리오를 시연하는 React/Vite 웹앱이다. Read Model 기반 운영 지표, 쿠폰 사용 이력, 출고 요청 이력, 상품/재고 운영, 주문 Saga 상태, 서비스별 outbox 상태를 같은 앱에서 확인하고, due 상태의 pending 이벤트 재시도와 failed 이벤트 재처리 준비를 수동으로 실행할 수 있게 한다. 모바일 확장은 고객 앱에 한정하고, 관리자 기능은 웹앱에 유지한다.
+Admin App은 StockRush 운영 시나리오를 확인하는 React/Vite 웹앱이다. Read Model 기반 운영 지표, 쿠폰 사용 이력, 출고 요청 이력, 상품/재고 운영, 주문 Saga 상태, 서비스별 outbox 상태를 같은 앱에서 확인하고, due 상태의 pending 이벤트 재시도와 failed 이벤트 재처리 준비를 수동으로 실행할 수 있게 한다. 모바일 확장은 고객 앱에 한정하고, 관리자 기능은 웹앱에 유지한다.
 
 ## Scope
 
