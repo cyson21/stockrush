@@ -6,6 +6,12 @@ StockRush의 도메인, 구조, 검증 범위를 한 문서로 요약한다. 상
 
 StockRush는 한정 판매 커머스 주문 흐름을 MSA, Apache Kafka, Outbox, Saga로 구현하고, 고객 앱과 관리자 앱에서 성공/실패/지연 결제 운영 시나리오까지 확인할 수 있게 만든 백엔드 중심 프로젝트다.
 
+## 대표 아키텍처 이미지
+
+![StockRush 아키텍처](assets/architecture/stockrush-architecture.png)
+
+원본 SVG와 발표 자료 활용 기준은 `docs/portfolio/visual-assets.md`에 둔다. README에는 같은 PNG를 연결해 GitHub 첫 화면에서 구조를 바로 확인할 수 있게 했다.
+
 ## 1분 설명
 
 StockRush는 한정 판매 상황에서 주문, 재고, 결제가 분산 서비스로 나뉘었을 때의 상태 수렴 문제를 다룹니다.
