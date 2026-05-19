@@ -36,5 +36,9 @@
 
 # Project Overrides
 
+## 상위 포트폴리오 가이드
+- 작업 시작 시 `/Users/chanyang.son/Documents/side-projects/SIDE_PROJECT_GUIDE.md`를 함께 읽고, 포트폴리오 허브 구조와 세션 복구 기준을 확인한다.
+- 이 레포의 로컬 규칙이 상위 가이드보다 구체적이면 이 레포의 로컬 규칙을 우선 적용한다.
+
 ## 기본 원칙
 - StockRush는 공통 규칙만 적용합니다. 별도 로컬 오버라이드는 현재 없습니다.
