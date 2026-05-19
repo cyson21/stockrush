@@ -17,6 +17,8 @@
 | `docs/assets/architecture/stockrush-cicd-runtime.svg` | GitHub Actions, GHCR, Docker Compose, kind 흐름 원본 |
 | `docs/assets/architecture/stockrush-cicd-runtime.png` | CI/CD와 실행 환경 설명용 PNG |
 | `tools/portfolio-visuals/generate-portfolio-visuals.mjs` | 보조 시각 자료 SVG 생성 스크립트 |
+| `docs/portfolio/project-01-stockrush-portfolio.html` | Project 01 PDF 원본 |
+| `docs/portfolio/project-01-stockrush-portfolio.pdf` | Project 01 제출용 PDF |
 
 이 방식은 외부 서비스에 의존하지 않고 문서/자산 변경 이력을 추적하기 쉽다. 포트폴리오 README처럼 공개 저장소에서 바로 보여줄 자료에는 이 방식이 가장 단순하다.
 
@@ -69,3 +71,15 @@ done
 ```
 
 다른 PC에서는 SVG를 브라우저로 열어 1600x1040 기준으로 export하거나, Figma/Canva에 SVG를 가져온 뒤 PNG로 내보내면 된다.
+
+## PDF 재생성
+
+```bash
+/Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome \
+  --headless \
+  --disable-gpu \
+  --no-sandbox \
+  --print-to-pdf=docs/portfolio/project-01-stockrush-portfolio.pdf \
+  --print-to-pdf-no-header \
+  "file://$PWD/docs/portfolio/project-01-stockrush-portfolio.html"
+```

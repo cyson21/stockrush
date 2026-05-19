@@ -1,0 +1,487 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Project 01 - StockRush Portfolio</title>
+  <style>
+    @page {
+      size: A4 landscape;
+      margin: 0;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      color: #111827;
+      background: #eef3f2;
+      font-family: "Apple SD Gothic Neo", "Noto Sans KR", Arial, sans-serif;
+      letter-spacing: 0;
+    }
+
+    a {
+      color: inherit;
+      text-decoration: none;
+    }
+
+    .page {
+      display: block;
+      position: relative;
+      width: 297mm;
+      height: 210mm;
+      overflow: hidden;
+      padding: 15mm 16mm;
+      background:
+        linear-gradient(135deg, rgba(15, 118, 110, 0.08), rgba(37, 99, 235, 0.04) 45%, rgba(180, 83, 9, 0.06)),
+        #f8fafc;
+      page-break-after: always;
+      break-after: page;
+      break-inside: avoid;
+      print-color-adjust: exact;
+      -webkit-print-color-adjust: exact;
+    }
+
+    .page + .page {
+      page-break-before: always;
+      break-before: page;
+    }
+
+    .page:last-child {
+      page-break-after: auto;
+      break-after: auto;
+    }
+
+    .cover {
+      color: #f8fafc;
+      background:
+        linear-gradient(100deg, rgba(17, 24, 39, 0.98), rgba(31, 41, 55, 0.94) 50%, rgba(15, 118, 110, 0.92)),
+        #111827;
+    }
+
+    .cover::after {
+      content: "";
+      position: absolute;
+      right: 18mm;
+      bottom: 16mm;
+      width: 128mm;
+      height: 72mm;
+      border: 1px solid rgba(255, 255, 255, 0.24);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.08);
+    }
+
+    .cover-image {
+      position: absolute;
+      right: 23mm;
+      bottom: 21mm;
+      width: 118mm;
+      border-radius: 8px;
+      box-shadow: 0 18px 38px rgba(0, 0, 0, 0.28);
+    }
+
+    .eyebrow {
+      display: inline-block;
+      padding: 7px 12px;
+      border-radius: 8px;
+      color: #ffffff;
+      background: #0f766e;
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .cover h1 {
+      width: 150mm;
+      margin: 22mm 0 7mm;
+      font-size: 54px;
+      line-height: 1.02;
+      letter-spacing: 0;
+    }
+
+    .cover .lead {
+      width: 150mm;
+      margin: 0;
+      color: #dbeafe;
+      font-size: 18px;
+      line-height: 1.65;
+      font-weight: 600;
+    }
+
+    .cover .meta {
+      position: absolute;
+      left: 16mm;
+      bottom: 18mm;
+      display: grid;
+      grid-template-columns: 38mm 1fr;
+      row-gap: 6px;
+      color: #cbd5e1;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .page-title {
+      display: flex;
+      align-items: end;
+      justify-content: space-between;
+      gap: 20px;
+      margin-bottom: 9mm;
+      padding-bottom: 6mm;
+      border-bottom: 1px solid #cbd5e1;
+    }
+
+    .page-title h2 {
+      margin: 0;
+      font-size: 30px;
+      line-height: 1.1;
+      letter-spacing: 0;
+    }
+
+    .page-title p {
+      max-width: 88mm;
+      margin: 0;
+      color: #64748b;
+      font-size: 12px;
+      line-height: 1.6;
+      text-align: right;
+    }
+
+    .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 7mm;
+    }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8mm;
+    }
+
+    .card {
+      min-height: 32mm;
+      padding: 6mm;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.86);
+      box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+    }
+
+    .card h3 {
+      margin: 0 0 4mm;
+      font-size: 18px;
+      line-height: 1.2;
+    }
+
+    .card p,
+    .card li {
+      margin: 0;
+      color: #475569;
+      font-size: 13px;
+      line-height: 1.7;
+      font-weight: 600;
+    }
+
+    .card ul {
+      margin: 0;
+      padding-left: 4mm;
+    }
+
+    .project-row {
+      display: grid;
+      grid-template-columns: 23mm 1fr 42mm;
+      align-items: center;
+      gap: 7mm;
+      padding: 6mm 0;
+      border-bottom: 1px solid #e2e8f0;
+    }
+
+    .num {
+      color: #0f766e;
+      font-size: 32px;
+      font-weight: 900;
+    }
+
+    .muted {
+      color: #64748b;
+    }
+
+    .pill {
+      display: inline-block;
+      padding: 5px 9px;
+      border-radius: 8px;
+      color: #ffffff;
+      background: #111827;
+      font-size: 11px;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+
+    .architecture {
+      width: 100%;
+      height: 116mm;
+      object-fit: contain;
+      background: #ffffff;
+      border-radius: 8px;
+      border: 1px solid #cbd5e1;
+      box-shadow: 0 12px 28px rgba(15, 23, 42, 0.12);
+    }
+
+    .half-image {
+      width: 100%;
+      object-fit: contain;
+      background: #ffffff;
+      border-radius: 8px;
+      border: 1px solid #cbd5e1;
+      box-shadow: 0 10px 24px rgba(15, 23, 42, 0.1);
+    }
+
+    .flow-grid .half-image {
+      height: 43mm;
+    }
+
+    .last-grid .half-image {
+      height: 58mm;
+    }
+
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 5mm;
+      margin-top: 7mm;
+    }
+
+    .metric {
+      padding: 5mm;
+      border-radius: 8px;
+      color: #ffffff;
+      background: #0f766e;
+    }
+
+    .metric:nth-child(2) {
+      background: #2563eb;
+    }
+
+    .metric:nth-child(3) {
+      background: #b45309;
+    }
+
+    .metric:nth-child(4) {
+      background: #334155;
+    }
+
+    .metric strong {
+      display: block;
+      margin-bottom: 2mm;
+      font-size: 24px;
+      line-height: 1;
+    }
+
+    .metric span {
+      font-size: 11px;
+      font-weight: 800;
+    }
+
+    .links {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 4mm;
+      margin-top: 6mm;
+    }
+
+    .link {
+      padding: 4mm 5mm;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      background: #ffffff;
+      color: #0f172a;
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .footer {
+      position: absolute;
+      left: 16mm;
+      right: 16mm;
+      bottom: 8mm;
+      display: flex;
+      justify-content: space-between;
+      color: #94a3b8;
+      font-size: 10px;
+      font-weight: 800;
+    }
+  </style>
+</head>
+<body>
+  <section class="page cover">
+    <span class="eyebrow">PROJECT 01</span>
+    <h1>StockRush<br />커머스 백엔드 포트폴리오</h1>
+    <p class="lead">
+      한정 판매 커머스에서 주문, 재고, 결제, 쿠폰, 출고, 조회 모델을 분리했을 때 생기는 상태 수렴과 운영 복구 문제를 Kafka, Saga, Outbox, OIDC 기반으로 다룬 프로젝트입니다.
+    </p>
+    <img class="cover-image" src="../assets/architecture/stockrush-architecture.png" alt="StockRush 아키텍처" />
+    <div class="meta">
+      <span>Owner</span><span>chanyang.son</span>
+      <span>Repository</span><span>github.com/cyson21/stockrush</span>
+      <span>Version</span><span>2026.05 Portfolio PDF</span>
+    </div>
+  </section>
+
+  <section class="page">
+    <div class="page-title">
+      <h2>포트폴리오 인덱스</h2>
+      <p>앞으로 사이드 프로젝트를 추가할 수 있도록 프로젝트별 섹션 구조로 정리했습니다.</p>
+    </div>
+
+    <div class="card">
+      <div class="project-row">
+        <div class="num">01</div>
+        <div>
+          <h3>StockRush</h3>
+          <p>Kafka 기반 주문 Saga, Outbox 복구, OIDC 보안, Docker/kind 실행 환경을 묶은 백엔드 중심 커머스 프로젝트</p>
+        </div>
+        <span class="pill">완료</span>
+      </div>
+      <div class="project-row">
+        <div class="num muted">02</div>
+        <div>
+          <h3 class="muted">다음 사이드 프로젝트</h3>
+          <p>아직 비워둔 슬롯입니다. 추후 다른 도메인이나 기술 축을 별도 프로젝트로 추가합니다.</p>
+        </div>
+        <span class="pill" style="background:#64748b;">예정</span>
+      </div>
+      <div class="project-row">
+        <div class="num muted">03</div>
+        <div>
+          <h3 class="muted">확장 프로젝트</h3>
+          <p>운영, 데이터, AI, 모바일 등 StockRush와 다른 강점을 보여줄 프로젝트를 추가할 수 있습니다.</p>
+        </div>
+        <span class="pill" style="background:#64748b;">예정</span>
+      </div>
+    </div>
+
+    <div class="grid-3" style="margin-top:8mm;">
+      <div class="card">
+        <h3>핵심 메시지</h3>
+        <p>단순 CRUD보다 상태 수렴, 장애 복구, 운영 화면, 검증 자동화가 필요한 백엔드 흐름에 집중했습니다.</p>
+      </div>
+      <div class="card">
+        <h3>상세 자료</h3>
+        <p>코드, 테스트, 실행 스크립트, 문서, 이미지 원본은 GitHub 저장소에서 확인하도록 분리했습니다.</p>
+      </div>
+      <div class="card">
+        <h3>PDF 역할</h3>
+        <p>면접이나 제출용으로 빠르게 훑는 요약본입니다. 구현 세부사항은 링크를 기준으로 확인합니다.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="page">
+    <div class="page-title">
+      <h2>프로젝트 개요</h2>
+      <p>한정 판매 주문 흐름에서 서비스 분리 이후 생기는 실패와 복구를 설명 가능한 구조로 만들었습니다.</p>
+    </div>
+
+    <div class="grid-3">
+      <div class="card">
+        <h3>문제</h3>
+        <p>주문, 재고, 결제를 분리하면 하나의 DB 트랜잭션으로 모든 상태를 즉시 확정하기 어렵습니다. 실패와 지연도 사용자/운영자가 이해할 수 있는 상태로 남아야 합니다.</p>
+      </div>
+      <div class="card">
+        <h3>선택</h3>
+        <p>Order Service를 Saga 중심으로 두고, Inventory와 Payment는 Kafka command/event로 결과를 돌려줍니다. 발행 실패는 Outbox로 운영 가능한 상태에 남깁니다.</p>
+      </div>
+      <div class="card">
+        <h3>결과</h3>
+        <p>정상, 결제 실패, 지연 결제 취소, 동일 SKU 동시 주문, Kafka 일시 중단, Gateway 보안 시나리오를 로컬에서 재현 가능하게 만들었습니다.</p>
+      </div>
+    </div>
+
+    <div class="metrics">
+      <div class="metric"><strong>8</strong><span>Spring Boot 서비스</span></div>
+      <div class="metric"><strong>3</strong><span>클라이언트: 고객/관리자/모바일</span></div>
+      <div class="metric"><strong>5</strong><span>대표 아키텍처 이미지</span></div>
+      <div class="metric"><strong>2</strong><span>실행 경로: Compose / kind</span></div>
+    </div>
+
+    <div class="grid-2" style="margin-top:8mm;">
+      <div class="card">
+        <h3>기술 스택</h3>
+        <ul>
+          <li>Java 17, Spring Boot, PostgreSQL, Flyway</li>
+          <li>Apache Kafka, Outbox relay, processed event</li>
+          <li>React/Vite/MUI, Expo React Native</li>
+          <li>Keycloak OIDC/PKCE, Gateway JWT 검증</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>운영/검증</h3>
+        <ul>
+          <li>GitHub Actions, GHCR, Trivy, secret scan</li>
+          <li>Docker Compose full demo, Windows PowerShell wrapper</li>
+          <li>kind Kubernetes smoke</li>
+          <li>Architecture Guard와 `.ai-runs` 실행 기록</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section class="page">
+    <div class="page-title">
+      <h2>아키텍처와 핵심 흐름</h2>
+      <p>전체 구조는 Gateway와 Kafka를 중심으로 읽고, 주문 Saga와 Outbox 복구를 별도 이미지로 설명합니다.</p>
+    </div>
+
+    <img class="architecture" src="../assets/architecture/stockrush-architecture.png" alt="StockRush 아키텍처" />
+
+    <div class="grid-2 flow-grid" style="margin-top:5mm;">
+      <img class="half-image" src="../assets/architecture/stockrush-saga-flow.png" alt="주문 Saga 흐름" />
+      <img class="half-image" src="../assets/architecture/stockrush-outbox-recovery.png" alt="Outbox 복구 흐름" />
+    </div>
+  </section>
+
+  <section class="page">
+    <div class="page-title">
+      <h2>검증과 링크</h2>
+      <p>PDF에는 핵심만 남기고, 코드와 상세 증거는 GitHub 문서로 이동합니다.</p>
+    </div>
+
+    <div class="grid-2 last-grid">
+      <div>
+        <img class="half-image" src="../assets/architecture/stockrush-security-boundary.png" alt="보안 경계" />
+        <img class="half-image" src="../assets/architecture/stockrush-cicd-runtime.png" alt="CI/CD와 실행 환경" style="margin-top:4mm;" />
+      </div>
+      <div>
+        <div class="card">
+          <h3>검증한 시나리오</h3>
+          <ul>
+            <li>`CARD` 정상 주문이 `CONFIRMED/COMPLETED`로 수렴</li>
+            <li>`FAIL_CARD` 결제 실패 시 주문 취소와 예약 재고 복구</li>
+            <li>`DELAY_CARD` 지연 결제 후 관리자 취소와 복구</li>
+            <li>동일 SKU 동시 주문에서 과다 확정 방지</li>
+            <li>Kafka 일시 중단 후 Outbox 대기와 상태 수렴</li>
+            <li>인증 없음 `401`, 권한 부족 `403`, 다른 고객 주문 조회 차단</li>
+          </ul>
+        </div>
+        <div class="card" style="margin-top:6mm;">
+          <h3>GitHub 링크</h3>
+          <div class="links">
+            <a class="link" href="https://github.com/cyson21/stockrush">Repository</a>
+            <a class="link" href="https://github.com/cyson21/stockrush#readme">README</a>
+            <a class="link" href="https://github.com/cyson21/stockrush/blob/main/docs/portfolio/portfolio-one-pager.md">One Pager</a>
+            <a class="link" href="https://github.com/cyson21/stockrush/blob/main/docs/portfolio/visual-story.md">Visual Story</a>
+            <a class="link" href="https://github.com/cyson21/stockrush/blob/main/docs/test-strategy.md">Test Strategy</a>
+            <a class="link" href="https://github.com/cyson21/stockrush/blob/main/docs/runbooks/kubernetes-kind.md">Kubernetes Runbook</a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer">
+      <span>Project 01 / StockRush</span>
+      <span>github.com/cyson21/stockrush</span>
+    </div>
+  </section>
+</body>
+</html>
