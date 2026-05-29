@@ -1,3 +1,4 @@
+## demo 배포용 서비스별 이미지 경로를 한 곳에서 오버라이드해 태그를 일괄 변경합니다.
 services:
   catalog-service:
     image: ${STOCKRUSH_IMAGE_REGISTRY:-ghcr.io}/${STOCKRUSH_IMAGE_OWNER:-cyson21}/stockrush-catalog-service:${STOCKRUSH_IMAGE_TAG:-latest-demo}

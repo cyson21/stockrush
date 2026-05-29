@@ -1,3 +1,4 @@
+// 번들러/개발 서버 설정을 정의해 경로 프록시와 플러그인을 관리합니다.
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
 

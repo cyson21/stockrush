@@ -1,3 +1,5 @@
+-- 쿠폰 멱등성 키 저장 테이블을 초기화하는 마이그레이션입니다.
+
 create table if not exists admin_coupon_command_idempotency (
   id bigserial primary key,
   idempotency_key varchar(120) unique not null,

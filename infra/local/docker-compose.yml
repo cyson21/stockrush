@@ -1,3 +1,4 @@
+# 로컬 개발/CI에서 공통으로 재사용할 인프라 조각(Postgres/Redis/Kafka)을 구성합니다.
 services:
   postgres:
     image: postgres:16-alpine

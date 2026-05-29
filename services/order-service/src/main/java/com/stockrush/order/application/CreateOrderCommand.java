@@ -1,3 +1,5 @@
+// CreateOrderCommand: 해당 모듈의 핵심 책임을 설명하는 도메인 컴포넌트입니다.
+
 package com.stockrush.order.application;
 
 import java.util.List;

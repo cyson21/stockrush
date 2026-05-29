@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# 데모 compose up 전 템플릿 동기화와 포트 가용성을 선검증합니다.
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

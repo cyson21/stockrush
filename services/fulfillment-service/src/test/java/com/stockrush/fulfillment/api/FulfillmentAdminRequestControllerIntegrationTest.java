@@ -1,3 +1,5 @@
+-- 도메인 초기화/보조 스키마 마이그레이션입니다.
+
 package com.stockrush.fulfillment.api;
 
 import static org.hamcrest.Matchers.hasSize;

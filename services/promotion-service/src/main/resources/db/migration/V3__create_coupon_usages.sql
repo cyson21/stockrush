@@ -1,3 +1,5 @@
+-- 쿠폰 사용 이력 및 중복 사용 방지 기준을 위한 테이블 스키마입니다.
+
 create table if not exists coupon_usages (
   id bigserial primary key,
   order_id varchar(100) unique not null,

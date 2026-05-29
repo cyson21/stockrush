@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# 데모 환경의 핵심 API/스토어 상태를 빠르게 확인하는 smoke 테스트를 실행합니다.
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

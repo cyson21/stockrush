@@ -1,3 +1,4 @@
+// admin 앱의 관리자 주문/상품/쿠폰 API 요청을 묶어 관리하는 모듈입니다.
 import { gatewayApiUrl, request } from './client';
 import type {
   AdminOrderPage,

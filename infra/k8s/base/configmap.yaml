@@ -1,3 +1,4 @@
+# 서비스 공통 환경변수를 중앙에서 주입해 런타임 설정의 정합성을 유지합니다.
 apiVersion: v1
 kind: ConfigMap
 metadata:

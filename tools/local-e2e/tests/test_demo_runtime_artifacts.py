@@ -3,6 +3,8 @@ from __future__ import annotations
 import unittest
 from pathlib import Path
 
+# 데모 기동 전에 필요한 인프라/스크립트 산출물이 존재하는지 보장하는 스모크 테스트입니다.
+
 
 ROOT = Path(__file__).resolve().parents[3]
 

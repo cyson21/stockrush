@@ -1,4 +1,5 @@
 $ErrorActionPreference = "Stop"
+<# 데모 compose 기동 전 포트 충돌/리비전 일치 여부를 점검하는 실행 스크립트입니다. #>
 
 $RootDir = Resolve-Path (Join-Path $PSScriptRoot "..")
 $ComposeFile = Join-Path $RootDir "infra/demo/docker-compose.yml"

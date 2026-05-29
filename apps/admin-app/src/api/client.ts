@@ -1,3 +1,4 @@
+// admin-app API 호출 경계: 관리자 기능에서 공통으로 사용하는 API 클라이언트 계층입니다.
 import type { ApiError, ApiResponse } from '../types/admin';
 import { getStoredAccessToken } from '../auth';
 

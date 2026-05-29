@@ -1,3 +1,5 @@
+// OutboxRelayService: 비즈니스 핵심 흐름을 조합해 상태 변경과 유효성 규칙을 적용합니다.
+
 package com.stockrush.inventory.infra.outbox;
 
 import java.sql.ResultSet;

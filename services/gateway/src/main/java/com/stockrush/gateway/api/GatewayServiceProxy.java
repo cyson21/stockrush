@@ -13,6 +13,10 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
+/**
+ * HTTP API 경계의 진입점으로, 요청 파라미터를 받아 서비스 호출 흐름을 연결합니다.
+ */
+
 
 @Component
 class GatewayServiceProxy {

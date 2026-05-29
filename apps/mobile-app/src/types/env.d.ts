@@ -1,3 +1,4 @@
+// 타입 정의 모듈: API/도메인 데이터 형태를 명시적으로 문서화합니다.
 declare namespace NodeJS {
   interface ProcessEnv {
     EXPO_PUBLIC_API_BASE_URL?: string;

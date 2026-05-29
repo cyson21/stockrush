@@ -1,3 +1,4 @@
+// 인증·세션·토큰·리다이렉트 흐름을 한 곳에서 관리하는 경계입니다.
 import { createContext, type PropsWithChildren, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { Linking } from 'react-native';
 import { buildLoginRequest, clearAuthSession, getCurrentAccessToken, handleAuthRedirect, isAuthRedirectUrl } from './oidc';

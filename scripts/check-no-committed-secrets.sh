@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Git 상태에서 고신뢰 자격 증명 패턴이 새로 들어오지 않았는지 점검합니다.
 set -euo pipefail
 
 PATTERN='-----BEGIN (RSA |OPENSSH |EC |DSA )?PRIVATE KEY-----|github_pat_[A-Za-z0-9_]{20,}|ghp_[A-Za-z0-9_]{30,}|AKIA[0-9A-Z]{16}|sk-[A-Za-z0-9]{32,}|xox[baprs]-[A-Za-z0-9-]{20,}'

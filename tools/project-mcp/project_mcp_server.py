@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """MCP server for StockRush project context and local guard tools."""
+# MCP를 통해 프로젝트 컨텍스트 조회와 도구 실행을 위한 서버 경계를 정의합니다.
 from __future__ import annotations
 
 import argparse

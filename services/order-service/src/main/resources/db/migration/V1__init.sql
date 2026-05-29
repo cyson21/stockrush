@@ -1,3 +1,5 @@
+-- V1__init: 스키마/제약조건/인덱스 같은 영속 구조를 반영하는 마이그레이션입니다.
+
 create table if not exists customer_orders (
   id bigserial primary key,
   order_id varchar(100) unique not null,

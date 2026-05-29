@@ -7,6 +7,10 @@ import tools.jackson.core.JacksonException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
+/**
+ * 아웃박스 이벤트를 카프카 토픽으로 발행해 비동기 전달 책임을 수행하는 퍼블리셔입니다.
+ */
+
 
 @Component
 class KafkaOutboxEventPublisher implements OutboxEventPublisher {

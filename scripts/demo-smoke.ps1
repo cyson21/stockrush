@@ -1,4 +1,5 @@
 $ErrorActionPreference = "Stop"
+<# 데모 환경에서 주요 엔드포인트 health/smoke 시나리오를 점검합니다. #>
 
 $RootDir = Resolve-Path (Join-Path $PSScriptRoot "..")
 $ComposeFile = Join-Path $RootDir "infra/demo/docker-compose.yml"

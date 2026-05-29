@@ -1,3 +1,4 @@
+# backend 서비스군 배포 템플릿을 묶어 앱별 리소스를 일괄 관리합니다.
 apiVersion: apps/v1
 kind: Deployment
 metadata:

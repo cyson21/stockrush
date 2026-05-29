@@ -7,6 +7,10 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import org.springframework.http.HttpHeaders;
 import org.springframework.security.oauth2.jwt.Jwt;
+/**
+ * HTTP API 경계의 진입점으로, 요청 파라미터를 받아 서비스 호출 흐름을 연결합니다.
+ */
+
 
 final class TrustedIdentityHeaders {
 

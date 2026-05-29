@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Run local StockRush E2E scenarios against already running services."""
+# 실행기에서 사용할 공통 상수와 시뮬레이션 파라미터를 한 번에 정리하는 파일입니다.
 from __future__ import annotations
 
 import argparse

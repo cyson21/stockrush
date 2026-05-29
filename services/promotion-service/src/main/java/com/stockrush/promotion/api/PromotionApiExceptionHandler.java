@@ -11,6 +11,10 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingRequestHeaderException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+/**
+ * 예외 발생 시 비즈니스 예외를 일관된 API 응답 형식으로 변환해 반환하는 처리기입니다.
+ */
+
 
 @RestControllerAdvice(basePackages = "com.stockrush.promotion.api")
 class PromotionApiExceptionHandler {

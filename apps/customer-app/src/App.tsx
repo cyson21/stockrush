@@ -1,3 +1,4 @@
+// 앱의 최상위 UI 레이어: 핵심 상태와 화면 구성을 담당합니다.
 import { useEffect, useMemo, useState } from 'react';
 import {
   Alert,

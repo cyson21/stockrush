@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// 관리/고객 화면의 스크린샷 기반 회귀 증거를 수집하기 위한 실행 스크립트입니다.
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

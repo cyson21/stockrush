@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# 코드 경계 위반을 빠르게 감지해 실행 가이드를 지키는지 점검하는 진입 스크립트입니다.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

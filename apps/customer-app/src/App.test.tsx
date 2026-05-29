@@ -1,3 +1,4 @@
+// 테스트 시나리오의 의도와 경계를 검증하기 위한 코드입니다.
 import { act, cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';

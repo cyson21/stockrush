@@ -1,3 +1,4 @@
+// 테스트 시나리오의 의도와 경계를 검증하기 위한 코드입니다.
 import { StrictMode } from 'react';
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';

@@ -1,3 +1,5 @@
+// OutboxRelaySchedulerTest: 런타임 설정/스케줄링/메시징 구성을 구성해 인프라 동작을 보장합니다.
+
 package com.stockrush.order.config;
 
 import static org.assertj.core.api.Assertions.assertThat;

@@ -6,6 +6,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
+# 아키텍처 가드 규칙(엔티티 반환 금지, 이벤트 필드, 아웃박스/액추에이터 조건)이 유지되는지 검증합니다.
+
 
 MODULE_PATH = Path(__file__).resolve().parents[1] / "architecture_guard.py"
 SPEC = importlib.util.spec_from_file_location("architecture_guard", MODULE_PATH)

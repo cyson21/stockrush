@@ -1,3 +1,5 @@
+// CorrelationIdFilterIntegrationTest: 요청 공통 컨텍스트(상관관계 ID 등)를 가공해 추적 관점을 유지합니다.
+
 package com.stockrush.order.api;
 
 import static org.assertj.core.api.Assertions.assertThat;

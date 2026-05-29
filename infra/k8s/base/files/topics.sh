@@ -1,4 +1,5 @@
 #!/usr/bin/env sh
+# kind init에서 재사용할 Kafka topic 생성 스크립트를 ConfigMap 템플릿으로 고정합니다.
 set -eu
 
 BOOTSTRAP_SERVER="${BOOTSTRAP_SERVER:-kafka:19092}"

@@ -8,6 +8,10 @@ import java.time.OffsetDateTime;
 import java.util.List;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
+/**
+ * JDBC 또는 JPA를 통해 영속 저장소를 직접 조회/갱신하며, 도메인 규칙 위임용 데이터 경계 역할을 합니다.
+ */
+
 
 @Repository
 class JdbcCouponUsageQueryRepository implements CouponUsageQueryRepository {

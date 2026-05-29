@@ -1,3 +1,4 @@
+// 인증·세션·토큰·리다이렉트 흐름을 한 곳에서 관리하는 경계입니다.
 const AUTH_SESSION_KEY = 'stockrush.customer-web.auth.session';
 const OIDC_PENDING_KEY = 'stockrush.customer-web.auth.pending';
 

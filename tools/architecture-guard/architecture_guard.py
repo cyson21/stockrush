@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Architecture boundary checks for StockRush."""
+# 서비스 경계, 이벤트 스키마, 아웃박스 규칙을 검사하는 정적 가드입니다.
 from __future__ import annotations
 
 import argparse

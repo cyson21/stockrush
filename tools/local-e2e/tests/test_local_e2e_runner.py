@@ -9,6 +9,8 @@ import unittest
 from contextlib import redirect_stderr
 from pathlib import Path
 
+# 동시 주문/멱등성 시나리오의 경계 동작을 검사하는 회귀 테스트 집합입니다.
+
 
 MODULE_PATH = Path(__file__).resolve().parents[1] / "local_e2e_runner.py"
 SPEC = importlib.util.spec_from_file_location("local_e2e_runner", MODULE_PATH)

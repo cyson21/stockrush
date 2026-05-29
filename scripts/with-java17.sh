@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Java 17 JDK 경로를 찾고 하위 명령을 JAVA_HOME로 실행합니다.
 set -euo pipefail
 
 usage() {

@@ -1,3 +1,5 @@
+// OrderReadModelController: API 진입점으로 요청/응답 경계와 HTTP 흐름을 정리합니다.
+
 package com.stockrush.readmodel.api;
 
 import com.stockrush.readmodel.application.OrderReadModelQueryService;

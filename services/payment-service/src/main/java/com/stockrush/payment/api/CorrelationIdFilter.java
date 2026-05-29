@@ -16,6 +16,10 @@ import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
+/**
+ * 요청 공통 헤더(상관관계 등)를 수집·전파해 감사 및 추적성이 유지되도록 처리하는 필터입니다.
+ */
+
 
 @Component
 @Order(Ordered.HIGHEST_PRECEDENCE)

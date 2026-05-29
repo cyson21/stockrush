@@ -1,3 +1,4 @@
+# 고객/관리자 웹앱을 배포해 데모 UI 경로를 동일 네임스페이스에 노출합니다.
 apiVersion: apps/v1
 kind: Deployment
 metadata:

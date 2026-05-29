@@ -1,3 +1,5 @@
+-- 초기 스키마 생성 DDL입니다.
+
 create table if not exists coupons (
   id bigserial primary key,
   coupon_code varchar(80) unique not null,

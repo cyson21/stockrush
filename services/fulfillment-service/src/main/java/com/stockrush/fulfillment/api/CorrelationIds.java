@@ -1,6 +1,10 @@
 package com.stockrush.fulfillment.api;
 
 import java.util.UUID;
+/**
+ * 상관관계 헤더 전달을 단일 DTO로 묶어 추적 키를 안정적으로 다루기 위한 보조 타입입니다.
+ */
+
 
 final class CorrelationIds {
 

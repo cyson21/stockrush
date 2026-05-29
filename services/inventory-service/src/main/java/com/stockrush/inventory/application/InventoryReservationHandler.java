@@ -1,3 +1,5 @@
+// InventoryReservationHandler: 이벤트/메시지 처리 흐름을 수신하고 도메인 상태 반영을 담당합니다.
+
 package com.stockrush.inventory.application;
 
 import com.stockrush.inventory.infra.kafka.KafkaEventEnvelope;

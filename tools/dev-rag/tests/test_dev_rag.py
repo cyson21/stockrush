@@ -6,6 +6,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
+# 인덱싱·검색·컨텍스트 조립 경로가 예기치 않게 빈 결과가 안 되도록 검증합니다.
+
 
 MODULE_PATH = Path(__file__).resolve().parents[1] / "dev_rag.py"
 SPEC = importlib.util.spec_from_file_location("dev_rag", MODULE_PATH)

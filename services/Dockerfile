@@ -1,3 +1,4 @@
+# 각 Spring Boot 서비스를 동일한 빌드/런타임 이미지 구조로 패키징합니다.
 FROM maven:3.9-eclipse-temurin-17 AS build
 
 ARG SERVICE_DIR

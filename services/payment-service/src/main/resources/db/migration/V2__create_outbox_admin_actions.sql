@@ -1,3 +1,5 @@
+-- 아웃박스 관리자 액션 이력 저장 스키마입니다.
+
 create table if not exists outbox_admin_actions (
     id bigserial primary key,
     action varchar(50) not null,

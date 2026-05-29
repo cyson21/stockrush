@@ -19,6 +19,10 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.web.SecurityFilterChain;
+/**
+ * 서비스 구성 계층으로, 실행 시 필요한 보안/메시지 인프라 설정을 담당합니다.
+ */
+
 
 @Configuration
 class SecurityConfig {

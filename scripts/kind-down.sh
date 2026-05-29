@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# kind 클러스터 삭제 전/후 상태 메시지를 일관되게 처리합니다.
 set -euo pipefail
 
 CLUSTER_NAME="${STOCKRUSH_KIND_CLUSTER:-stockrush}"

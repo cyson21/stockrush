@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// 데모용 주문/쿠폰/이벤트 샘플 데이터를 구성해 포트폴리오 화면 준비 상태를 보장합니다.
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
