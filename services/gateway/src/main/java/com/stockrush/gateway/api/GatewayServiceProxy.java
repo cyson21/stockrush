@@ -5,6 +5,7 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.time.Duration;
 import java.util.List;
 import java.util.Set;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -35,13 +36,15 @@ class GatewayServiceProxy {
         "location",
         "x-correlation-id"
     );
+    private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(2);
+    private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(5);
 
     private final HttpClient httpClient;
     private final GatewayRoutingProperties routingProperties;
 
     @Autowired
     GatewayServiceProxy(GatewayRoutingProperties routingProperties) {
-        this(HttpClient.newHttpClient(), routingProperties);
+        this(HttpClient.newBuilder().connectTimeout(CONNECT_TIMEOUT).build(), routingProperties);
     }
 
     GatewayServiceProxy(HttpClient httpClient, GatewayRoutingProperties routingProperties) {
@@ -67,7 +70,7 @@ class GatewayServiceProxy {
         HttpRequest.BodyPublisher bodyPublisher = body == null
             ? HttpRequest.BodyPublishers.noBody()
             : HttpRequest.BodyPublishers.ofString(body);
-        HttpRequest request = requestBuilder.method(method, bodyPublisher).build();
+        HttpRequest request = requestBuilder.method(method, bodyPublisher).timeout(REQUEST_TIMEOUT).build();
 
         try {
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());

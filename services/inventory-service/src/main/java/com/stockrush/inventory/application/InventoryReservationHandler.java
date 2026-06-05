@@ -102,6 +102,66 @@ public class InventoryReservationHandler {
         );
     }
 
+    /**
+     * 만료(expires_at 경과)된 RESERVED 예약을 해제해 점유 재고를 회수한다.
+     * 지연/미결 주문이 한정 재고를 영구 점유하는 누수를 방지하고, 보상용
+     * InventoryReservationReleased 이벤트를 주문별로 발행한다.
+     *
+     * @return 해제 처리한 주문 수
+     */
+    @Transactional
+    public int releaseExpiredReservations() {
+        List<String> expiredOrderIds = jdbcClient.sql("""
+                select distinct order_id
+                from stock_reservations
+                where status = 'RESERVED'
+                  and expires_at is not null
+                  and expires_at < now()
+                order by order_id
+                """)
+            .query(String.class)
+            .list();
+
+        for (String orderId : expiredOrderIds) {
+            List<ReservationLine> reservations = reservedReservations(orderId);
+            for (ReservationLine reservation : reservations) {
+                releaseReservation(reservation);
+            }
+            updateReservationStatus(orderId, "EXPIRED");
+            writeExpiredOutbox(orderId, reservations);
+        }
+        return expiredOrderIds.size();
+    }
+
+    private void writeExpiredOutbox(String orderId, List<ReservationLine> reservations) {
+        InventoryReservationReleasedPayload payload = new InventoryReservationReleasedPayload(
+            orderId,
+            "RESERVATION_EXPIRED",
+            toPayloadItems(reservations),
+            clock.instant()
+        );
+        jdbcClient.sql("""
+                insert into outbox_events (
+                  event_id, aggregate_type, aggregate_id, event_type, event_version,
+                  topic, partition_key, correlation_id, idempotency_key, payload, headers,
+                  status, retry_count, max_retry_count, created_at, updated_at
+                )
+                values (
+                  :eventId, 'inventory-reservation', :aggregateId, 'InventoryReservationReleased', 1,
+                  :topic, :partitionKey, :correlationId, :idempotencyKey, :payload, '{}'::jsonb,
+                  'PENDING', 0, 5, now(), now()
+                )
+                """)
+            .param("eventId", idSupplier.get())
+            .param("aggregateId", orderId)
+            .param("topic", INVENTORY_TOPIC)
+            .param("partitionKey", orderId)
+            .param("correlationId", idSupplier.get().toString())
+            .param("idempotencyKey", "reservation-expired:" + orderId)
+            .param("payload", jsonb(writePayload(payload)))
+            .update();
+    }
+
     private boolean markProcessed(KafkaEventEnvelope<?> event) {
         int inserted = jdbcClient.sql("""
                 insert into processed_events (

@@ -160,6 +160,40 @@ class InventoryReservationHandlerIntegrationTest {
     }
 
     @Test
+    void releases_expired_reservations_and_writes_outbox() {
+        insertReservedStock("ord_expired_001", 3, 2);
+        jdbcClient.sql("""
+                update stock_reservations
+                set expires_at = now() - interval '1 minute'
+                where order_id = 'ord_expired_001'
+                """)
+            .update();
+
+        int released = handler.releaseExpiredReservations();
+
+        assertEquals(1, released);
+        assertEquals(5, queryInt("select available_quantity from stock_items where sku_id = 'SKU-001'"));
+        assertEquals(0, queryInt("select reserved_quantity from stock_items where sku_id = 'SKU-001'"));
+        assertEquals("EXPIRED", queryString("select status from stock_reservations where order_id = 'ord_expired_001'"));
+        assertEquals("InventoryReservationReleased", queryString("select event_type from outbox_events"));
+        assertEquals("RESERVATION_EXPIRED", queryString("select payload ->> 'reason' from outbox_events"));
+        assertEquals("ord_expired_001", queryString("select payload ->> 'orderId' from outbox_events"));
+    }
+
+    @Test
+    void does_not_release_unexpired_reservations() {
+        insertReservedStock("ord_unexpired_001", 3, 2);
+
+        int released = handler.releaseExpiredReservations();
+
+        assertEquals(0, released);
+        assertEquals(3, queryInt("select available_quantity from stock_items where sku_id = 'SKU-001'"));
+        assertEquals(2, queryInt("select reserved_quantity from stock_items where sku_id = 'SKU-001'"));
+        assertEquals("RESERVED", queryString("select status from stock_reservations where order_id = 'ord_unexpired_001'"));
+        assertEquals(0, queryInt("select count(*) from outbox_events"));
+    }
+
+    @Test
     void ignores_duplicate_order_cancelled_event() {
         insertReservedStock("ord_inventory_cancelled_001", 3, 2);
         KafkaEventEnvelope<OrderCancelledPayload> event = orderCancelled();

@@ -1,5 +1,3 @@
--- 도메인 초기화/보조 스키마 마이그레이션입니다.
-
 package com.stockrush.payment.infra.outbox;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -67,6 +65,46 @@ class PaymentOutboxRelayServiceIntegrationTest {
         assertEquals("ord_payment_relay_001", publisher.events.get(0).partitionKey());
         assertEquals("PUBLISHED", queryString("select status from outbox_events"));
         assertNotNull(queryString("select published_at::text from outbox_events"));
+    }
+
+    @Test
+    void reclaims_stale_publishing_then_publishes() {
+        insertOutboxEventWithCustomTimestamps(
+            "018f8d0b-8d32-7c42-9f1b-78328e0f8a35",
+            "PUBLISHING",
+            0,
+            5,
+            "now() - interval '5 minutes'",
+            "now() - interval '5 minutes'"
+        );
+
+        OutboxRelayResult result = relayService.publishPending(10);
+
+        assertEquals(1, result.claimed());
+        assertEquals(1, result.published());
+        assertEquals(0, result.failed());
+        assertEquals("PUBLISHED", queryString("select status from outbox_events"));
+        assertEquals(1, publisher.events.size());
+    }
+
+    @Test
+    void does_not_reclaim_recent_publishing() {
+        insertOutboxEventWithCustomTimestamps(
+            "018f8d0b-8d32-7c42-9f1b-78328e0f8a36",
+            "PUBLISHING",
+            0,
+            5,
+            "now()",
+            "now()"
+        );
+
+        OutboxRelayResult result = relayService.publishPending(10);
+
+        assertEquals(0, result.claimed());
+        assertEquals(0, result.published());
+        assertEquals(0, result.failed());
+        assertEquals("PUBLISHING", queryString("select status from outbox_events"));
+        assertEquals(0, publisher.events.size());
     }
 
     @Test
@@ -152,6 +190,34 @@ class PaymentOutboxRelayServiceIntegrationTest {
                   :status, :retryCount, :maxRetryCount, now(), now()
                 )
                 """)
+            .param("eventId", eventId)
+            .param("status", status)
+            .param("retryCount", retryCount)
+            .param("maxRetryCount", maxRetryCount)
+            .update();
+    }
+
+    private void insertOutboxEventWithCustomTimestamps(
+        String eventId,
+        String status,
+        int retryCount,
+        int maxRetryCount,
+        String createdAtExpression,
+        String updatedAtExpression
+    ) {
+        jdbcClient.sql("""
+                insert into outbox_events (
+                  event_id, aggregate_type, aggregate_id, event_type, event_version,
+                  topic, partition_key, correlation_id, idempotency_key, payload, headers,
+                  status, retry_count, max_retry_count, created_at, updated_at
+                )
+                values (
+                  cast(:eventId as uuid), 'payment', 'ord_payment_relay_001', 'PaymentAuthorized', 1,
+                  'stockrush.payment.events.v1', 'ord_payment_relay_001', 'corr-payment-relay-001', 'idem-payment-relay-001',
+                  '{"orderId": "ord_payment_relay_001"}'::jsonb, '{}'::jsonb,
+                  :status, :retryCount, :maxRetryCount, %s, %s
+                )
+                """.formatted(createdAtExpression, updatedAtExpression))
             .param("eventId", eventId)
             .param("status", status)
             .param("retryCount", retryCount)

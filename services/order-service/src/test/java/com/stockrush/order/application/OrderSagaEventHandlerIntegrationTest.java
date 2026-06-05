@@ -84,6 +84,40 @@ class OrderSagaEventHandlerIntegrationTest {
     }
 
     @Test
+    void ignores_payment_authorized_for_cancelled_order() {
+        jdbcClient.sql("""
+                update customer_orders
+                set status = 'CANCELLED',
+                    saga_status = 'FAILED'
+                where order_id = 'ord_saga_001'
+                """)
+            .update();
+
+        handler.handlePaymentAuthorized(paymentAuthorized());
+
+        assertEquals("CANCELLED", queryString("select status from customer_orders where order_id = 'ord_saga_001'"));
+        assertEquals("FAILED", queryString("select saga_status from customer_orders where order_id = 'ord_saga_001'"));
+        assertEquals(0, queryInt("select count(*) from outbox_events where event_type = 'OrderConfirmed'"));
+    }
+
+    @Test
+    void ignores_inventory_reserved_for_cancelled_order() {
+        jdbcClient.sql("""
+                update customer_orders
+                set status = 'CANCELLED',
+                    saga_status = 'FAILED'
+                where order_id = 'ord_saga_001'
+                """)
+            .update();
+
+        handler.handleInventoryReserved(inventoryReserved());
+
+        assertEquals("CANCELLED", queryString("select status from customer_orders where order_id = 'ord_saga_001'"));
+        assertEquals("FAILED", queryString("select saga_status from customer_orders where order_id = 'ord_saga_001'"));
+        assertEquals(0, queryInt("select count(*) from outbox_events where event_type = 'PaymentAuthorizationRequested'"));
+    }
+
+    @Test
     void cancels_order_when_inventory_reservation_failed() {
         handler.handleInventoryReservationFailed(inventoryReservationFailed());
 

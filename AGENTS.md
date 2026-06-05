@@ -1,4 +1,4 @@
-<!-- BASE_MIRROR: /Users/chanyang.son/agent-rules/sources/AGENTS_BASE.md v2.52 START -->
+<!-- BASE_MIRROR: /Users/chanyang.son/agent-rules/sources/AGENTS_BASE.md v2.54 START -->
 # AGENTS.md (공통 실행 규칙)
 
 ## Hard Rules
@@ -16,11 +16,14 @@
 ## Supplemental
 ### Commit Policy
 - 공통 커밋 규칙 기본값은 접두어 `Feat/Fix/Refactor/Docs/Test/Chore`를 사용한다.
+- `develop`, `dev`, `master` 브랜치에는 절대 직접 커밋하거나 푸시하지 않는다.
 - 커밋 메시지 형식은 `Prefix: 요약`이며 50자 이내로 작성한다.
 - 커밋 메시지 내용에 `Update`, `Change` 같은 모호한 용어를 사용하지 않는다.
+- 커밋 메시지 제목, 본문, 푸터에 `Co-Authored-By:` 트레일러를 추가하지 않는다.
 - 커밋 메시지가 규칙을 따르지 않거나 다른 언어이면, 규칙을 준수하는 한국어 포맷으로 재작성한다.
 
 ### Branch Naming
+- `develop`, `dev`, `master` 브랜치는 보호 브랜치로 간주하고 직접 커밋/푸시 대상에서 제외한다.
 - 브랜치를 만들거나 이름을 제안할 때 먼저 해당 저장소의 기존 브랜치 접두어와 구분자 패턴을 확인한다.
 - 기존 패턴이 확인되면 `feature/`, `fix/`, `hotfix/`, `release/`, `test/` 등 저장소에서 쓰는 유형 접두어를 따른다.
 - 새 작업 브랜치 이름은 `<type>/<scope-or-domain>/<short-slug>` 형태로 정리하고, 불필요한 대문자·공백·오타 접두어를 만들지 않는다.
@@ -32,7 +35,7 @@
 - 같은 의미가 필요하면 문맥에 맞게 `규칙`, `합의`, `기준`, `명세`, `인터페이스` 등으로 대체한다.
 - 병렬 작업에서는 다른 agent 변경을 **되돌리지 않는다**.
 
-<!-- BASE_MIRROR: /Users/chanyang.son/agent-rules/sources/AGENTS_BASE.md v2.52 END -->
+<!-- BASE_MIRROR: /Users/chanyang.son/agent-rules/sources/AGENTS_BASE.md v2.54 END -->
 
 # Project Overrides
 

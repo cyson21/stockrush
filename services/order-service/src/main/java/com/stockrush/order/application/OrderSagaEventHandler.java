@@ -43,8 +43,10 @@ public class OrderSagaEventHandler {
         }
 
         String orderId = event.payload().orderId();
+        if (!transitionOrder(orderId, "CREATED", "PAYMENT_REQUESTED")) {
+            return;
+        }
         PaymentRequestOrder order = paymentRequestOrder(orderId);
-        updateOrder(orderId, "CREATED", "PAYMENT_REQUESTED");
         saveOutbox(
             event,
             "PaymentAuthorizationRequested",
@@ -60,7 +62,9 @@ public class OrderSagaEventHandler {
         }
 
         String orderId = event.payload().orderId();
-        cancelOrder(orderId);
+        if (!cancelOrder(orderId)) {
+            return;
+        }
         saveOutbox(
             event,
             "OrderCancelled",
@@ -76,7 +80,9 @@ public class OrderSagaEventHandler {
         }
 
         String orderId = event.payload().orderId();
-        updateOrder(orderId, "CONFIRMED", "COMPLETED");
+        if (!transitionOrder(orderId, "CONFIRMED", "COMPLETED")) {
+            return;
+        }
         saveOutbox(
             event,
             "OrderConfirmed",
@@ -92,7 +98,9 @@ public class OrderSagaEventHandler {
         }
 
         String orderId = event.payload().orderId();
-        cancelOrder(orderId);
+        if (!cancelOrder(orderId)) {
+            return;
+        }
         saveOutbox(
             event,
             "OrderCancelled",
@@ -107,7 +115,7 @@ public class OrderSagaEventHandler {
             return;
         }
 
-        updateOrder(event.payload().orderId(), "CREATED", "PAYMENT_DELAYED");
+        transitionOrder(event.payload().orderId(), "CREATED", "PAYMENT_DELAYED");
     }
 
     @Transactional
@@ -117,7 +125,9 @@ public class OrderSagaEventHandler {
         }
 
         String orderId = event.payload().orderId();
-        cancelOrder(orderId);
+        if (!cancelOrder(orderId)) {
+            return;
+        }
         saveOutbox(
             event,
             "OrderCancelled",
@@ -158,26 +168,29 @@ public class OrderSagaEventHandler {
             .single();
     }
 
-    private void updateOrder(String orderId, String status, String sagaStatus) {
+    /**
+     * 종료 상태(CANCELLED/CONFIRMED) 주문은 더 이상 전이시키지 않는다.
+     * 늦게 도착한 이벤트가 이미 끝난 주문을 되살리는 것을 막고, 전이 성공 여부를 반환한다.
+     */
+    private boolean transitionOrder(String orderId, String status, String sagaStatus) {
         int updated = jdbcClient.sql("""
                 update customer_orders
                 set status = :status,
                     saga_status = :sagaStatus,
                     updated_at = now()
                 where order_id = :orderId
+                  and status not in ('CANCELLED', 'CONFIRMED')
                 """)
             .param("status", status)
             .param("sagaStatus", sagaStatus)
             .param("orderId", orderId)
             .update();
 
-        if (updated != 1) {
-            throw new IllegalArgumentException("order not found: " + orderId);
-        }
+        return updated == 1;
     }
 
-    private void cancelOrder(String orderId) {
-        updateOrder(orderId, "CANCELLED", "FAILED");
+    private boolean cancelOrder(String orderId) {
+        return transitionOrder(orderId, "CANCELLED", "FAILED");
     }
 
     private void saveOutbox(KafkaEventEnvelope<?> source, String eventType, String topic, Object payload) {
