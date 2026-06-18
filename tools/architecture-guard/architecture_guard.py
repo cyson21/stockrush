@@ -84,6 +84,24 @@ SQL_SCHEMA_REFERENCE_PREFIXES = (
     r"create\s+(?:table|view|index|unique\s+index)",
     r"drop\s+(?:table|view|index)",
 )
+DEMO_INTERNAL_BACKEND_SERVICES = {
+    "catalog-service",
+    "inventory-service",
+    "order-service",
+    "payment-service",
+    "promotion-service",
+    "fulfillment-service",
+    "read-model-service",
+}
+NGINX_LEGACY_SERVICE_PREFIXES = {
+    "/catalog/": "catalog-service",
+    "/inventory/": "inventory-service",
+    "/orders/": "order-service",
+    "/payment/": "payment-service",
+    "/promotion/": "promotion-service",
+    "/fulfillment/": "fulfillment-service",
+    "/read-model/": "read-model-service",
+}
 
 
 @dataclass(frozen=True)
@@ -380,6 +398,190 @@ def check_gateway_trusted_identity_headers(root: Path) -> list[Violation]:
     ]
 
 
+def check_demo_backend_port_exposure(root: Path) -> list[Violation]:
+    compose_path = root / "infra" / "demo" / "docker-compose.yml"
+    if not compose_path.exists():
+        return []
+
+    violations: list[Violation] = []
+    for service_name, block in compose_service_blocks(read_text(compose_path)):
+        if service_name not in DEMO_INTERNAL_BACKEND_SERVICES:
+            continue
+        if re.search(r"(?m)^    ports\s*:", block):
+            violations.append(
+                Violation(
+                    rule_id="ARCH-013",
+                    severity="error",
+                    file=display_path(root, compose_path),
+                    message=f"Demo compose publishes internal backend service `{service_name}` with ports.",
+                    suggested_fix="Remove host port publishing from backend service blocks; expose external access through Gateway, web apps, Keycloak, and required infrastructure only.",
+                )
+            )
+    return violations
+
+
+def compose_service_blocks(text: str) -> list[tuple[str, str]]:
+    services_match = re.search(r"(?m)^services:\s*$", text)
+    if not services_match:
+        return []
+
+    services_text = text[services_match.end():]
+    matches = list(re.finditer(r"(?m)^  ([A-Za-z0-9_-]+):\s*(?:#.*)?$", services_text))
+    blocks: list[tuple[str, str]] = []
+    for index, match in enumerate(matches):
+        start = match.start()
+        end = matches[index + 1].start() if index + 1 < len(matches) else len(services_text)
+        blocks.append((match.group(1), services_text[start:end]))
+    return blocks
+
+
+def check_nginx_direct_backend_proxying(root: Path) -> list[Violation]:
+    nginx_config = root / "apps" / "nginx" / "default.conf"
+    if not nginx_config.exists():
+        return []
+
+    violations: list[Violation] = []
+    text = read_text(nginx_config)
+    for location_path, body in nginx_location_blocks(text):
+        service_name = NGINX_LEGACY_SERVICE_PREFIXES.get(location_path)
+        if service_name is None:
+            continue
+        if re.search(rf"\bproxy_pass\s+http://{re.escape(service_name)}(?::\d+)?\s*;", body):
+            violations.append(
+                Violation(
+                    rule_id="ARCH-014",
+                    severity="error",
+                    file=display_path(root, nginx_config),
+                    message=f"Nginx proxies legacy path `{location_path}` directly to `{service_name}`.",
+                    suggested_fix="Route public and smoke traffic through Gateway `/api/**` paths instead of direct backend service prefixes.",
+                )
+            )
+    return violations
+
+
+def nginx_location_blocks(text: str) -> list[tuple[str, str]]:
+    matches = list(re.finditer(r"(?m)^\s*location\s+([^\s{]+)[^{]*\{", text))
+    blocks: list[tuple[str, str]] = []
+    for index, match in enumerate(matches):
+        start = match.end()
+        end = matches[index + 1].start() if index + 1 < len(matches) else len(text)
+        blocks.append((match.group(1), text[start:end]))
+    return blocks
+
+
+def check_customer_trusted_identity(root: Path) -> list[Violation]:
+    violations: list[Violation] = []
+    create_controller = (
+        root
+        / "services"
+        / "order-service"
+        / "src"
+        / "main"
+        / "java"
+        / "com"
+        / "stockrush"
+        / "order"
+        / "api"
+        / "CreateOrderController.java"
+    )
+    query_controller = (
+        root
+        / "services"
+        / "order-service"
+        / "src"
+        / "main"
+        / "java"
+        / "com"
+        / "stockrush"
+        / "order"
+        / "api"
+        / "OrderQueryController.java"
+    )
+    read_model_controller = (
+        root
+        / "services"
+        / "read-model-service"
+        / "src"
+        / "main"
+        / "java"
+        / "com"
+        / "stockrush"
+        / "readmodel"
+        / "api"
+        / "OrderReadModelController.java"
+    )
+
+    if create_controller.exists() and create_order_uses_member_id_fallback(read_text(create_controller)):
+        violations.append(customer_identity_violation(root, create_controller, "Order creation falls back to caller supplied memberId."))
+
+    if query_controller.exists() and order_detail_is_unrestricted(read_text(query_controller)):
+        violations.append(customer_identity_violation(root, query_controller, "Customer order detail does not require trusted subject ownership."))
+
+    if read_model_controller.exists() and read_model_uses_member_id_fallback(read_text(read_model_controller)):
+        violations.append(customer_identity_violation(root, read_model_controller, "Customer read-model route falls back to query memberId."))
+
+    return violations
+
+
+def customer_identity_violation(root: Path, path: Path, message: str) -> Violation:
+    return Violation(
+        rule_id="ARCH-015",
+        severity="error",
+        file=display_path(root, path),
+        message=message,
+        suggested_fix="Require X-StockRush-Subject on customer routes and derive customer identity from the trusted subject only.",
+    )
+
+
+def create_order_uses_member_id_fallback(text: str) -> bool:
+    fallback_patterns = [
+        r"resolveMemberId\s*\(\s*authenticatedMemberId\s*,\s*request\.memberId\s*\(\s*\)\s*\)",
+        r"resolveMemberId\s*\(\s*authenticatedMemberId\s*\)",
+        r"new\s+CreateOrderCommand\s*\(\s*request\.memberId\s*\(\s*\)",
+        r"new\s+CreateOrderCommand\s*\(\s*memberId\b",
+        r"return\s+request\.memberId\s*\(\s*\)\s*;",
+        r"return\s+memberId\s*;",
+    ]
+    return any(re.search(pattern, text, re.DOTALL) for pattern in fallback_patterns)
+
+
+def order_detail_is_unrestricted(text: str) -> bool:
+    if '@GetMapping("/{orderId}")' not in text and "@GetMapping(\"/{orderId}\")" not in text:
+        return False
+    requires_subject = "TrustedCustomerIdentity.require(authenticatedMemberId)" in text
+    checks_owner = "getDetailForMember" in text
+    unrestricted_lookup = re.search(r"\borderQueryService\.getDetail\s*\(\s*orderId\s*\)", text) is not None
+    return unrestricted_lookup or not (requires_subject and checks_owner)
+
+
+def read_model_uses_member_id_fallback(text: str) -> bool:
+    customer_block = extract_customer_read_model_block(text)
+    if not customer_block:
+        return False
+
+    fallback_patterns = [
+        r"resolveMemberId\s*\(\s*authenticatedMemberId\s*,\s*memberId\s*\)",
+        r"return\s+requestMemberId\s*;",
+        r"return\s+memberId\s*;",
+        r"listCustomerOrders\s*\(\s*memberId\b",
+    ]
+    if any(re.search(pattern, customer_block, re.DOTALL) for pattern in fallback_patterns):
+        return True
+
+    declares_member_id = re.search(r"@RequestParam[^;\n]*\bmemberId\b|String\s+memberId\b", customer_block) is not None
+    requires_subject = "TrustedCustomerIdentity.require(authenticatedMemberId)" in customer_block
+    return declares_member_id and not requires_subject
+
+
+def extract_customer_read_model_block(text: str) -> str:
+    match = re.search(r"@GetMapping\s*\(\s*\"/orders\"\s*\)", text)
+    if not match:
+        return ""
+    admin_match = re.search(r"@GetMapping\s*\(\s*\"/admin/orders\"\s*\)", text[match.end():])
+    end = match.end() + admin_match.start() if admin_match else len(text)
+    return text[match.start():end]
+
+
 def check_correlation_id_propagation(root: Path) -> list[Violation]:
     violations: list[Violation] = []
     gateway_root = root / "services" / "gateway"
@@ -561,6 +763,9 @@ def check(root: Path) -> list[Violation]:
     violations.extend(check_actuator_observability(root))
     violations.extend(check_gateway_security_routes(root))
     violations.extend(check_gateway_trusted_identity_headers(root))
+    violations.extend(check_demo_backend_port_exposure(root))
+    violations.extend(check_nginx_direct_backend_proxying(root))
+    violations.extend(check_customer_trusted_identity(root))
     return violations
 
 

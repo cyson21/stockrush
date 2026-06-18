@@ -18,11 +18,13 @@ from typing import Any, Mapping, Sequence
 from uuid import uuid4
 
 
+DEFAULT_GATEWAY_URL = "http://localhost:18080"
+DEFAULT_PUBLIC_API_URL = DEFAULT_GATEWAY_URL
+DEFAULT_ADMIN_API_URL = DEFAULT_GATEWAY_URL
+DEFAULT_ORDER_API_URL = DEFAULT_GATEWAY_URL
 DEFAULT_CATALOG_URL = "http://localhost:18081"
 DEFAULT_INVENTORY_URL = "http://localhost:18082"
 DEFAULT_ORDER_URL = "http://localhost:18083"
-DEFAULT_ORDER_API_URL = "http://localhost:18080"
-DEFAULT_OUTBOX_API_URL = "http://localhost:18080"
 DEFAULT_PAYMENT_URL = "http://localhost:18084"
 DEFAULT_PROMOTION_URL = "http://localhost:18085"
 SERVICE_BASES = ("order", "inventory", "payment")
@@ -43,11 +45,12 @@ class OrderSummary:
 
 @dataclass(frozen=True)
 class ScenarioConfig:
+    public_api_url: str
+    admin_api_url: str
     catalog_url: str
     inventory_url: str
     order_url: str
     order_api_url: str
-    outbox_api_url: str
     payment_url: str
     promotion_url: str
     order_count: int
@@ -71,6 +74,7 @@ class ScenarioConfig:
     outage_observation_seconds: float = 2.0
     admin_bearer_token: str | None = None
     customer_bearer_token: str | None = None
+    direct_service_health: bool = False
 
 
 def expected_success_count(initial_stock: int, quantity_per_order: int, order_count: int) -> int:
@@ -750,21 +754,21 @@ def outbox_list_url(
 ) -> str:
     status_param = ",".join(statuses)
     return (
-        f"{config.outbox_api_url}/api/admin/outbox-services/{service}/events"
+        f"{config.admin_api_url}/api/admin/outbox-services/{service}/events"
         f"?status={status_param}&limit={OUTBOX_QUERY_LIMIT}"
     )
 
 
 def outbox_retry_url(config: ScenarioConfig, service: str) -> str:
     return (
-        f"{config.outbox_api_url}/api/admin/outbox-services/{service}/events/retry"
+        f"{config.admin_api_url}/api/admin/outbox-services/{service}/events/retry"
         f"?batchSize={config.relay_batch_size}"
     )
 
 
 def outbox_requeue_failed_url(config: ScenarioConfig, service: str) -> str:
     return (
-        f"{config.outbox_api_url}/api/admin/outbox-services/{service}/events/failed/requeue"
+        f"{config.admin_api_url}/api/admin/outbox-services/{service}/events/failed/requeue"
         f"?batchSize={config.relay_batch_size}"
     )
 
@@ -784,11 +788,28 @@ def ensure_no_pending_outbox(client: ApiClient, config: ScenarioConfig) -> None:
 
 def healthcheck(client: ApiClient, config: ScenarioConfig) -> None:
     for base_url in dict.fromkeys([
+        config.public_api_url,
+        config.admin_api_url,
+        config.order_api_url,
+    ]):
+        payload = client.get(f"{base_url}/actuator/health")
+        if payload.get("status") != "UP":
+            raise RuntimeError(f"service is not healthy: {base_url} -> {payload}")
+
+    client.get(f"{config.public_api_url}/api/products?status=ON_SALE")
+    client.get(f"{config.public_api_url}/api/stocks")
+    client.get(
+        f"{config.admin_api_url}/api/admin/outbox-services/order/events?status=PENDING&limit=1",
+        headers=admin_auth_headers(config),
+    )
+
+    if not config.direct_service_health:
+        return
+
+    for base_url in dict.fromkeys([
         config.catalog_url,
         config.inventory_url,
         config.order_url,
-        config.order_api_url,
-        config.outbox_api_url,
         config.payment_url,
         config.promotion_url,
     ]):
@@ -799,7 +820,21 @@ def healthcheck(client: ApiClient, config: ScenarioConfig) -> None:
 
 def outbox_recovery_healthcheck(client: ApiClient, config: ScenarioConfig) -> None:
     for base_url in dict.fromkeys([
-        config.outbox_api_url,
+        config.admin_api_url,
+    ]):
+        payload = client.get(f"{base_url}/actuator/health")
+        if payload.get("status") != "UP":
+            raise RuntimeError(f"service is not healthy: {base_url} -> {payload}")
+
+    client.get(
+        f"{config.admin_api_url}/api/admin/outbox-services/order/events?status=PENDING&limit=1",
+        headers=admin_auth_headers(config),
+    )
+
+    if not config.direct_service_health:
+        return
+
+    for base_url in dict.fromkeys([
         config.order_url,
         config.inventory_url,
         config.payment_url,
@@ -1298,22 +1333,28 @@ def outbox_recovery_headers(
 
 def seed_product(client: ApiClient, config: ScenarioConfig, product_code: str) -> None:
     client.post(
-        f"{config.catalog_url}/api/admin/products",
+        f"{config.admin_api_url}/api/admin/products",
         {
             "productCode": product_code,
             "name": "Concurrent E2E Product",
             "salesStatus": "ON_SALE",
             "listPrice": config.unit_price,
         },
-        headers={"Idempotency-Key": f"idem-product-{product_code}"},
+        headers={
+            **admin_auth_headers(config),
+            "Idempotency-Key": f"idem-product-{product_code}",
+        },
     )
 
 
 def seed_stock(client: ApiClient, config: ScenarioConfig, product_code: str, sku_id: str) -> None:
     client.put(
-        f"{config.inventory_url}/api/stocks/{sku_id}",
+        f"{config.admin_api_url}/api/admin/stocks/{sku_id}",
         {"productCode": product_code, "availableQuantity": config.initial_stock},
-        headers={"Idempotency-Key": f"idem-stock-{sku_id}"},
+        headers={
+            **admin_auth_headers(config),
+            "Idempotency-Key": f"idem-stock-{sku_id}",
+        },
     )
 
 
@@ -1321,7 +1362,7 @@ def seed_coupon(client: ApiClient, config: ScenarioConfig, coupon_code: str) -> 
     starts_at, ends_at = demo_coupon_period()
     return response_data(
         client.post(
-            f"{config.promotion_url}/api/admin/coupons",
+            f"{config.admin_api_url}/api/admin/coupons",
             {
                 "couponCode": coupon_code,
                 "name": "Demo E2E Coupon",
@@ -1334,6 +1375,7 @@ def seed_coupon(client: ApiClient, config: ScenarioConfig, coupon_code: str) -> 
                 "endsAt": ends_at,
             },
             headers={
+                **admin_auth_headers(config),
                 "Idempotency-Key": f"idem-coupon-{coupon_code}",
                 "X-Correlation-Id": f"corr-coupon-{coupon_code}",
             },
@@ -1344,7 +1386,7 @@ def seed_coupon(client: ApiClient, config: ScenarioConfig, coupon_code: str) -> 
 def quote_coupon(client: ApiClient, config: ScenarioConfig, coupon_code: str, order_amount: int) -> Mapping[str, Any]:
     return response_data(
         client.post(
-            f"{config.order_api_url}/api/coupons/quote",
+            f"{config.public_api_url}/api/coupons/quote",
             {
                 "couponCode": coupon_code,
                 "orderAmount": order_amount,
@@ -1360,12 +1402,11 @@ def create_order(
     product_code: str,
     sku_id: str,
     payment_method: str,
-    member_id: str,
+    _member_id: str,
     index: int,
     coupon_code: str | None = None,
 ) -> Mapping[str, Any]:
     body: dict[str, Any] = {
-        "memberId": member_id,
         "paymentMethod": payment_method,
         "items": [
             {
@@ -1397,7 +1438,7 @@ def cancel_delayed_order(client: ApiClient, config: ScenarioConfig, order_id: st
     }
     headers.update(admin_auth_headers(config))
     client.post(
-        f"{config.order_api_url}/api/admin/orders/{order_id}/cancel",
+        f"{config.admin_api_url}/api/admin/orders/{order_id}/cancel",
         headers=headers,
     )
 
@@ -1413,7 +1454,6 @@ def create_orders_concurrently(
             client.post(
                 f"{config.order_api_url}/api/orders",
                 {
-                    "memberId": f"member-concurrent-{index:02d}",
                     "paymentMethod": "CARD",
                     "items": [
                         {
@@ -1495,7 +1535,6 @@ def create_order_with_retryable_replay_pending(
             return client.post(
                 f"{config.order_api_url}/api/orders",
                 {
-                    "memberId": f"member-burst-{index:02d}",
                     "paymentMethod": "CARD",
                     "items": [
                         {
@@ -1559,7 +1598,7 @@ def get_order(client: ApiClient, config: ScenarioConfig, order_id: str) -> Mappi
 
 
 def get_stock(client: ApiClient, config: ScenarioConfig, sku_id: str) -> Mapping[str, Any]:
-    return response_data(client.get(f"{config.inventory_url}/api/stocks/{sku_id}"))
+    return response_data(client.get(f"{config.public_api_url}/api/stocks/{sku_id}"))
 
 
 def add_runtime_arguments(
@@ -1569,24 +1608,39 @@ def add_runtime_arguments(
     default_initial_stock: int,
     default_prefix: str,
 ) -> None:
-    command_parser.add_argument("--catalog-url", default=DEFAULT_CATALOG_URL)
-    command_parser.add_argument("--inventory-url", default=DEFAULT_INVENTORY_URL)
-    command_parser.add_argument("--order-url", default=DEFAULT_ORDER_URL, help="Order Service health URL")
+    command_parser.add_argument(
+        "--public-api-url",
+        default=DEFAULT_PUBLIC_API_URL,
+        help="Gateway public API URL. Defaults to http://localhost:18080.",
+    )
+    command_parser.add_argument(
+        "--admin-api-url",
+        default=DEFAULT_ADMIN_API_URL,
+        help="Gateway admin API URL. Defaults to http://localhost:18080.",
+    )
     command_parser.add_argument(
         "--order-api-url",
         default=DEFAULT_ORDER_API_URL,
-        help="Public order create/query URL. Defaults to Gateway at http://localhost:18080.",
+        help="Gateway order create/query URL. Defaults to http://localhost:18080.",
     )
+    command_parser.add_argument("--catalog-url", default=DEFAULT_CATALOG_URL, help="Catalog Service health URL.")
+    command_parser.add_argument("--inventory-url", default=DEFAULT_INVENTORY_URL, help="Inventory Service health URL.")
+    command_parser.add_argument("--order-url", default=DEFAULT_ORDER_URL, help="Order Service health URL.")
+    command_parser.add_argument("--payment-url", default=DEFAULT_PAYMENT_URL, help="Payment Service health URL.")
     command_parser.add_argument(
         "--outbox-api-url",
-        default=DEFAULT_OUTBOX_API_URL,
-        help="Outbox admin routing URL. Defaults to Gateway at http://localhost:18080.",
+        default=None,
+        help="Deprecated alias for --admin-api-url.",
     )
-    command_parser.add_argument("--payment-url", default=DEFAULT_PAYMENT_URL)
     command_parser.add_argument(
         "--promotion-url",
         default=DEFAULT_PROMOTION_URL,
-        help="Promotion Service admin URL. Coupon quote still runs through --order-api-url.",
+        help="Promotion Service health URL.",
+    )
+    command_parser.add_argument(
+        "--direct-service-health",
+        action="store_true",
+        help="Also check direct backend service health URLs for host development.",
     )
     command_parser.add_argument("--orders", type=positive_int, default=default_orders)
     command_parser.add_argument("--initial-stock", type=non_negative_int, default=default_initial_stock)
@@ -1620,21 +1674,36 @@ def add_runtime_arguments(
 
 
 def add_outbox_recovery_arguments(command_parser: argparse.ArgumentParser) -> None:
-    command_parser.add_argument("--catalog-url", default=DEFAULT_CATALOG_URL)
-    command_parser.add_argument("--inventory-url", default=DEFAULT_INVENTORY_URL)
-    command_parser.add_argument("--order-url", default=DEFAULT_ORDER_URL, help="Order Service health URL")
+    command_parser.add_argument(
+        "--public-api-url",
+        default=DEFAULT_PUBLIC_API_URL,
+        help="Gateway public API URL. Defaults to http://localhost:18080.",
+    )
+    command_parser.add_argument(
+        "--admin-api-url",
+        default=DEFAULT_ADMIN_API_URL,
+        help="Gateway admin API URL. Defaults to http://localhost:18080.",
+    )
     command_parser.add_argument(
         "--order-api-url",
         default=DEFAULT_ORDER_API_URL,
-        help="Public order API health URL. Defaults to Gateway at http://localhost:18080.",
+        help="Gateway order API URL. Defaults to http://localhost:18080.",
     )
+    command_parser.add_argument("--catalog-url", default=DEFAULT_CATALOG_URL, help="Catalog Service health URL.")
+    command_parser.add_argument("--inventory-url", default=DEFAULT_INVENTORY_URL, help="Inventory Service health URL.")
+    command_parser.add_argument("--order-url", default=DEFAULT_ORDER_URL, help="Order Service health URL.")
+    command_parser.add_argument("--payment-url", default=DEFAULT_PAYMENT_URL, help="Payment Service health URL.")
     command_parser.add_argument(
         "--outbox-api-url",
-        default=DEFAULT_OUTBOX_API_URL,
-        help="Outbox admin routing URL. Defaults to Gateway at http://localhost:18080.",
+        default=None,
+        help="Deprecated alias for --admin-api-url.",
     )
-    command_parser.add_argument("--payment-url", default=DEFAULT_PAYMENT_URL)
-    command_parser.add_argument("--promotion-url", default=DEFAULT_PROMOTION_URL)
+    command_parser.add_argument("--promotion-url", default=DEFAULT_PROMOTION_URL, help="Promotion Service health URL.")
+    command_parser.add_argument(
+        "--direct-service-health",
+        action="store_true",
+        help="Also check direct backend service health URLs for host development.",
+    )
     command_parser.add_argument("--max-attempts", type=positive_int, default=3)
     command_parser.add_argument("--relay-batch-size", type=relay_batch_size, default=100)
     command_parser.add_argument("--wait-seconds", type=non_negative_float, default=1.0)
@@ -1755,12 +1824,14 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
 
 def config_from_args(args: argparse.Namespace) -> ScenarioConfig:
     order_url = args.order_url.rstrip("/")
+    admin_api_url = (getattr(args, "outbox_api_url", None) or args.admin_api_url).rstrip("/")
     return ScenarioConfig(
+        public_api_url=args.public_api_url.rstrip("/"),
+        admin_api_url=admin_api_url,
         catalog_url=args.catalog_url.rstrip("/"),
         inventory_url=args.inventory_url.rstrip("/"),
         order_url=order_url,
         order_api_url=args.order_api_url.rstrip("/"),
-        outbox_api_url=args.outbox_api_url.rstrip("/"),
         payment_url=args.payment_url.rstrip("/"),
         promotion_url=args.promotion_url.rstrip("/"),
         order_count=getattr(args, "orders", 1),
@@ -1784,6 +1855,7 @@ def config_from_args(args: argparse.Namespace) -> ScenarioConfig:
         outage_observation_seconds=getattr(args, "outage_observation_seconds", 2.0),
         admin_bearer_token=normalize_admin_bearer_token(getattr(args, "admin_bearer_token", None)),
         customer_bearer_token=normalize_bearer_token(getattr(args, "customer_bearer_token", None)),
+        direct_service_health=getattr(args, "direct_service_health", False),
     )
 
 

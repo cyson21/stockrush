@@ -38,7 +38,7 @@ class OrderReadModelController {
         @RequestHeader(value = CorrelationIds.HEADER_NAME, required = false) String correlationId
     ) {
         String resolvedCorrelationId = CorrelationIds.resolve(correlationId);
-        String trustedMemberId = resolveMemberId(authenticatedMemberId, memberId);
+        String trustedMemberId = TrustedCustomerIdentity.require(authenticatedMemberId);
         return ResponseEntity.ok()
             .header(CorrelationIds.HEADER_NAME, resolvedCorrelationId)
             .body(ApiResponse.success(
@@ -71,12 +71,6 @@ class OrderReadModelController {
             ));
     }
 
-    private String resolveMemberId(String authenticatedMemberId, String requestMemberId) {
-        if (authenticatedMemberId != null && !authenticatedMemberId.isBlank()) {
-            return authenticatedMemberId.trim();
-        }
-        return requestMemberId;
-    }
 }
 
 record OrderSummaryPageResponse(

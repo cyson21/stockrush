@@ -343,9 +343,11 @@ class LocalE2ERunnerTest(unittest.TestCase):
         args = local_e2e_runner.parse_args(["same-sku-concurrency"])
 
         self.assertEqual(args.command, "same-sku-concurrency")
+        self.assertEqual(args.public_api_url, "http://localhost:18080")
+        self.assertEqual(args.admin_api_url, "http://localhost:18080")
         self.assertEqual(args.order_url, "http://localhost:18083")
         self.assertEqual(args.order_api_url, "http://localhost:18080")
-        self.assertEqual(args.outbox_api_url, "http://localhost:18080")
+        self.assertFalse(args.direct_service_health)
         self.assertEqual(args.relay_mode, "manual")
 
     def test_cli_accepts_demo_order_flow_command_name(self) -> None:
@@ -355,7 +357,9 @@ class LocalE2ERunnerTest(unittest.TestCase):
         self.assertEqual(args.orders, 3)
         self.assertEqual(args.initial_stock, 20)
         self.assertEqual(args.prefix, "DEMO-E2E")
-        self.assertEqual(args.promotion_url, "http://localhost:18085")
+        self.assertEqual(args.public_api_url, "http://localhost:18080")
+        self.assertEqual(args.admin_api_url, "http://localhost:18080")
+        self.assertEqual(args.order_api_url, "http://localhost:18080")
         self.assertEqual(args.relay_mode, "automatic")
 
     def test_cli_accepts_burst_idempotency_command_name(self) -> None:
@@ -369,27 +373,32 @@ class LocalE2ERunnerTest(unittest.TestCase):
         self.assertEqual(args.relay_workers, 4)
         self.assertEqual(args.stability_waves, 2)
 
-    def test_config_from_args_separates_order_admin_public_and_outbox_api_urls(self) -> None:
+    def test_config_from_args_separates_gateway_roles_from_direct_service_health_urls(self) -> None:
         args = local_e2e_runner.parse_args([
             "same-sku-concurrency",
+            "--public-api-url",
+            "http://gateway-public.local/",
+            "--admin-api-url",
+            "http://gateway-admin.local/",
             "--order-url",
             "http://order-admin.local/",
             "--order-api-url",
-            "http://gateway.local/",
-            "--outbox-api-url",
-            "http://gateway-outbox.local/",
+            "http://gateway-order.local/",
+            "--direct-service-health",
         ])
 
         config = local_e2e_runner.config_from_args(args)
 
+        self.assertEqual(config.public_api_url, "http://gateway-public.local")
+        self.assertEqual(config.admin_api_url, "http://gateway-admin.local")
         self.assertEqual(config.order_url, "http://order-admin.local")
-        self.assertEqual(config.order_api_url, "http://gateway.local")
-        self.assertEqual(config.outbox_api_url, "http://gateway-outbox.local")
+        self.assertEqual(config.order_api_url, "http://gateway-order.local")
+        self.assertTrue(config.direct_service_health)
 
     def test_outbox_urls_use_gateway_service_routes(self) -> None:
         args = local_e2e_runner.parse_args([
             "same-sku-concurrency",
-            "--outbox-api-url",
+            "--admin-api-url",
             "http://gateway.local/",
         ])
         config = local_e2e_runner.config_from_args(args)
@@ -406,7 +415,7 @@ class LocalE2ERunnerTest(unittest.TestCase):
     def test_outbox_list_url_accepts_multiple_statuses_for_recovery(self) -> None:
         args = local_e2e_runner.parse_args([
             "outbox-recovery",
-            "--outbox-api-url",
+            "--admin-api-url",
             "http://gateway.local/",
         ])
         config = local_e2e_runner.config_from_args(args)
@@ -481,9 +490,67 @@ class LocalE2ERunnerTest(unittest.TestCase):
         args = local_e2e_runner.parse_args(["outbox-recovery", "--operator-id", "qa-runner"])
 
         self.assertEqual(args.command, "outbox-recovery")
-        self.assertEqual(args.outbox_api_url, "http://localhost:18080")
+        self.assertEqual(args.admin_api_url, "http://localhost:18080")
         self.assertEqual(args.operator_id, "qa-runner")
         self.assertFalse(args.skip_requeue_failed)
+
+    def test_seed_and_read_operations_use_gateway_roles(self) -> None:
+        args = local_e2e_runner.parse_args([
+            "demo-order-flow",
+            "--public-api-url",
+            "http://gateway-public.local",
+            "--admin-api-url",
+            "http://gateway-admin.local",
+            "--admin-bearer-token",
+            "admin-seed-token",
+        ])
+        config = local_e2e_runner.config_from_args(args)
+        calls: list[tuple[str, str, dict[str, str]]] = []
+
+        class FakeClient:
+            def post(
+                self,
+                url: str,
+                body: Mapping[str, object] | None = None,
+                headers: Mapping[str, str] | None = None,
+            ) -> dict[str, object]:
+                calls.append(("POST", url, dict(headers or {})))
+                return {"data": {"ok": True}}
+
+            def put(
+                self,
+                url: str,
+                body: Mapping[str, object],
+                headers: Mapping[str, str] | None = None,
+            ) -> dict[str, object]:
+                calls.append(("PUT", url, dict(headers or {})))
+                return {"data": {"ok": True}}
+
+            def get(self, url: str, headers: Mapping[str, str] | None = None) -> dict[str, object]:
+                calls.append(("GET", url, dict(headers or {})))
+                return {"data": {"skuId": "sku-1"}}
+
+        client = FakeClient()
+
+        local_e2e_runner.seed_product(client, config, "product-1")
+        local_e2e_runner.seed_stock(client, config, "product-1", "sku-1")
+        local_e2e_runner.seed_coupon(client, config, "coupon-1")
+        local_e2e_runner.quote_coupon(client, config, "coupon-1", 12000)
+        local_e2e_runner.get_stock(client, config, "sku-1")
+
+        self.assertEqual(
+            [(method, url) for method, url, _headers in calls],
+            [
+                ("POST", "http://gateway-admin.local/api/admin/products"),
+                ("PUT", "http://gateway-admin.local/api/admin/stocks/sku-1"),
+                ("POST", "http://gateway-admin.local/api/admin/coupons"),
+                ("POST", "http://gateway-public.local/api/coupons/quote"),
+                ("GET", "http://gateway-public.local/api/stocks/sku-1"),
+            ],
+        )
+        for method, _url, headers in calls[:3]:
+            with self.subTest(method=method):
+                self.assertEqual(headers["Authorization"], "Bearer admin-seed-token")
 
     def test_cli_accepts_admin_bearer_token_option(self) -> None:
         args = local_e2e_runner.parse_args([
@@ -661,6 +728,99 @@ class LocalE2ERunnerTest(unittest.TestCase):
         for headers in posted_headers:
             self.assertEqual(headers["Authorization"], "Bearer retry-token")
 
+    def test_healthcheck_uses_gateway_routes_by_default(self) -> None:
+        args = local_e2e_runner.parse_args([
+            "demo-order-flow",
+            "--public-api-url",
+            "http://gateway-public.local",
+            "--admin-api-url",
+            "http://gateway-admin.local",
+            "--order-api-url",
+            "http://gateway-order.local",
+            "--catalog-url",
+            "http://catalog.local",
+            "--inventory-url",
+            "http://inventory.local",
+            "--order-url",
+            "http://order.local",
+            "--payment-url",
+            "http://payment.local",
+            "--promotion-url",
+            "http://promotion.local",
+            "--admin-bearer-token",
+            "admin-health-token",
+        ])
+        config = local_e2e_runner.config_from_args(args)
+
+        class FakeClient:
+            def __init__(self) -> None:
+                self.calls: list[tuple[str, dict[str, str]]] = []
+
+            def get(self, url: str, headers: Mapping[str, str] | None = None) -> dict[str, object]:
+                self.calls.append((url, dict(headers or {})))
+                if url.endswith("/actuator/health"):
+                    return {"status": "UP"}
+                return {"data": []}
+
+        client = FakeClient()
+
+        local_e2e_runner.healthcheck(client, config)
+
+        self.assertEqual(
+            [url for url, _headers in client.calls],
+            [
+                "http://gateway-public.local/actuator/health",
+                "http://gateway-admin.local/actuator/health",
+                "http://gateway-order.local/actuator/health",
+                "http://gateway-public.local/api/products?status=ON_SALE",
+                "http://gateway-public.local/api/stocks",
+                "http://gateway-admin.local/api/admin/outbox-services/order/events?status=PENDING&limit=1",
+            ],
+        )
+        self.assertNotIn("http://catalog.local/actuator/health", [url for url, _headers in client.calls])
+        self.assertEqual(client.calls[-1][1]["Authorization"], "Bearer admin-health-token")
+
+    def test_direct_service_health_opt_in_checks_backend_actuators(self) -> None:
+        args = local_e2e_runner.parse_args([
+            "demo-order-flow",
+            "--direct-service-health",
+            "--catalog-url",
+            "http://catalog.local",
+            "--inventory-url",
+            "http://inventory.local",
+            "--order-url",
+            "http://order.local",
+            "--payment-url",
+            "http://payment.local",
+            "--promotion-url",
+            "http://promotion.local",
+        ])
+        config = local_e2e_runner.config_from_args(args)
+
+        class FakeClient:
+            def __init__(self) -> None:
+                self.urls: list[str] = []
+
+            def get(self, url: str, headers: Mapping[str, str] | None = None) -> dict[str, object]:
+                self.urls.append(url)
+                if url.endswith("/actuator/health"):
+                    return {"status": "UP"}
+                return {"data": []}
+
+        client = FakeClient()
+
+        local_e2e_runner.healthcheck(client, config)
+
+        for url in [
+            "http://catalog.local/actuator/health",
+            "http://inventory.local/actuator/health",
+            "http://order.local/actuator/health",
+            "http://payment.local/actuator/health",
+            "http://promotion.local/actuator/health",
+        ]:
+            with self.subTest(url=url):
+                self.assertIn(url, client.urls)
+
     def test_cancel_delayed_order_attaches_admin_bearer_token(self) -> None:
         args = local_e2e_runner.parse_args([
             "demo-order-flow",
@@ -694,6 +854,7 @@ class LocalE2ERunnerTest(unittest.TestCase):
         ])
         config = local_e2e_runner.config_from_args(args)
         posted_headers: list[dict[str, str]] = []
+        posted_bodies: list[Mapping[str, object] | None] = []
 
         class FakeClient:
             def post(
@@ -703,12 +864,14 @@ class LocalE2ERunnerTest(unittest.TestCase):
                 headers: Mapping[str, str] | None = None,
             ) -> dict[str, object]:
                 posted_headers.append(dict(headers or {}))
+                posted_bodies.append(body)
                 return {"orderId": "ord-test"}
 
         local_e2e_runner.create_order(FakeClient(), config, "product-1", "sku-1", "CARD", "member-1", 1)
 
         self.assertEqual(len(posted_headers), 1)
         self.assertEqual(posted_headers[0]["Authorization"], "Bearer customer-create-token")
+        self.assertNotIn("memberId", posted_bodies[0] or {})
 
     def test_get_order_attaches_customer_bearer_token(self) -> None:
         args = local_e2e_runner.parse_args([
@@ -980,8 +1143,8 @@ class LocalE2ERunnerTest(unittest.TestCase):
             "http://catalog.local",
             "--promotion-url",
             "http://promotion.local",
-            "--outbox-api-url",
-            "http://gateway.local",
+            "--admin-api-url",
+            "http://gateway-admin.local",
             "--order-url",
             "http://order.local",
             "--inventory-url",
@@ -995,7 +1158,7 @@ class LocalE2ERunnerTest(unittest.TestCase):
             def __init__(self) -> None:
                 self.urls: list[str] = []
 
-            def get(self, url: str) -> dict[str, str]:
+            def get(self, url: str, headers: Mapping[str, str] | None = None) -> dict[str, str]:
                 self.urls.append(url)
                 return {"status": "UP"}
 
@@ -1006,10 +1169,8 @@ class LocalE2ERunnerTest(unittest.TestCase):
         self.assertEqual(
             client.urls,
             [
-                "http://gateway.local/actuator/health",
-                "http://order.local/actuator/health",
-                "http://inventory.local/actuator/health",
-                "http://payment.local/actuator/health",
+                "http://gateway-admin.local/actuator/health",
+                "http://gateway-admin.local/api/admin/outbox-services/order/events?status=PENDING&limit=1",
             ],
         )
 

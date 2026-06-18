@@ -17,26 +17,22 @@ npm run dev
 
 ## 환경 변수
 
-기본 개발 모드는 서비스 프록시를 사용하고, 정적 환경에서는 아래 환경 변수를 지정할 수 있습니다.
+기본 개발 모드는 Gateway 프록시를 사용하고, 정적 환경에서는 Gateway base URL만 지정할 수 있습니다.
 
 | 환경 변수 | 설명 |
 |---|---|
-| `VITE_API_BASE_URL` | 서비스별 prefix 앞에 붙는 공통 기본 주소 |
 | `VITE_GATEWAY_API_BASE_URL` | Gateway 주소. 보호된 관리자 API에 사용하며, 없으면 same-origin 경로를 사용 |
 | `VITE_AUTH_ISSUER` | `http://localhost:28088/realms/stockrush` |
 | `VITE_AUTH_CLIENT_ID` | `stockrush-admin-web` |
 
 ## 프록시
 
-개발 서버 프록시는 아래 Prefix를 내부적으로 localhost 서비스로 연결합니다.
+개발 서버 프록시는 아래 Prefix를 Gateway로 연결합니다.
 
 - `/api/admin` -> `http://localhost:18080`
-- `/api/admin/outbox-services` -> `http://localhost:18080`
-- `/api/admin/coupon-usages` -> `http://localhost:18080`
-- `/api/admin/fulfillment-requests` -> `http://localhost:18080`
 - `/api/read-model` -> `http://localhost:18080`
 
-Docker 데모 모드에서는 Nginx가 같은 prefix를 compose 내부 서비스와 Gateway로 프록시합니다. 실행법은 `infra/demo/README.md`를 기준으로 합니다.
+Docker 데모 모드에서도 관리자 앱은 Gateway 관리자/read-model route만 공개 진입점으로 사용합니다. 실행법은 `infra/demo/README.md`를 기준으로 합니다.
 
 ## 검증
 

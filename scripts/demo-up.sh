@@ -6,7 +6,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 COMPOSE_FILE="$ROOT_DIR/infra/demo/docker-compose.yml"
 ENV_FILE="$ROOT_DIR/infra/demo/.env"
 ENV_EXAMPLE="$ROOT_DIR/infra/demo/.env.example"
-EXPECTED_ENV_REV="2026-05-15-security-v1"
+EXPECTED_ENV_REV="2026-06-17-gateway-boundary-v1"
 
 PORT_SPECS=(
   "POSTGRES_HOST_PORT:25432:postgres:5432"
@@ -15,13 +15,6 @@ PORT_SPECS=(
   "KAFKA_UI_PORT:29090:kafka-ui:8080"
   "KEYCLOAK_HOST_PORT:28088:keycloak:8080"
   "GATEWAY_HOST_PORT:28080:gateway:18080"
-  "CATALOG_HOST_PORT:28081:catalog-service:18081"
-  "INVENTORY_HOST_PORT:28082:inventory-service:18082"
-  "ORDER_HOST_PORT:28083:order-service:18083"
-  "PAYMENT_HOST_PORT:28084:payment-service:18084"
-  "PROMOTION_HOST_PORT:28085:promotion-service:18085"
-  "FULFILLMENT_HOST_PORT:28086:fulfillment-service:18086"
-  "READ_MODEL_HOST_PORT:28087:read-model-service:18087"
   "CUSTOMER_APP_HOST_PORT:15173:customer-app:8080"
   "ADMIN_APP_HOST_PORT:15174:admin-app:8080"
 )

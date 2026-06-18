@@ -56,7 +56,7 @@ class CreateOrderController {
 }
 
 record CreateOrderRequest(
-    @NotBlank String memberId,
+    String memberId,
     String paymentMethod,
     String couponCode,
     @NotEmpty List<@Valid CreateOrderItemRequest> items
@@ -64,20 +64,13 @@ record CreateOrderRequest(
 
     CreateOrderCommand toCommand(String idempotencyKey, String correlationId, String authenticatedMemberId) {
         return new CreateOrderCommand(
-            resolveMemberId(authenticatedMemberId),
+            TrustedCustomerIdentity.require(authenticatedMemberId),
             idempotencyKey,
             correlationId,
             paymentMethod,
             couponCode,
             items.stream().map(CreateOrderItemRequest::toCommand).toList()
         );
-    }
-
-    private String resolveMemberId(String authenticatedMemberId) {
-        if (authenticatedMemberId == null || authenticatedMemberId.isBlank()) {
-            return memberId;
-        }
-        return authenticatedMemberId.trim();
     }
 }
 

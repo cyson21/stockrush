@@ -31,7 +31,7 @@ class CatalogGatewayController {
             ServiceRoute.CATALOG,
             "GET",
             withQueryString("/api/products", request),
-            headers,
+            TrustedIdentityHeaders.publicRequest(headers),
             null
         );
     }

@@ -69,6 +69,17 @@ class OrderApiExceptionHandler {
             .body(ApiResponse.failure("ORDER_FORBIDDEN", exception.getMessage(), correlationId));
     }
 
+    @ExceptionHandler(TrustedCustomerIdentityRequiredException.class)
+    ResponseEntity<ApiResponse<Void>> handleTrustedCustomerIdentityRequired(
+        TrustedCustomerIdentityRequiredException exception,
+        HttpServletRequest request
+    ) {
+        String correlationId = CorrelationIds.resolve(request.getHeader(CorrelationIds.HEADER_NAME));
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+            .header(CorrelationIds.HEADER_NAME, correlationId)
+            .body(ApiResponse.failure("ORDER_TRUSTED_IDENTITY_REQUIRED", exception.getMessage(), correlationId));
+    }
+
     @ExceptionHandler(OrderDataIntegrityException.class)
     ResponseEntity<ApiResponse<Void>> handleOrderDataIntegrity(
         OrderDataIntegrityException exception,

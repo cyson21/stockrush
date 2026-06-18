@@ -421,10 +421,10 @@ describe('Customer order flow', () => {
 
     await user.click(await screen.findByRole('button', { name: /Limited Hoodie/ }));
     expect(await screen.findByText('SKU-001')).toBeInTheDocument();
+    expect(screen.queryByLabelText('회원 ID')).not.toBeInTheDocument();
 
     await user.clear(screen.getByLabelText('수량'));
     await user.type(screen.getByLabelText('수량'), '2');
-    await user.type(screen.getByLabelText('회원 ID'), 'member-portfolio');
     expect(screen.getByRole('option', { name: 'DELAY_CARD' })).toBeInTheDocument();
     await user.selectOptions(screen.getByLabelText('결제수단'), 'FAIL_CARD');
     await user.click(screen.getByRole('button', { name: '주문 생성' }));
@@ -445,7 +445,6 @@ describe('Customer order flow', () => {
       'X-Correlation-Id': 'customer-app-order-create',
     });
     expect(JSON.parse(String(init?.body))).toEqual({
-      memberId: 'member-portfolio',
       paymentMethod: 'FAIL_CARD',
       items: [
         {
@@ -486,7 +485,6 @@ describe('Customer order flow', () => {
 
     await user.click(await screen.findByRole('button', { name: /Limited Hoodie/ }));
     expect(await screen.findByText('SKU-001')).toBeInTheDocument();
-    await user.type(screen.getByLabelText('회원 ID'), 'member-portfolio');
     await user.click(screen.getByRole('button', { name: '주문 생성' }));
     await waitFor(() => expect(getPollCallCount('ord_app_card_001', fetchMock.mock.calls)).toBe(1));
     expect(intervalCallbacks.length).toBeGreaterThan(0);
@@ -523,8 +521,6 @@ describe('Customer order flow', () => {
 
     await user.click(await screen.findByRole('button', { name: /Limited Hoodie/ }));
     expect(await screen.findByText('SKU-001')).toBeInTheDocument();
-
-    await user.type(screen.getByLabelText('회원 ID'), 'member-portfolio');
     await user.selectOptions(screen.getByLabelText('결제수단'), 'DELAY_CARD');
     await user.click(screen.getByRole('button', { name: '주문 생성' }));
 
@@ -543,7 +539,6 @@ describe('Customer order flow', () => {
     );
     expect(orderRequest).toBeDefined();
     expect(JSON.parse(String(orderRequest?.[1]?.body))).toMatchObject({
-      memberId: 'member-portfolio',
       paymentMethod: 'DELAY_CARD',
     });
 
@@ -571,7 +566,6 @@ describe('Customer order flow', () => {
     expect(screen.getByText('결제 예정 금액')).toBeInTheDocument();
     expect(screen.getByText('₩7,000')).toBeInTheDocument();
 
-    await user.type(screen.getByLabelText('회원 ID'), 'member-portfolio');
     await user.selectOptions(screen.getByLabelText('결제수단'), 'FAIL_CARD');
     await user.click(screen.getByRole('button', { name: '주문 생성' }));
 
@@ -580,7 +574,6 @@ describe('Customer order flow', () => {
     );
     expect(orderRequest).toBeDefined();
     expect(JSON.parse(String(orderRequest?.[1]?.body))).toMatchObject({
-      memberId: 'member-portfolio',
       paymentMethod: 'FAIL_CARD',
       couponCode: 'WELCOME10',
       items: [
@@ -603,7 +596,6 @@ describe('Customer order flow', () => {
     await user.click(await screen.findByRole('button', { name: /Limited Hoodie/ }));
     await user.type(screen.getByLabelText('쿠폰 코드'), 'BAD01');
     await user.click(screen.getByRole('button', { name: '쿠폰 적용' }));
-    await user.type(screen.getByLabelText('회원 ID'), 'member-portfolio');
 
     expect(await screen.findByRole('alert')).toHaveTextContent(
       '쿠폰 적용 실패: PROMOTION_COUPON_NOT_FOUND: 쿠폰 코드를 확인해주세요.',
@@ -622,7 +614,6 @@ describe('Customer order flow', () => {
     await user.click(await screen.findByRole('button', { name: /Limited Hoodie/ }));
     await user.type(screen.getByLabelText('쿠폰 코드'), 'BAD01');
     await user.click(screen.getByRole('button', { name: '쿠폰 적용' }));
-    await user.type(screen.getByLabelText('회원 ID'), 'member-portfolio');
 
     await screen.findByText('쿠폰 적용: INVALID_COUPON');
     expect(screen.getByText('할인 금액')).toBeInTheDocument();
@@ -714,7 +705,6 @@ describe('Customer order flow', () => {
 
     render(<App />);
     await user.click(await screen.findByRole('button', { name: /Limited Hoodie/ }));
-    await user.type(screen.getByLabelText('회원 ID'), 'member-portfolio');
     await user.selectOptions(screen.getByLabelText('결제수단'), 'FAIL_CARD');
     await user.click(screen.getByRole('button', { name: '주문 생성' }));
 
@@ -747,7 +737,6 @@ describe('Customer order flow', () => {
     render(<App />);
 
     await user.click(await screen.findByRole('button', { name: /Limited Hoodie/ }));
-    await user.type(screen.getByLabelText('회원 ID'), 'member-portfolio');
     await user.click(screen.getByRole('button', { name: '주문 생성' }));
 
     await screen.findByText('ord_app_card_001');
@@ -785,9 +774,8 @@ describe('Customer order flow', () => {
     await user.click(screen.getByRole('button', { name: '쿠폰 적용' }));
     await screen.findByText('쿠폰 적용: APPLIED');
     expect(screen.getByText('₩5,000')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '주문 생성' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '주문 생성' })).toBeEnabled();
 
-    await user.type(screen.getByLabelText('회원 ID'), 'member-portfolio');
     await user.clear(screen.getByLabelText('수량'));
     await user.type(screen.getByLabelText('수량'), '2');
 
@@ -810,7 +798,6 @@ describe('Customer order flow', () => {
     await user.click(await screen.findByRole('button', { name: /Limited Hoodie/ }));
     expect(await screen.findByText('SKU-001')).toBeInTheDocument();
     await user.type(screen.getByLabelText('수량'), '1');
-    await user.type(screen.getByLabelText('회원 ID'), 'member-portfolio');
 
     expect(screen.getByRole('button', { name: '주문 생성' })).toBeDisabled();
     expect(getAuthSession()).toBeNull();
@@ -823,7 +810,6 @@ describe('Customer order flow', () => {
 
     await user.click(await screen.findByRole('button', { name: /Limited Hoodie/ }));
     expect(await screen.findByText('SKU-001')).toBeInTheDocument();
-    await user.type(screen.getByLabelText('회원 ID'), 'member-portfolio');
 
     await user.click(screen.getByRole('button', { name: '주문 생성' }));
 
@@ -860,7 +846,6 @@ describe('Customer order flow', () => {
     expect(getAuthSession()).not.toBeNull();
 
     await user.click(await screen.findByRole('button', { name: /Limited Hoodie/ }));
-    await user.type(screen.getByLabelText('회원 ID'), 'member-portfolio');
     await user.click(screen.getByRole('button', { name: '로그아웃' }));
 
     expect(screen.getByText('인증 상태: 미인증')).toBeInTheDocument();

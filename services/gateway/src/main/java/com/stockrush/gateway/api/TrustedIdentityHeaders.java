@@ -35,13 +35,17 @@ final class TrustedIdentityHeaders {
         return headers;
     }
 
+    static HttpHeaders publicRequest(HttpHeaders source) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.putAll(source);
+        removeTrustedIdentity(headers);
+        return headers;
+    }
+
     private static HttpHeaders trustedBase(HttpHeaders source, Jwt jwt) {
         HttpHeaders headers = new HttpHeaders();
         headers.putAll(source);
-        headers.remove(SUBJECT);
-        headers.remove(EMAIL);
-        headers.remove(ROLES);
-        headers.remove(OPERATOR);
+        removeTrustedIdentity(headers);
 
         headers.set(SUBJECT, jwt.getSubject());
         String email = jwt.getClaimAsString("email");
@@ -57,6 +61,13 @@ final class TrustedIdentityHeaders {
             return email.trim();
         }
         return jwt.getSubject();
+    }
+
+    private static void removeTrustedIdentity(HttpHeaders headers) {
+        headers.remove(SUBJECT);
+        headers.remove(EMAIL);
+        headers.remove(ROLES);
+        headers.remove(OPERATOR);
     }
 
     private static String roles(Jwt jwt) {

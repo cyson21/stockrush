@@ -128,6 +128,8 @@ Initial rule categories:
 - Outbox structure
 - Consumer idempotency
 - synchronous call allow list
+- Gateway-only demo/API boundary
+- trusted customer identity on protected routes
 
 ## Workflow
 

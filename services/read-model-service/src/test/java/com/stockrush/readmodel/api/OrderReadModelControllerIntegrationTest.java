@@ -56,8 +56,8 @@ class OrderReadModelControllerIntegrationTest {
     @Test
     void lists_customer_order_history_from_projection() throws Exception {
         mockMvc.perform(get("/api/read-model/orders")
-                .param("memberId", "member-api-1")
                 .param("size", "5")
+                .header("X-StockRush-Subject", "member-api-1")
                 .header("X-Correlation-Id", "corr-read-customer"))
             .andExpect(status().isOk())
             .andExpect(header().string("X-Correlation-Id", "corr-read-customer"))
@@ -87,9 +87,9 @@ class OrderReadModelControllerIntegrationTest {
     @Test
     void normalizes_customer_order_history_page_parameters() throws Exception {
         mockMvc.perform(get("/api/read-model/orders")
-                .param("memberId", "member-api-1")
                 .param("page", "-1")
-                .param("size", "999"))
+                .param("size", "999")
+                .header("X-StockRush-Subject", "member-api-1"))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.data.page", is(0)))
             .andExpect(jsonPath("$.data.size", is(100)))
@@ -97,12 +97,26 @@ class OrderReadModelControllerIntegrationTest {
     }
 
     @Test
-    void lists_customer_orders_with_search_filters_from_projection() throws Exception {
+    void rejects_customer_order_history_without_trusted_customer_subject() throws Exception {
         mockMvc.perform(get("/api/read-model/orders")
                 .param("memberId", "member-api-1")
+                .param("size", "5")
+                .header("X-Correlation-Id", "corr-read-missing-subject"))
+            .andExpect(status().isUnauthorized())
+            .andExpect(header().string("X-Correlation-Id", "corr-read-missing-subject"))
+            .andExpect(jsonPath("$.success", is(false)))
+            .andExpect(jsonPath("$.error.code", is("READ_MODEL_TRUSTED_IDENTITY_REQUIRED")))
+            .andExpect(jsonPath("$.trace.correlationId", is("corr-read-missing-subject")));
+    }
+
+    @Test
+    void lists_customer_orders_with_search_filters_from_projection() throws Exception {
+        mockMvc.perform(get("/api/read-model/orders")
+                .param("memberId", "member-api-2")
                 .param("orderId", "ord_read_api_new")
                 .param("status", "CONFIRMED")
                 .param("sagaStatus", "COMPLETED")
+                .header("X-StockRush-Subject", "member-api-1")
                 .header("X-Correlation-Id", "corr-read-customer-search"))
             .andExpect(status().isOk())
             .andExpect(header().string("X-Correlation-Id", "corr-read-customer-search"))
@@ -116,10 +130,10 @@ class OrderReadModelControllerIntegrationTest {
     }
 
     @Test
-    void trims_customer_member_id_before_filtering() throws Exception {
+    void trims_trusted_customer_subject_before_filtering() throws Exception {
         mockMvc.perform(get("/api/read-model/orders")
-                .param("memberId", " member-api-1 ")
-                .param("orderId", "ord_read_api_new"))
+                .param("orderId", "ord_read_api_new")
+                .header("X-StockRush-Subject", " member-api-1 "))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.success", is(true)))
             .andExpect(jsonPath("$.data.items", hasSize(1)))

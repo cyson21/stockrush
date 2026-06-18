@@ -6,6 +6,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -15,7 +17,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 
 @RestController
-@RequestMapping("/api/admin/coupon-usages")
+@RequestMapping("/api/admin")
 class PromotionAdminGatewayController {
 
     private final GatewayServiceProxy gatewayServiceProxy;
@@ -24,7 +26,7 @@ class PromotionAdminGatewayController {
         this.gatewayServiceProxy = gatewayServiceProxy;
     }
 
-    @GetMapping({"", "/"})
+    @GetMapping({"/coupon-usages", "/coupon-usages/"})
     ResponseEntity<String> listCouponUsages(
         @RequestHeader HttpHeaders headers,
         @AuthenticationPrincipal Jwt jwt,
@@ -36,6 +38,21 @@ class PromotionAdminGatewayController {
             withQueryString("/api/admin/coupon-usages", request),
             TrustedIdentityHeaders.admin(headers, jwt),
             null
+        );
+    }
+
+    @PostMapping("/coupons")
+    ResponseEntity<String> createCoupon(
+        @RequestHeader HttpHeaders headers,
+        @AuthenticationPrincipal Jwt jwt,
+        @RequestBody(required = false) String body
+    ) {
+        return gatewayServiceProxy.forward(
+            ServiceRoute.PROMOTION,
+            "POST",
+            "/api/admin/coupons",
+            TrustedIdentityHeaders.admin(headers, jwt),
+            body
         );
     }
 

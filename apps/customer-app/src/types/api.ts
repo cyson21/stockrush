@@ -37,7 +37,6 @@ export type CreateOrderItemRequest = {
 };
 
 export type CreateOrderRequest = {
-  memberId: string;
   paymentMethod: string;
   items: CreateOrderItemRequest[];
   couponCode?: string;

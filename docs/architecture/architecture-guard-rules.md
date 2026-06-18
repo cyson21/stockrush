@@ -42,6 +42,9 @@ info: useful design feedback
 | ARCH-010 Service Correlation MDC | Implemented |
 | ARCH-011 Gateway Security Routes | Implemented |
 | ARCH-012 Trusted Identity Headers | Implemented |
+| ARCH-013 Demo Backend Port Exposure | Implemented |
+| ARCH-014 Nginx Direct Backend Proxying | Implemented |
+| ARCH-015 Customer Trusted Identity | Implemented |
 
 ### ARCH-001: Service Schema Ownership
 
@@ -290,4 +293,84 @@ Suggested fix:
 
 ```text
 Introduce a trusted identity header helper in Gateway and reuse it in all protected route proxies.
+```
+
+### ARCH-013: Demo Backend Port Exposure
+
+Severity: error
+
+Demo Docker Compose must not publish host ports for internal backend services.
+
+Allowed host port exposure:
+
+- Gateway
+- Customer/Admin web apps
+- Keycloak
+- infrastructure required for local operation, such as PostgreSQL, Redis, Kafka, and Kafka UI
+
+Disallowed:
+
+```yaml
+services:
+  order-service:
+    ports:
+      - "28083:18083"
+```
+
+Suggested fix:
+
+```text
+Remove `ports:` from internal backend service blocks and route demo traffic through Gateway and web apps.
+```
+
+### ARCH-014: Nginx Direct Backend Proxying
+
+Severity: error
+
+The demo web Nginx config must not expose legacy service prefixes such as `/orders/`, `/inventory/`, `/payment/`, `/catalog/`, or `/promotion/` by proxying them directly to backend service names.
+
+Allowed:
+
+```nginx
+location /api/orders {
+  proxy_pass http://gateway:18080;
+}
+```
+
+Disallowed:
+
+```nginx
+location /orders/ {
+  proxy_pass http://order-service:18083;
+}
+```
+
+Suggested fix:
+
+```text
+Proxy public and smoke traffic through Gateway `/api/**` paths only.
+```
+
+### ARCH-015: Customer Trusted Identity
+
+Severity: error
+
+Customer order routes must derive customer identity from the trusted `X-StockRush-Subject` header and reject missing trusted identity by default.
+
+Disallowed:
+
+- falling back from missing `X-StockRush-Subject` to request body `memberId`
+- falling back from missing `X-StockRush-Subject` to query `memberId`
+- returning customer order detail without owner-scoped lookup
+
+Allowed:
+
+```java
+TrustedCustomerIdentity.require(authenticatedMemberId)
+```
+
+Suggested fix:
+
+```text
+Require trusted subject identity on customer routes and keep memberId filters only on protected admin routes.
 ```

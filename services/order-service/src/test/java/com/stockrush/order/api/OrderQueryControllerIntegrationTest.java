@@ -49,6 +49,7 @@ class OrderQueryControllerIntegrationTest {
     @Test
     void returns_order_detail_with_items() throws Exception {
         mockMvc.perform(get("/api/orders/{orderId}", "ord_query_001")
+                .header("X-StockRush-Subject", "member-query-1")
                 .header("X-Correlation-Id", "corr-order-query"))
             .andExpect(status().isOk())
             .andExpect(header().string("X-Correlation-Id", "corr-order-query"))
@@ -82,6 +83,17 @@ class OrderQueryControllerIntegrationTest {
     }
 
     @Test
+    void rejects_order_detail_without_trusted_customer_subject() throws Exception {
+        mockMvc.perform(get("/api/orders/{orderId}", "ord_query_001")
+                .header("X-Correlation-Id", "corr-order-missing-subject"))
+            .andExpect(status().isUnauthorized())
+            .andExpect(header().string("X-Correlation-Id", "corr-order-missing-subject"))
+            .andExpect(jsonPath("$.success", is(false)))
+            .andExpect(jsonPath("$.error.code", is("ORDER_TRUSTED_IDENTITY_REQUIRED")))
+            .andExpect(jsonPath("$.trace.correlationId", is("corr-order-missing-subject")));
+    }
+
+    @Test
     void rejects_order_detail_for_different_authenticated_subject() throws Exception {
         mockMvc.perform(get("/api/orders/{orderId}", "ord_query_001")
                 .header("X-StockRush-Subject", "member-other")
@@ -96,6 +108,7 @@ class OrderQueryControllerIntegrationTest {
     @Test
     void returns_not_found_for_unknown_order() throws Exception {
         mockMvc.perform(get("/api/orders/{orderId}", "ord_missing")
+                .header("X-StockRush-Subject", "member-query-1")
                 .header("X-Correlation-Id", "corr-order-missing"))
             .andExpect(status().isNotFound())
             .andExpect(header().string("X-Correlation-Id", "corr-order-missing"))
@@ -119,6 +132,7 @@ class OrderQueryControllerIntegrationTest {
             .update();
 
         mockMvc.perform(get("/api/orders/{orderId}", "ord_invalid_status")
+                .header("X-StockRush-Subject", "member-query-1")
                 .header("X-Correlation-Id", "corr-order-data-error"))
             .andExpect(status().isInternalServerError())
             .andExpect(header().string("X-Correlation-Id", "corr-order-data-error"))

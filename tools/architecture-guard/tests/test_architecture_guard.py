@@ -717,6 +717,235 @@ class ArchitectureGuardTest(unittest.TestCase):
 
             self.assertFalse(any(violation.rule_id == "ARCH-001" for violation in violations))
 
+    def test_detects_demo_backend_service_port_exposure(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            compose_root = root / "infra" / "demo"
+            compose_root.mkdir(parents=True)
+            (compose_root / "docker-compose.yml").write_text(
+                "services:\n"
+                "  order-service:\n"
+                "    image: stockrush-order\n"
+                "    ports:\n"
+                "      - \"28083:18083\"\n"
+                "  gateway:\n"
+                "    image: stockrush-gateway\n"
+                "    ports:\n"
+                "      - \"28080:18080\"\n",
+                encoding="utf-8",
+            )
+
+            violations = architecture_guard.check(root)
+
+            self.assertTrue(any(violation.rule_id == "ARCH-013" for violation in violations))
+
+    def test_allows_demo_host_ports_for_gateway_apps_and_infrastructure(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            compose_root = root / "infra" / "demo"
+            compose_root.mkdir(parents=True)
+            (compose_root / "docker-compose.yml").write_text(
+                "services:\n"
+                "  postgres:\n"
+                "    image: postgres:16-alpine\n"
+                "    ports:\n"
+                "      - \"25432:5432\"\n"
+                "  keycloak:\n"
+                "    image: quay.io/keycloak/keycloak\n"
+                "    ports:\n"
+                "      - \"28088:8080\"\n"
+                "  order-service:\n"
+                "    image: stockrush-order\n"
+                "    expose:\n"
+                "      - \"18083\"\n"
+                "  gateway:\n"
+                "    image: stockrush-gateway\n"
+                "    ports:\n"
+                "      - \"28080:18080\"\n"
+                "  customer-app:\n"
+                "    image: stockrush-customer-app\n"
+                "    ports:\n"
+                "      - \"15173:8080\"\n",
+                encoding="utf-8",
+            )
+
+            violations = architecture_guard.check(root)
+
+            self.assertFalse(any(violation.rule_id == "ARCH-013" for violation in violations))
+
+    def test_detects_nginx_direct_backend_proxying(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            nginx_root = root / "apps" / "nginx"
+            nginx_root.mkdir(parents=True)
+            (nginx_root / "default.conf").write_text(
+                "server {\n"
+                "  location /orders/ {\n"
+                "    proxy_pass http://order-service:18083;\n"
+                "  }\n"
+                "  location /api/orders {\n"
+                "    proxy_pass http://gateway:18080;\n"
+                "  }\n"
+                "}\n",
+                encoding="utf-8",
+            )
+
+            violations = architecture_guard.check(root)
+
+            self.assertTrue(any(violation.rule_id == "ARCH-014" for violation in violations))
+
+    def test_allows_nginx_gateway_proxying_for_public_api_paths(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            nginx_root = root / "apps" / "nginx"
+            nginx_root.mkdir(parents=True)
+            (nginx_root / "default.conf").write_text(
+                "server {\n"
+                "  location /api/orders {\n"
+                "    proxy_pass http://gateway:18080;\n"
+                "  }\n"
+                "  location /api/admin/ {\n"
+                "    proxy_pass http://gateway:18080;\n"
+                "  }\n"
+                "}\n",
+                encoding="utf-8",
+            )
+
+            violations = architecture_guard.check(root)
+
+            self.assertFalse(any(violation.rule_id == "ARCH-014" for violation in violations))
+
+    def test_detects_customer_identity_fallback_to_member_id(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            api_root = (
+                root
+                / "services"
+                / "read-model-service"
+                / "src"
+                / "main"
+                / "java"
+                / "com"
+                / "stockrush"
+                / "readmodel"
+                / "api"
+            )
+            api_root.mkdir(parents=True)
+            (api_root / "OrderReadModelController.java").write_text(
+                "@RestController\n"
+                "@RequestMapping(\"/api/read-model\")\n"
+                "class OrderReadModelController {\n"
+                "  @GetMapping(\"/orders\")\n"
+                "  Object listCustomerOrders(\n"
+                "    @RequestParam(required = false) String memberId,\n"
+                "    @RequestHeader(value = \"X-StockRush-Subject\", required = false) String authenticatedMemberId\n"
+                "  ) {\n"
+                "    String trustedMemberId = resolveMemberId(authenticatedMemberId, memberId);\n"
+                "    return queryService.listCustomerOrders(trustedMemberId);\n"
+                "  }\n"
+                "  private String resolveMemberId(String authenticatedMemberId, String requestMemberId) {\n"
+                "    if (authenticatedMemberId != null && !authenticatedMemberId.isBlank()) { return authenticatedMemberId.trim(); }\n"
+                "    return requestMemberId;\n"
+                "  }\n"
+                "}\n",
+                encoding="utf-8",
+            )
+
+            violations = architecture_guard.check(root)
+
+            self.assertTrue(any(violation.rule_id == "ARCH-015" for violation in violations))
+
+    def test_detects_create_order_request_member_id_fallback(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            api_root = root / "services" / "order-service" / "src" / "main" / "java" / "com" / "stockrush" / "order" / "api"
+            api_root.mkdir(parents=True)
+            (api_root / "CreateOrderController.java").write_text(
+                "@RestController\n"
+                "@RequestMapping(\"/api/orders\")\n"
+                "class CreateOrderController {\n"
+                "  @PostMapping Object create(\n"
+                "    @RequestBody CreateOrderRequest request,\n"
+                "    @RequestHeader(value = \"X-StockRush-Subject\", required = false) String authenticatedMemberId\n"
+                "  ) {\n"
+                "    return request.toCommand(authenticatedMemberId);\n"
+                "  }\n"
+                "}\n"
+                "record CreateOrderRequest(String memberId) {\n"
+                "  Object toCommand(String authenticatedMemberId) {\n"
+                "    return new CreateOrderCommand(resolveMemberId(authenticatedMemberId));\n"
+                "  }\n"
+                "  private String resolveMemberId(String authenticatedMemberId) {\n"
+                "    if (authenticatedMemberId == null || authenticatedMemberId.isBlank()) {\n"
+                "      return memberId;\n"
+                "    }\n"
+                "    return authenticatedMemberId.trim();\n"
+                "  }\n"
+                "}\n",
+                encoding="utf-8",
+            )
+
+            violations = architecture_guard.check(root)
+
+            self.assertTrue(any(violation.rule_id == "ARCH-015" for violation in violations))
+
+    def test_allows_customer_routes_that_require_trusted_subject(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            order_api_root = root / "services" / "order-service" / "src" / "main" / "java" / "com" / "stockrush" / "order" / "api"
+            read_model_api_root = (
+                root
+                / "services"
+                / "read-model-service"
+                / "src"
+                / "main"
+                / "java"
+                / "com"
+                / "stockrush"
+                / "readmodel"
+                / "api"
+            )
+            order_api_root.mkdir(parents=True)
+            read_model_api_root.mkdir(parents=True)
+            (order_api_root / "CreateOrderController.java").write_text(
+                "@RestController\n"
+                "@RequestMapping(\"/api/orders\")\n"
+                "class CreateOrderController {\n"
+                "  @PostMapping Object create(@RequestHeader(value = \"X-StockRush-Subject\", required = false) String authenticatedMemberId) {\n"
+                "    return request.toCommand(TrustedCustomerIdentity.require(authenticatedMemberId));\n"
+                "  }\n"
+                "}\n",
+                encoding="utf-8",
+            )
+            (order_api_root / "OrderQueryController.java").write_text(
+                "@RestController\n"
+                "@RequestMapping(\"/api/orders\")\n"
+                "class OrderQueryController {\n"
+                "  @GetMapping(\"/{orderId}\")\n"
+                "  Object getDetail(@PathVariable String orderId, @RequestHeader(value = \"X-StockRush-Subject\", required = false) String authenticatedMemberId) {\n"
+                "    return orderQueryService.getDetailForMember(orderId, TrustedCustomerIdentity.require(authenticatedMemberId));\n"
+                "  }\n"
+                "}\n",
+                encoding="utf-8",
+            )
+            (read_model_api_root / "OrderReadModelController.java").write_text(
+                "@RestController\n"
+                "@RequestMapping(\"/api/read-model\")\n"
+                "class OrderReadModelController {\n"
+                "  @GetMapping(\"/orders\")\n"
+                "  Object listCustomerOrders(@RequestHeader(value = \"X-StockRush-Subject\", required = false) String authenticatedMemberId) {\n"
+                "    return queryService.listCustomerOrders(TrustedCustomerIdentity.require(authenticatedMemberId));\n"
+                "  }\n"
+                "  @GetMapping(\"/admin/orders\")\n"
+                "  Object listAdminOrders(@RequestParam(required = false) String memberId) { return memberId; }\n"
+                "}\n",
+                encoding="utf-8",
+            )
+
+            violations = architecture_guard.check(root)
+
+            self.assertFalse(any(violation.rule_id == "ARCH-015" for violation in violations))
+
     def test_passes_empty_project(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

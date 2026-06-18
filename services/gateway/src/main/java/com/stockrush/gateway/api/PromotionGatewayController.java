@@ -27,6 +27,12 @@ class PromotionGatewayController {
         @RequestHeader HttpHeaders headers,
         @RequestBody(required = false) String body
     ) {
-        return gatewayServiceProxy.forward(ServiceRoute.PROMOTION, "POST", "/api/coupons/quote", headers, body);
+        return gatewayServiceProxy.forward(
+            ServiceRoute.PROMOTION,
+            "POST",
+            "/api/coupons/quote",
+            TrustedIdentityHeaders.publicRequest(headers),
+            body
+        );
     }
 }

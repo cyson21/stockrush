@@ -39,10 +39,7 @@ class OrderQueryController {
     }
 
     private OrderDetailSnapshot getDetail(String orderId, String authenticatedMemberId) {
-        if (authenticatedMemberId == null || authenticatedMemberId.isBlank()) {
-            return orderQueryService.getDetail(orderId);
-        }
-        return orderQueryService.getDetailForMember(orderId, authenticatedMemberId);
+        return orderQueryService.getDetailForMember(orderId, TrustedCustomerIdentity.require(authenticatedMemberId));
     }
 }
 

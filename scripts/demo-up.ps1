@@ -5,7 +5,7 @@ $RootDir = Resolve-Path (Join-Path $PSScriptRoot "..")
 $ComposeFile = Join-Path $RootDir "infra/demo/docker-compose.yml"
 $EnvFile = Join-Path $RootDir "infra/demo/.env"
 $EnvExample = Join-Path $RootDir "infra/demo/.env.example"
-$ExpectedEnvRev = "2026-05-15-security-v1"
+$ExpectedEnvRev = "2026-06-17-gateway-boundary-v1"
 
 $RefreshEnv = $false
 $SkipPortCheck = $false
@@ -80,13 +80,6 @@ function Test-DemoPorts {
     @{ Name = "KAFKA_UI_PORT"; Default = 29090; Service = "kafka-ui"; Target = 8080 },
     @{ Name = "KEYCLOAK_HOST_PORT"; Default = 28088; Service = "keycloak"; Target = 8080 },
     @{ Name = "GATEWAY_HOST_PORT"; Default = 28080; Service = "gateway"; Target = 18080 },
-    @{ Name = "CATALOG_HOST_PORT"; Default = 28081; Service = "catalog-service"; Target = 18081 },
-    @{ Name = "INVENTORY_HOST_PORT"; Default = 28082; Service = "inventory-service"; Target = 18082 },
-    @{ Name = "ORDER_HOST_PORT"; Default = 28083; Service = "order-service"; Target = 18083 },
-    @{ Name = "PAYMENT_HOST_PORT"; Default = 28084; Service = "payment-service"; Target = 18084 },
-    @{ Name = "PROMOTION_HOST_PORT"; Default = 28085; Service = "promotion-service"; Target = 18085 },
-    @{ Name = "FULFILLMENT_HOST_PORT"; Default = 28086; Service = "fulfillment-service"; Target = 18086 },
-    @{ Name = "READ_MODEL_HOST_PORT"; Default = 28087; Service = "read-model-service"; Target = 18087 },
     @{ Name = "CUSTOMER_APP_HOST_PORT"; Default = 15173; Service = "customer-app"; Target = 8080 },
     @{ Name = "ADMIN_APP_HOST_PORT"; Default = 15174; Service = "admin-app"; Target = 8080 }
   )

@@ -46,7 +46,7 @@ function headerValue(headers: HeadersInit | undefined, name: string): string {
 function isAdminApiCall(input: RequestInfo | URL): boolean {
   const request = new URL(String(input), 'http://localhost:5173');
   const pathname = request.pathname;
-  return pathname.startsWith('/orders') || pathname.startsWith('/api') || pathname.startsWith('/inventory') || pathname.startsWith('/catalog');
+  return pathname.startsWith('/api/admin') || pathname.startsWith('/api/read-model');
 }
 
 const TEST_ACCESS_TOKEN = 'test-admin-token';

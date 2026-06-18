@@ -82,13 +82,7 @@ function Test-ActuatorEndpoints($Name, $BaseUrl) {
 }
 
 $GatewayPort = Get-PortValue "GATEWAY_HOST_PORT" "28080"
-$CatalogPort = Get-PortValue "CATALOG_HOST_PORT" "28081"
-$InventoryPort = Get-PortValue "INVENTORY_HOST_PORT" "28082"
-$OrderPort = Get-PortValue "ORDER_HOST_PORT" "28083"
-$PaymentPort = Get-PortValue "PAYMENT_HOST_PORT" "28084"
-$PromotionPort = Get-PortValue "PROMOTION_HOST_PORT" "28085"
-$FulfillmentPort = Get-PortValue "FULFILLMENT_HOST_PORT" "28086"
-$ReadModelPort = Get-PortValue "READ_MODEL_HOST_PORT" "28087"
+$GatewayBaseUrl = "http://localhost:$GatewayPort"
 $CustomerAppPort = Get-PortValue "CUSTOMER_APP_HOST_PORT" "15173"
 $AdminAppPort = Get-PortValue "ADMIN_APP_HOST_PORT" "15174"
 $KeycloakPort = Get-PortValue "KEYCLOAK_HOST_PORT" "28088"
@@ -156,20 +150,11 @@ function Invoke-LocalE2E {
   exit 1
 }
 
-Test-ActuatorEndpoints "gateway" "http://localhost:$GatewayPort"
-Test-ActuatorEndpoints "catalog" "http://localhost:$CatalogPort"
-Test-ActuatorEndpoints "inventory" "http://localhost:$InventoryPort"
-Test-ActuatorEndpoints "order" "http://localhost:$OrderPort"
-Test-ActuatorEndpoints "payment" "http://localhost:$PaymentPort"
-Test-ActuatorEndpoints "promotion" "http://localhost:$PromotionPort"
-Test-ActuatorEndpoints "fulfillment" "http://localhost:$FulfillmentPort"
-Test-ActuatorEndpoints "read-model" "http://localhost:$ReadModelPort"
+Test-ActuatorEndpoints "gateway" $GatewayBaseUrl
 Test-Url "customer-app" "http://localhost:$CustomerAppPort/"
 Test-Url "admin-app" "http://localhost:$AdminAppPort/"
-Test-Url "catalog-products" "http://localhost:$CatalogPort/api/products?status=ON_SALE"
-Test-Url "inventory-stocks" "http://localhost:$InventoryPort/api/stocks"
-Test-Url "gateway-products" "http://localhost:$GatewayPort/api/products?status=ON_SALE"
-Test-Url "gateway-stocks" "http://localhost:$GatewayPort/api/stocks"
+Test-Url "gateway-products" "$GatewayBaseUrl/api/products?status=ON_SALE"
+Test-Url "gateway-stocks" "$GatewayBaseUrl/api/stocks"
 
 Wait-KeycloakReady $KeycloakPort
 
@@ -190,16 +175,12 @@ if (-not $AdminBearerToken -or -not $CustomerBearerToken) {
   exit 1
 }
 
-Test-Url "gateway-read-model" "http://localhost:$GatewayPort/api/read-model/admin/orders?page=0&size=1" @{Authorization = "Bearer $AdminBearerToken"}
+Test-Url "gateway-read-model" "$GatewayBaseUrl/api/read-model/admin/orders?page=0&size=1" @{Authorization = "Bearer $AdminBearerToken"}
 
 Invoke-LocalE2E demo-order-flow `
-  --catalog-url "http://localhost:$CatalogPort" `
-  --inventory-url "http://localhost:$InventoryPort" `
-  --order-url "http://localhost:$OrderPort" `
-  --order-api-url "http://localhost:$GatewayPort" `
-  --outbox-api-url "http://localhost:$GatewayPort" `
-  --payment-url "http://localhost:$PaymentPort" `
-  --promotion-url "http://localhost:$PromotionPort" `
+  --public-api-url $GatewayBaseUrl `
+  --admin-api-url $GatewayBaseUrl `
+  --order-api-url $GatewayBaseUrl `
   --admin-bearer-token "$AdminBearerToken" `
   --customer-bearer-token "$CustomerBearerToken" `
   --relay-mode automatic `
@@ -215,13 +196,9 @@ if ($LASTEXITCODE -ne 0) {
 
 if (-not $SkipBurst) {
   Invoke-LocalE2E burst-idempotency `
-    --catalog-url "http://localhost:$CatalogPort" `
-    --inventory-url "http://localhost:$InventoryPort" `
-    --order-url "http://localhost:$OrderPort" `
-    --order-api-url "http://localhost:$GatewayPort" `
-    --outbox-api-url "http://localhost:$GatewayPort" `
-    --payment-url "http://localhost:$PaymentPort" `
-    --promotion-url "http://localhost:$PromotionPort" `
+    --public-api-url $GatewayBaseUrl `
+    --admin-api-url $GatewayBaseUrl `
+    --order-api-url $GatewayBaseUrl `
     --admin-bearer-token "$AdminBearerToken" `
     --customer-bearer-token "$CustomerBearerToken" `
     --relay-mode automatic `
@@ -244,13 +221,9 @@ if ($KafkaOutage) {
     --compose-file $ComposeFile `
     --env-file $EnvFile `
     --kafka-service kafka `
-    --catalog-url "http://localhost:$CatalogPort" `
-    --inventory-url "http://localhost:$InventoryPort" `
-    --order-url "http://localhost:$OrderPort" `
-    --order-api-url "http://localhost:$GatewayPort" `
-    --outbox-api-url "http://localhost:$GatewayPort" `
-    --payment-url "http://localhost:$PaymentPort" `
-    --promotion-url "http://localhost:$PromotionPort" `
+    --public-api-url $GatewayBaseUrl `
+    --admin-api-url $GatewayBaseUrl `
+    --order-api-url $GatewayBaseUrl `
     --admin-bearer-token "$AdminBearerToken" `
     --customer-bearer-token "$CustomerBearerToken" `
     --relay-mode automatic `

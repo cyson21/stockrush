@@ -124,20 +124,13 @@ check_actuator_endpoints() {
   check_url "$name-metrics" "$base_url/actuator/metrics"
 }
 
-check_actuator_endpoints "gateway" "http://localhost:${GATEWAY_HOST_PORT:-28080}"
-check_actuator_endpoints "catalog" "http://localhost:${CATALOG_HOST_PORT:-28081}"
-check_actuator_endpoints "inventory" "http://localhost:${INVENTORY_HOST_PORT:-28082}"
-check_actuator_endpoints "order" "http://localhost:${ORDER_HOST_PORT:-28083}"
-check_actuator_endpoints "payment" "http://localhost:${PAYMENT_HOST_PORT:-28084}"
-check_actuator_endpoints "promotion" "http://localhost:${PROMOTION_HOST_PORT:-28085}"
-check_actuator_endpoints "fulfillment" "http://localhost:${FULFILLMENT_HOST_PORT:-28086}"
-check_actuator_endpoints "read-model" "http://localhost:${READ_MODEL_HOST_PORT:-28087}"
+GATEWAY_BASE_URL="http://localhost:${GATEWAY_HOST_PORT:-28080}"
+
+check_actuator_endpoints "gateway" "$GATEWAY_BASE_URL"
 check_url "customer-app" "http://localhost:${CUSTOMER_APP_HOST_PORT:-15173}/"
 check_url "admin-app" "http://localhost:${ADMIN_APP_HOST_PORT:-15174}/"
-check_url "catalog-products" "http://localhost:${CATALOG_HOST_PORT:-28081}/api/products?status=ON_SALE"
-check_url "inventory-stocks" "http://localhost:${INVENTORY_HOST_PORT:-28082}/api/stocks"
-check_url "gateway-products" "http://localhost:${GATEWAY_HOST_PORT:-28080}/api/products?status=ON_SALE"
-check_url "gateway-stocks" "http://localhost:${GATEWAY_HOST_PORT:-28080}/api/stocks"
+check_url "gateway-products" "$GATEWAY_BASE_URL/api/products?status=ON_SALE"
+check_url "gateway-stocks" "$GATEWAY_BASE_URL/api/stocks"
 
 KEYCLOAK_HOST_PORT="${KEYCLOAK_HOST_PORT:-28088}"
 KEYCLOAK_SMOKE_CLIENT_ID="${KEYCLOAK_SMOKE_CLIENT_ID:-stockrush-demo-smoke}"
@@ -153,7 +146,7 @@ CUSTOMER_BEARER_TOKEN="$(get_keycloak_token "$KEYCLOAK_HOST_PORT" "$KEYCLOAK_SMO
 
 printf '[ok] obtained admin/customer smoke tokens\n'
 
-check_url "gateway-read-model" "http://localhost:${GATEWAY_HOST_PORT:-28080}/api/read-model/admin/orders?page=0&size=1" "Authorization: Bearer $ADMIN_BEARER_TOKEN"
+check_url "gateway-read-model" "$GATEWAY_BASE_URL/api/read-model/admin/orders?page=0&size=1" "Authorization: Bearer $ADMIN_BEARER_TOKEN"
 
 if [[ -z "$CUSTOMER_BEARER_TOKEN" ]]; then
   printf '[fail] customer bearer token is empty\n' >&2
@@ -161,13 +154,9 @@ if [[ -z "$CUSTOMER_BEARER_TOKEN" ]]; then
 fi
 
 "$ROOT_DIR/tools/local-e2e/local-e2e" demo-order-flow \
-  --catalog-url "http://localhost:${CATALOG_HOST_PORT:-28081}" \
-  --inventory-url "http://localhost:${INVENTORY_HOST_PORT:-28082}" \
-  --order-url "http://localhost:${ORDER_HOST_PORT:-28083}" \
-  --order-api-url "http://localhost:${GATEWAY_HOST_PORT:-28080}" \
-  --outbox-api-url "http://localhost:${GATEWAY_HOST_PORT:-28080}" \
-  --payment-url "http://localhost:${PAYMENT_HOST_PORT:-28084}" \
-  --promotion-url "http://localhost:${PROMOTION_HOST_PORT:-28085}" \
+  --public-api-url "$GATEWAY_BASE_URL" \
+  --admin-api-url "$GATEWAY_BASE_URL" \
+  --order-api-url "$GATEWAY_BASE_URL" \
   --admin-bearer-token "$ADMIN_BEARER_TOKEN" \
   --customer-bearer-token "$CUSTOMER_BEARER_TOKEN" \
   --relay-mode automatic \
@@ -179,13 +168,9 @@ fi
 
 if [[ "$skip_burst" != true ]]; then
   "$ROOT_DIR/tools/local-e2e/local-e2e" burst-idempotency \
-    --catalog-url "http://localhost:${CATALOG_HOST_PORT:-28081}" \
-    --inventory-url "http://localhost:${INVENTORY_HOST_PORT:-28082}" \
-    --order-url "http://localhost:${ORDER_HOST_PORT:-28083}" \
-    --order-api-url "http://localhost:${GATEWAY_HOST_PORT:-28080}" \
-    --outbox-api-url "http://localhost:${GATEWAY_HOST_PORT:-28080}" \
-    --payment-url "http://localhost:${PAYMENT_HOST_PORT:-28084}" \
-    --promotion-url "http://localhost:${PROMOTION_HOST_PORT:-28085}" \
+    --public-api-url "$GATEWAY_BASE_URL" \
+    --admin-api-url "$GATEWAY_BASE_URL" \
+    --order-api-url "$GATEWAY_BASE_URL" \
     --admin-bearer-token "$ADMIN_BEARER_TOKEN" \
     --customer-bearer-token "$CUSTOMER_BEARER_TOKEN" \
     --relay-mode automatic \
@@ -204,13 +189,9 @@ if [[ "$kafka_outage" == true ]]; then
     --compose-file "$COMPOSE_FILE" \
     --env-file "$ENV_FILE" \
     --kafka-service kafka \
-    --catalog-url "http://localhost:${CATALOG_HOST_PORT:-28081}" \
-    --inventory-url "http://localhost:${INVENTORY_HOST_PORT:-28082}" \
-    --order-url "http://localhost:${ORDER_HOST_PORT:-28083}" \
-    --order-api-url "http://localhost:${GATEWAY_HOST_PORT:-28080}" \
-    --outbox-api-url "http://localhost:${GATEWAY_HOST_PORT:-28080}" \
-    --payment-url "http://localhost:${PAYMENT_HOST_PORT:-28084}" \
-    --promotion-url "http://localhost:${PROMOTION_HOST_PORT:-28085}" \
+    --public-api-url "$GATEWAY_BASE_URL" \
+    --admin-api-url "$GATEWAY_BASE_URL" \
+    --order-api-url "$GATEWAY_BASE_URL" \
     --admin-bearer-token "$ADMIN_BEARER_TOKEN" \
     --customer-bearer-token "$CUSTOMER_BEARER_TOKEN" \
     --relay-mode automatic \

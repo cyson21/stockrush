@@ -8,6 +8,16 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
 
+INTERNAL_BACKEND_SERVICES = [
+    "catalog-service",
+    "inventory-service",
+    "order-service",
+    "payment-service",
+    "promotion-service",
+    "fulfillment-service",
+    "read-model-service",
+]
+
 
 class DemoRuntimeArtifactsTest(unittest.TestCase):
     def test_demo_runtime_files_are_present(self) -> None:
@@ -93,7 +103,15 @@ class DemoRuntimeArtifactsTest(unittest.TestCase):
                 self.assertIn("infra/demo/docker-compose.yml", powershell_script)
                 self.assertIn("infra/demo/.env.example", powershell_script)
 
-    def test_demo_uses_separate_host_ports_and_preflight(self) -> None:
+    def service_block(self, compose: str, service_name: str) -> str:
+        marker = f"  {service_name}:"
+        start = compose.index(marker)
+        next_service = compose.find("\n  ", start + len(marker))
+        while next_service != -1 and compose[next_service + 3:next_service + 4] == " ":
+            next_service = compose.find("\n  ", next_service + 1)
+        return compose[start:] if next_service == -1 else compose[start:next_service]
+
+    def test_demo_uses_gateway_and_app_host_ports_with_preflight(self) -> None:
         env_template = (ROOT / "infra/demo/.env.example").read_text(encoding="utf-8")
         compose = (ROOT / "infra/demo/docker-compose.yml").read_text(encoding="utf-8")
         shell_up = (ROOT / "scripts/demo-up.sh").read_text(encoding="utf-8")
@@ -106,21 +124,25 @@ class DemoRuntimeArtifactsTest(unittest.TestCase):
             "KAFKA_UI_PORT=29090",
             "KEYCLOAK_HOST_PORT=28088",
             "GATEWAY_HOST_PORT=28080",
-            "CATALOG_HOST_PORT=28081",
-            "INVENTORY_HOST_PORT=28082",
-            "ORDER_HOST_PORT=28083",
-            "PAYMENT_HOST_PORT=28084",
-            "PROMOTION_HOST_PORT=28085",
-            "FULFILLMENT_HOST_PORT=28086",
-            "READ_MODEL_HOST_PORT=28087",
             "CUSTOMER_APP_HOST_PORT=15173",
             "ADMIN_APP_HOST_PORT=15174",
         ]
 
-        self.assertIn("DEMO_ENV_REV=2026-05-15-security-v1", env_template)
+        self.assertIn("DEMO_ENV_REV=2026-06-17-gateway-boundary-v1", env_template)
         for port_line in expected_ports:
             with self.subTest(port=port_line):
                 self.assertIn(port_line, env_template)
+        for removed_port_name in [
+            "CATALOG_HOST_PORT",
+            "INVENTORY_HOST_PORT",
+            "ORDER_HOST_PORT",
+            "PAYMENT_HOST_PORT",
+            "PROMOTION_HOST_PORT",
+            "FULFILLMENT_HOST_PORT",
+            "READ_MODEL_HOST_PORT",
+        ]:
+            with self.subTest(removed_port=removed_port_name):
+                self.assertNotIn(removed_port_name, env_template)
 
         expected_image_env = [
             "STOCKRUSH_IMAGE_REGISTRY=ghcr.io",
@@ -143,8 +165,71 @@ class DemoRuntimeArtifactsTest(unittest.TestCase):
         self.assertIn("--refresh-env", powershell_up)
         self.assertIn("--skip-port-check", powershell_up)
         self.assertIn("Test-DemoPorts", powershell_up)
-        self.assertIn('EXPECTED_ENV_REV="2026-05-15-security-v1"', shell_up)
-        self.assertIn('$ExpectedEnvRev = "2026-05-15-security-v1"', powershell_up)
+        self.assertIn('EXPECTED_ENV_REV="2026-06-17-gateway-boundary-v1"', shell_up)
+        self.assertIn('$ExpectedEnvRev = "2026-06-17-gateway-boundary-v1"', powershell_up)
+
+        for removed_port_name in [
+            "CATALOG_HOST_PORT",
+            "INVENTORY_HOST_PORT",
+            "ORDER_HOST_PORT",
+            "PAYMENT_HOST_PORT",
+            "PROMOTION_HOST_PORT",
+            "FULFILLMENT_HOST_PORT",
+            "READ_MODEL_HOST_PORT",
+        ]:
+            with self.subTest(script_removed_port=removed_port_name):
+                self.assertNotIn(removed_port_name, shell_up)
+                self.assertNotIn(removed_port_name, powershell_up)
+
+    def test_demo_compose_does_not_publish_internal_backend_service_ports(self) -> None:
+        compose = (ROOT / "infra/demo/docker-compose.yml").read_text(encoding="utf-8")
+
+        for service_name in INTERNAL_BACKEND_SERVICES:
+            with self.subTest(service=service_name):
+                block = self.service_block(compose, service_name)
+                self.assertNotIn("\n    ports:", block)
+                self.assertIn("\n    healthcheck:", block)
+
+        for published_port in [
+            "28081:18081",
+            "28082:18082",
+            "28083:18083",
+            "28084:18084",
+            "28085:18085",
+            "28086:18086",
+            "28087:18087",
+        ]:
+            with self.subTest(port=published_port):
+                self.assertNotIn(published_port, compose)
+
+    def test_nginx_proxies_gateway_api_paths_only(self) -> None:
+        nginx = (ROOT / "apps/nginx/default.conf").read_text(encoding="utf-8")
+
+        for removed_location in [
+            "location /catalog/",
+            "location /inventory/",
+            "location /orders/",
+            "location /payment/",
+            "location /promotion/",
+        ]:
+            with self.subTest(removed_location=removed_location):
+                self.assertNotIn(removed_location, nginx)
+
+        for gateway_location in [
+            "location /api/products",
+            "location /api/stocks",
+            "location /api/coupons",
+            "location /api/orders",
+            "location /api/admin",
+            "location /api/read-model",
+        ]:
+            with self.subTest(gateway_location=gateway_location):
+                self.assertIn(gateway_location, nginx)
+        self.assertNotIn("proxy_pass http://catalog-service:18081", nginx)
+        self.assertNotIn("proxy_pass http://inventory-service:18082", nginx)
+        self.assertNotIn("proxy_pass http://order-service:18083", nginx)
+        self.assertNotIn("proxy_pass http://payment-service:18084", nginx)
+        self.assertNotIn("proxy_pass http://promotion-service:18085", nginx)
 
     def test_demo_image_override_targets_ghcr_images(self) -> None:
         image_compose = (ROOT / "infra/demo/docker-compose.images.yml").read_text(encoding="utf-8")
@@ -196,7 +281,9 @@ class DemoRuntimeArtifactsTest(unittest.TestCase):
         self.assertIn("kafka-outage-recovery", shell_script)
         self.assertIn("pause kafka", shell_script)
         self.assertIn("unpause kafka", shell_script)
-        self.assertIn("--promotion-url", shell_script)
+        self.assertIn("--public-api-url", shell_script)
+        self.assertIn("--admin-api-url", shell_script)
+        self.assertIn("--order-api-url", shell_script)
         self.assertIn("get_keycloak_token", shell_script)
         self.assertIn("wait_for_keycloak_ready", shell_script)
         self.assertIn("--admin-bearer-token", shell_script)
@@ -210,9 +297,19 @@ class DemoRuntimeArtifactsTest(unittest.TestCase):
         self.assertIn("--stability-waves 2", shell_script)
         self.assertIn("--max-attempts 30", shell_script)
         self.assertIn("--wait-seconds 1", shell_script)
-        self.assertIn("PROMOTION_HOST_PORT", shell_script)
         self.assertIn("/actuator/info", shell_script)
         self.assertIn("/actuator/metrics", shell_script)
+        self.assertNotIn("--catalog-url", shell_script)
+        self.assertNotIn("--inventory-url", shell_script)
+        self.assertNotIn("--payment-url", shell_script)
+        self.assertNotIn("--promotion-url", shell_script)
+        self.assertNotIn("CATALOG_HOST_PORT", shell_script)
+        self.assertNotIn("INVENTORY_HOST_PORT", shell_script)
+        self.assertNotIn("ORDER_HOST_PORT", shell_script)
+        self.assertNotIn("PAYMENT_HOST_PORT", shell_script)
+        self.assertNotIn("PROMOTION_HOST_PORT", shell_script)
+        self.assertNotIn("FULFILLMENT_HOST_PORT", shell_script)
+        self.assertNotIn("READ_MODEL_HOST_PORT", shell_script)
         self.assertIn("tools/local-e2e/local-e2e", powershell_script)
         self.assertIn("demo-order-flow", powershell_script)
         self.assertIn("burst-idempotency", powershell_script)
@@ -221,7 +318,9 @@ class DemoRuntimeArtifactsTest(unittest.TestCase):
         self.assertIn("kafka-outage-recovery", powershell_script)
         self.assertIn("pause kafka", powershell_script)
         self.assertIn("unpause kafka", powershell_script)
-        self.assertIn("--promotion-url", powershell_script)
+        self.assertIn("--public-api-url", powershell_script)
+        self.assertIn("--admin-api-url", powershell_script)
+        self.assertIn("--order-api-url", powershell_script)
         self.assertIn("Get-KeycloakToken", powershell_script)
         self.assertIn("Wait-KeycloakReady", powershell_script)
         self.assertIn("Invoke-LocalE2E", powershell_script)
@@ -238,9 +337,19 @@ class DemoRuntimeArtifactsTest(unittest.TestCase):
         self.assertIn("--stability-waves 2", powershell_script)
         self.assertIn("--max-attempts 30", powershell_script)
         self.assertIn("--wait-seconds 1", powershell_script)
-        self.assertIn("$PromotionPort", powershell_script)
         self.assertIn("/actuator/info", powershell_script)
         self.assertIn("/actuator/metrics", powershell_script)
+        self.assertNotIn("--catalog-url", powershell_script)
+        self.assertNotIn("--inventory-url", powershell_script)
+        self.assertNotIn("--payment-url", powershell_script)
+        self.assertNotIn("--promotion-url", powershell_script)
+        self.assertNotIn("CatalogPort", powershell_script)
+        self.assertNotIn("InventoryPort", powershell_script)
+        self.assertNotIn("OrderPort", powershell_script)
+        self.assertNotIn("PaymentPort", powershell_script)
+        self.assertNotIn("PromotionPort", powershell_script)
+        self.assertNotIn("FulfillmentPort", powershell_script)
+        self.assertNotIn("ReadModelPort", powershell_script)
 
     def test_keycloak_realm_is_demo_scoped_and_port_override_friendly(self) -> None:
         realm = (ROOT / "infra/demo/keycloak/stockrush-realm.json").read_text(encoding="utf-8")

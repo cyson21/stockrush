@@ -27,7 +27,6 @@ Customer Order API는 고객 앱에서 상품과 SKU를 선택한 뒤 주문을 
 
 ```json
 {
-  "memberId": "member-demo",
   "paymentMethod": "CARD",
   "couponCode": "WELCOME10",
   "items": [
@@ -45,7 +44,6 @@ Customer Order API는 고객 앱에서 상품과 SKU를 선택한 뒤 주문을 
 
 | Field | Required | Rule |
 |---|---:|---|
-| `memberId` | yes for legacy direct service calls | Gateway 경유 고객 route에서는 token subject가 우선이며 caller supplied value는 권한 기준으로 사용하지 않음 |
 | `paymentMethod` | no | defaults to `CARD`; blank value is invalid |
 | `couponCode` | no | when present, Order Service requests Promotion coupon quote and stores discounted pricing |
 | `items` | yes | non-empty |
@@ -53,6 +51,8 @@ Customer Order API는 고객 앱에서 상품과 SKU를 선택한 뒤 주문을 
 | `items[].skuId` | yes | non-blank |
 | `items[].quantity` | yes | `>= 1` |
 | `items[].unitPrice` | yes | `> 0` |
+
+Customer identity is not a trusted request-body field. Gateway validates the customer bearer token and forwards the trusted subject to the Order Service. Missing trusted subject is rejected on customer order routes.
 
 ### Payment Methods
 
