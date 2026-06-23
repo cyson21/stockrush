@@ -91,6 +91,7 @@ flowchart LR
 | Gateway 보안 | 인증/권한/소유권 위반을 차단하는지 | `401`, `403`, 고객 주문 소유권 차단 |
 | 모바일 보호 주문 | Android Expo Go 로그인 후 보호 주문이 완료되는지 | `ord_20260515233439_6a5f6b71` 완료 증거 |
 
+대표 증거는 [Test Strategy](docs/test-strategy.md), [Local E2E Runbook](docs/runbooks/local-e2e.md), [Mobile Protected Order Smoke](docs/runbooks/mobile-protected-order-smoke.md)에 정리했습니다.
 
 ## 부하/동시성 검증
 
@@ -106,6 +107,7 @@ flowchart LR
 |---|---|---|---|
 | Outbox vs direct publish | DB 저장 후 Kafka publish 실패 시 이벤트 유실 가능 | 서비스별 Outbox relay와 failed requeue | Kafka outage smoke로 로컬 검증, 운영 HA는 범위 밖 |
 | Gateway 보안 | 서비스별 외부 port 노출 시 인증 우회 가능 | Gateway만 외부 진입점으로 유지 | Architecture Guard와 route smoke |
+| 모바일 보호 주문 | Expo Go 환경에서 보호 API와 OIDC 흐름을 함께 확인해야 함 | Android smoke runbook과 주문 완료 증거 기록 | 기기/환경 의존 smoke는 로컬 검증 기록과 분리 보관 |
 
 ## 화면과 아키텍처
 
@@ -159,6 +161,7 @@ docker compose up -d
 | Kubernetes smoke | `./scripts/kind-preflight.sh --tag latest-demo`, `./scripts/kind-smoke.sh` | 선택형 kind runtime |
 | Secret/AWS guard | `./scripts/check-no-committed-secrets.sh`, `./scripts/check-no-aws-usage.sh` | 공개 레포 안전장치 |
 
+`main` 배지는 `main` 브랜치 CI 상태입니다. 현재 브랜치의 최신 `demo-smoke` 증거는 로컬 실행 로그나 별도 검증 기록이 있을 때만 완료 주장에 포함합니다.
 
 ## 운영/배포
 
