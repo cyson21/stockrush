@@ -136,6 +136,7 @@ flowchart LR
 | Security | Keycloak realm import, Gateway JWT 검증, `ROLE_CUSTOMER`/`ROLE_ADMIN`, 고객 주문 소유권 검사 |
 | CI/CD | GitHub Actions, GHCR image publish, Trivy scan, AWS 사용 차단 스크립트 |
 | Local Runtime | 개발용 인프라 compose, 이식형 데모 compose, 선택형 kind Kubernetes 런타임 |
+| Development Record | Architecture Guard와 공개 검증 산출물 정리 |
 
 ## Verified Scenarios
 
@@ -150,6 +151,7 @@ flowchart LR
 | Gateway 보안 | 인증 없음 `401`, 권한 부족 `403`, 고객 주문 소유권 위반 차단 |
 | 모바일 보호 주문 | Android Expo Go에서 Keycloak 로그인 후 주문 `ord_20260515233439_6a5f6b71`이 `CONFIRMED/COMPLETED` 도달 |
 
+대표 증거는 [Test Strategy](docs/test-strategy.md), [Local E2E Runbook](docs/runbooks/local-e2e.md), [Mobile Protected Order Smoke](docs/runbooks/mobile-protected-order-smoke.md)에 정리했습니다.
 
 ## Run Locally
 
