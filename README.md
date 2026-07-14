@@ -1,251 +1,173 @@
 # StockRush
 
-[![CI](https://github.com/cyson21/stockrush/actions/workflows/ci.yml/badge.svg)](https://github.com/cyson21/stockrush/actions/workflows/ci.yml)
-[![Release Images](https://github.com/cyson21/stockrush/actions/workflows/release-images.yml/badge.svg)](https://github.com/cyson21/stockrush/actions/workflows/release-images.yml)
-![Java 17](https://img.shields.io/badge/Java-17-007396)
-![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.x-6DB33F)
-![Kafka](https://img.shields.io/badge/Kafka-event%20driven-231F20)
-![React](https://img.shields.io/badge/React-web%20apps-61DAFB)
-![Expo](https://img.shields.io/badge/Expo-mobile-000020)
+StockRush는 한정 판매 커머스에서 주문, 재고, 결제, 쿠폰, 출고, 조회 모델을 분리했을 때 발생하는 부분 실패와 상태 수렴을 다루는 Java/Spring 백엔드 프로젝트입니다. 주문 상태와 이벤트 발행 상태를 함께 추적하고, 중복 요청·결제 실패·Kafka 중단을 로컬 시나리오로 재현합니다.
 
-StockRush는 한정 판매 커머스에서 주문, 재고, 결제, 쿠폰, 출고, 조회 모델을 분리했을 때 생기는 상태 수렴과 운영 복구 문제를 다루는 백엔드 중심 프로젝트입니다. 주문은 Kafka, Outbox, Saga, 멱등성 키, 재고 선점, 결제 결과, 관리자 운영 액션을 거쳐 최종 상태로 수렴합니다.
+외부 요청은 Gateway를 통과하며 Order, Inventory, Payment 서비스는 각자 상태 변경과 Outbox 기록을 관리합니다.
 
-## 프로젝트 요약
+## 한눈에 보기
 
 | 항목 | 내용 |
 |---|---|
-| 해결하려는 문제 | 동시 주문, 결제 실패, 지연 결제, Kafka 중단 상황에서도 주문·재고·조회 상태가 일관되게 수렴해야 함 |
-| 주요 기술 | Java 17, Spring Boot, Kafka, Saga, Transactional Outbox, OIDC Gateway, Docker Compose |
-| 주요 기능 | 주문 상태 수렴, 재고 선점, Outbox 복구, Gateway 보안, 운영자 보정 |
-| 확인 방법 | 동일 SKU 동시 주문, 결제 실패·지연, Kafka 중단, Gateway 보안, 모바일 보호 주문 스모크 테스트 |
-| 빠른 실행 | `./scripts/demo-up.sh` → `./scripts/demo-smoke.sh` → `./scripts/demo-down.sh` |
-| 제한 사항 | 로컬 데모와 CI 결과를 구분하며, 운영 규모 성능이나 고가용성 운영 결과로 확대해 설명하지 않음 |
-
-## 주요 내용
-
-| 주제 | 관련 문서와 코드 | 설명 |
-|---|---|---|
-| 주문·재고 수렴 | [대표 시나리오](#대표-시나리오), [로컬 E2E 실행 문서](docs/runbooks/local-e2e.md) | 동시 주문·결제 실패·지연 결제에서 주문과 재고가 최종적으로 어떻게 정리되는지 보여줌 |
-| 전체 데모 | [`demo-up`](scripts/demo-up.sh) → [`demo-smoke`](scripts/demo-smoke.sh) → [`demo-down`](scripts/demo-down.sh) | Docker Compose로 서비스를 시작하고 테스트한 뒤 종료하는 순서 |
-| 설계 선택 | [Outbox 설계](docs/architecture/outbox.md), [보안 구조](docs/architecture/security.md) | 이벤트 발행 실패 복구와 Gateway 단일 진입 구조를 선택한 이유 |
-
-## 주요 코드와 테스트
-
-| 구분 | 코드 또는 기능 | 테스트 또는 실행 방법 |
-|---|---|---|
-| 주문 Saga와 상태 수렴 | [PersistentCreateOrderService](services/order-service/src/main/java/com/stockrush/order/application/PersistentCreateOrderService.java) | [OrderSagaEventHandlerIntegrationTest](services/order-service/src/test/java/com/stockrush/order/application/OrderSagaEventHandlerIntegrationTest.java) |
-| 재고 선점과 Outbox 복구 | [InventoryReservationHandlerIntegrationTest](services/inventory-service/src/test/java/com/stockrush/inventory/application/InventoryReservationHandlerIntegrationTest.java) | [OutboxRelayServiceIntegrationTest](services/order-service/src/test/java/com/stockrush/order/infra/outbox/OutboxRelayServiceIntegrationTest.java), `./scripts/demo-smoke.sh --kafka-outage` |
-| Gateway 단일 진입 | [Architecture Guard](tools/architecture-guard/architecture_guard.py) | `./tools/architecture-guard/architecture-guard check` |
-
-## 실행 환경
-
-| 구분 | 준비 사항 | 확인할 내용 |
-|---|---|---|
-| 기본 데모 | Docker Compose | 주문·재고·결제·조회 흐름과 관리자 보정 스모크 테스트 |
-| 장애 복구 | 기본 데모 실행 후 Kafka 중단 옵션 사용 | Outbox에 대기한 이벤트가 Kafka 복구 후 반영되는지 확인 |
-| Kubernetes 실습 | kind와 컨테이너 이미지 준비 | 로컬 Kubernetes 스모크 테스트이며 운영 고가용성이나 실서비스 성능 테스트는 아님 |
-
-## 구현 결과
-
-| 구현 내용 | 결과 | 확인 방법 |
-|---|---|---|
-| 주문/재고 수렴 | 동일 SKU 주문 6건 중 재고 3개만 완료, oversell 없이 `available=0`, `reserved=0` 수렴 | `./scripts/demo-smoke.sh`, local E2E runner |
-| 이벤트 복구 | Kafka 일시 중단 중 outbox에 대기한 이벤트가 broker 복구 후 최종 상태로 반영 | Kafka outage smoke |
-| 보안 경계 | 고객 주문 소유권 위반과 권한 부족 요청을 Gateway에서 차단 | Gateway security smoke, Architecture Guard |
-| 운영자 보정 | 지연 결제, 쿠폰, Saga, Outbox 상태를 관리자 화면에서 관측/보정 | Admin app tests, demo screenshots |
-
-## 프로젝트 배경
-
-단순 CRUD 커머스가 아니라 주문 생성 이후 재고 예약, 결제 결과, 이벤트 발행, 조회 모델 반영, 운영자 보정이 각각 실패할 수 있는 운영 백엔드 문제에 집중했습니다. 서비스 경계와 복구 흐름을 코드와 시나리오로 확인할 수 있게 하는 것이 목표입니다.
-
-## 주요 설계
-
-| 설계 | 선택 이유 | 구현과 테스트 |
-|---|---|---|
-| Transactional Outbox | DB commit과 Kafka publish 사이의 유실 가능성을 줄이고 재처리 기준을 남기기 위함 | 서비스별 outbox relay, Kafka outage smoke |
-| Saga 기반 주문 상태 | 결제/재고/쿠폰/출고가 모두 독립 실패할 수 있어 단일 트랜잭션보다 단계별 보정이 적합 | Order Saga, 관리자 보정 화면 |
-| Gateway-only 외부 진입 | 내부 서비스 port 노출과 권한 우회를 막기 위함 | `architecture-guard check`, Gateway smoke |
-| schema-per-service | 단일 PostgreSQL 비용으로 서비스별 데이터 소유권과 migration 책임을 드러내기 위함 | Flyway migration, 서비스별 schema |
+| 문제 | 분리된 주문·재고·결제 서비스에서 중복 요청, 부분 실패, 이벤트 발행 지연이 발생해도 최종 상태가 모순 없이 정리되어야 함 |
+| 핵심 구현 | Saga 상태 전이, Transactional Outbox, 소비자 멱등 처리, 재고 선점, Gateway 인증·권한 경계 |
+| 기술 | Java 17, Spring Boot 4.0.6, PostgreSQL, Kafka, Redis, Keycloak, Docker Compose |
+| 검증 | 서비스 통합 테스트, Architecture Guard, 전체 데모 스모크, 동일 SKU 동시 주문, Kafka pause/unpause 복구 시나리오 |
+| 담당 | 개인 프로젝트로 도메인 모델, 백엔드 서비스, Gateway, 로컬 인프라, 테스트·복구 도구를 직접 설계하고 구현 |
+| 범위 | 실제 결제·배송 연동과 운영 환경 부하·장애 복구는 포함하지 않음 |
 
 ## 아키텍처
 
 ```mermaid
 flowchart LR
-  Client["Customer/Admin/Mobile"] --> Gateway["Gateway\nOIDC/JWT"]
+  Client["Customer / Admin / Mobile"] --> Gateway["Gateway<br/>OIDC / JWT / 역할"]
   Gateway --> Catalog["Catalog"]
-  Gateway --> Inventory["Inventory"]
-  Gateway --> Order["Order\nSaga"]
+  Gateway --> Inventory["Inventory<br/>상태 + Outbox"]
+  Gateway --> Order["Order<br/>Saga + Outbox"]
   Gateway --> Promotion["Promotion"]
-  Gateway --> Fulfillment["Fulfillment"]
   Gateway --> ReadModel["Read Model"]
+
   Order <--> Kafka["Kafka"]
   Inventory <--> Kafka
+  Payment["Payment<br/>상태 + Outbox"] <--> Kafka
   Promotion <--> Kafka
-  Fulfillment <--> Kafka
+  Fulfillment["Fulfillment"] <--> Kafka
   ReadModel <--> Kafka
-  Order --> Postgres[("PostgreSQL\nschema per service")]
+
+  Catalog --> Postgres[("PostgreSQL<br/>서비스별 스키마")]
   Inventory --> Postgres
+  Order --> Postgres
+  Payment --> Postgres
   Promotion --> Postgres
+  Fulfillment --> Postgres
+  ReadModel --> Postgres
 ```
 
-서비스는 하나의 PostgreSQL 인스턴스를 공유하되 schema를 분리합니다. 사이드 프로젝트 비용은 낮추면서도 서비스별 데이터 소유권, 마이그레이션, 이벤트 책임을 드러내기 위한 선택입니다.
+데모 환경은 하나의 PostgreSQL 인스턴스를 사용하되 서비스별 스키마와 Flyway 마이그레이션을 분리합니다. 고객·관리자 HTTP 경로는 Gateway로 모으고, 서비스 간 상태 변화는 Kafka 이벤트와 서비스별 저장소를 통해 전달합니다. 상세 경계는 [Security Architecture](docs/architecture/security.md)와 [Outbox and Consumer Idempotency](docs/architecture/outbox.md)에 정리했습니다.
 
-## 구현 범위
+## 핵심 설계 판단
 
-| 영역 | 구현 내용 | 확인 방법 |
-|---|---|---|
-| Backend | Gateway, Catalog, Inventory, Order, Payment, Promotion, Fulfillment, Read Model | 서비스별 테스트, local E2E runner |
-| Messaging | Kafka command/event topic, 서비스별 Outbox relay, retry, failed requeue, consumer 중복 처리 | `docs/architecture/outbox.md`, `tools/local-e2e/` |
-| Persistence | PostgreSQL schema 분리, Flyway migration, 서비스별 감사 row | service test, migration scripts |
-| Security | Keycloak OIDC/PKCE, Gateway JWT 검증, 역할 기반 접근, 고객 주문 소유권 검사 | Gateway smoke, Architecture Guard |
-| Web/Mobile | 고객 웹, 관리자 웹, Expo 모바일 주문 흐름 | Vitest, typecheck, Android Expo Go smoke |
-| Operations | 관리자 주문/Saga/Outbox/쿠폰/출고 화면 | demo screenshots, admin app tests |
-| CI/CD | GitHub Actions, GHCR image publish, Trivy scan, AWS 사용 차단 | workflow badges, `scripts/check-no-aws-usage.sh` |
-
-## 대표 시나리오
-
-| 시나리오 | 확인 내용 | 결과 |
-|---|---|---|
-| 정상 주문 | `CARD` 주문이 여러 서비스 이벤트를 거쳐 최종 완료되는지 | `CONFIRMED/COMPLETED` 수렴 |
-| 결제 실패 | 결제 실패 후 예약 재고가 복구되는지 | `CANCELLED/FAILED`, 재고 복구 |
-| 지연 결제 | `PAYMENT_DELAYED` 상태를 운영자가 취소할 수 있는지 | 관리자 취소 후 복구 |
-| 동일 SKU 동시 주문 | 초기 재고 3개에 주문 6건이 몰릴 때 oversell이 없는지 | 3건 완료/3건 취소, `available=0`, `reserved=0` |
-| 대량 요청 + 멱등성 replay | replay 요청이 주문을 중복 생성하지 않는지 | 요청 60회에서 주문 30건, outbox 잔여분 0 |
-| Kafka 일시 중단 | broker pause 중 이벤트가 유실되지 않는지 | outbox 대기 후 unpause 수렴 |
-| Gateway 보안 | 인증/권한/소유권 위반을 차단하는지 | `401`, `403`, 고객 주문 소유권 차단 |
-| 모바일 보호 주문 | Android Expo Go 로그인 후 보호 주문이 완료되는지 | 완료 주문 `ord_20260515233439_6a5f6b71` 기록 |
-
-자세한 테스트 방법은 [Test Strategy](docs/test-strategy.md), [Local E2E Runbook](docs/runbooks/local-e2e.md), [Mobile Protected Order Smoke](docs/runbooks/mobile-protected-order-smoke.md)에 정리했습니다.
-
-## 부하 및 동시성 테스트
-
-| 테스트 항목 | 방법 | 결과 | 확인 방법 |
+| 판단 | 적용 방식 | 구현 근거 | 테스트 근거 |
 |---|---|---|---|
-| 동일 SKU 동시 주문 | local E2E runner로 재고 3개에 주문 6건 집중 | 3건 완료/3건 취소, oversell 없음 | `demo-smoke` concurrent scenario |
-| 멱등성 replay | 같은 idempotency key 기반 요청 반복 | 요청 60회에서 주문 30건만 생성 | local E2E runner |
-| Kafka outage | broker pause/unpause 중 outbox 대기와 재발행 확인 | 이벤트 유실 없이 read model 수렴 | `--kafka-outage` smoke |
+| DB 반영과 이벤트 발행 사이의 간극을 Outbox로 관리 | 주문 저장과 Outbox 레코드를 같은 트랜잭션에 기록하고 릴레이가 `PENDING` 이벤트를 선점해 발행 | [PersistentCreateOrderService](services/order-service/src/main/java/com/stockrush/order/application/PersistentCreateOrderService.java), [OutboxRelayService](services/order-service/src/main/java/com/stockrush/order/infra/outbox/OutboxRelayService.java) | [PersistentCreateOrderServiceIntegrationTest](services/order-service/src/test/java/com/stockrush/order/infra/persistence/PersistentCreateOrderServiceIntegrationTest.java), [OutboxRelayServiceIntegrationTest](services/order-service/src/test/java/com/stockrush/order/infra/outbox/OutboxRelayServiceIntegrationTest.java) |
+| 재고 변경과 결과 이벤트를 한 트랜잭션 경계에서 처리 | 예약·해제 결과와 Inventory Outbox를 함께 기록 | [InventoryReservationHandler](services/inventory-service/src/main/java/com/stockrush/inventory/application/InventoryReservationHandler.java) | [InventoryReservationHandlerIntegrationTest](services/inventory-service/src/test/java/com/stockrush/inventory/application/InventoryReservationHandlerIntegrationTest.java) |
+| 결제 결과를 주문 상태와 분리 | 승인 성공·실패·지연·취소를 Payment 이벤트로 기록하고 Outbox로 전달 | [PaymentAuthorizationHandler](services/payment-service/src/main/java/com/stockrush/payment/application/PaymentAuthorizationHandler.java) | [PaymentAuthorizationHandlerIntegrationTest](services/payment-service/src/test/java/com/stockrush/payment/application/PaymentAuthorizationHandlerIntegrationTest.java), [PaymentOutboxRelayServiceIntegrationTest](services/payment-service/src/test/java/com/stockrush/payment/infra/outbox/PaymentOutboxRelayServiceIntegrationTest.java) |
+| 외부 진입점을 Gateway로 제한 | JWT 사용자 식별자와 역할을 검증하고 내부 서비스로 신뢰 헤더·상관관계 ID를 전달 | [OrderGatewayController](services/gateway/src/main/java/com/stockrush/gateway/api/OrderGatewayController.java), [GatewayServiceProxy](services/gateway/src/main/java/com/stockrush/gateway/api/GatewayServiceProxy.java) | [OrderGatewayControllerIntegrationTest](services/gateway/src/test/java/com/stockrush/gateway/api/OrderGatewayControllerIntegrationTest.java), [Architecture Guard tests](tools/architecture-guard/tests/test_architecture_guard.py) |
+| 로컬 관리자 복구 경로를 API로 명시 | Order·Inventory·Payment Outbox 조회, 재시도, 실패 레코드 재등록 요청을 Gateway로 라우팅 | [AdminOutboxGatewayController](services/gateway/src/main/java/com/stockrush/gateway/api/AdminOutboxGatewayController.java) | [OrderGatewayControllerIntegrationTest](services/gateway/src/test/java/com/stockrush/gateway/api/OrderGatewayControllerIntegrationTest.java), [OutboxAdminControllerIntegrationTest](services/order-service/src/test/java/com/stockrush/order/api/OutboxAdminControllerIntegrationTest.java) |
 
-## 기술 선택과 문제 해결
+## 검증 시나리오
 
-| 주제 | 고민한 점 | 적용 내용 | 확인 방법과 남은 과제 |
-|---|---|---|---|
-| Outbox와 직접 발행 비교 | DB 저장 후 Kafka 발행에 실패하면 이벤트가 유실될 수 있음 | 서비스별 Outbox relay와 실패 이벤트 재처리 | Kafka 중단 스모크 테스트, 운영 고가용성은 추가 테스트 필요 |
-| Gateway 보안 | 서비스별 외부 port 노출 시 인증 우회 가능 | Gateway만 외부 진입점으로 유지 | Architecture Guard와 route smoke |
-| 모바일 보호 주문 | Expo Go 환경에서 보호 API와 OIDC 흐름을 함께 확인해야 함 | Android 스모크 테스트 문서와 완료 주문 기록 | 기기와 환경에 따라 달라지는 결과는 로컬 테스트 기록으로 따로 보관 |
+| 시나리오 | 보호하는 규칙 | 증거 |
+|---|---|---|
+| 정상·실패·지연 결제 주문 | 결제 결과에 따라 주문 상태와 예약 재고가 최종 상태로 정리됨 | [`demo-order-flow`](tools/local-e2e/local_e2e_runner.py), [OrderSagaEventHandlerIntegrationTest](services/order-service/src/test/java/com/stockrush/order/application/OrderSagaEventHandlerIntegrationTest.java) |
+| 동일 SKU 동시 주문 | 초기 재고를 초과한 주문이 완료되지 않고 예약 수량이 남지 않음 | [`same-sku-concurrency` 실행 절차](docs/runbooks/local-e2e.md#동일-sku-concurrency), [InventoryReservationHandlerIntegrationTest](services/inventory-service/src/test/java/com/stockrush/inventory/application/InventoryReservationHandlerIntegrationTest.java) |
+| 멱등성 key 재전송 | 같은 요청의 재전송이 새 주문을 중복 생성하지 않음 | [`burst-idempotency` 실행 절차](docs/runbooks/local-e2e.md#burst-idempotency), [CreateOrderControllerIntegrationTest](services/order-service/src/test/java/com/stockrush/order/api/CreateOrderControllerIntegrationTest.java) |
+| Kafka 일시 중단 | 브로커 중단 동안 Outbox 대기를 관측하고 재개 후 신규 미처리 이벤트 없이 상태가 수렴함 | [`kafka-outage-recovery` 실행 절차](docs/runbooks/local-e2e.md#kafka-outage-recovery), [demo-smoke.sh](scripts/demo-smoke.sh) |
+| 인증·권한·소유권 위반 | 비인증 요청, 고객 역할의 관리자 경로 접근, 사용자 식별자 위조를 Gateway에서 차단 | [OrderGatewayControllerIntegrationTest](services/gateway/src/test/java/com/stockrush/gateway/api/OrderGatewayControllerIntegrationTest.java), [CreateOrderControllerIntegrationTest](services/order-service/src/test/java/com/stockrush/order/api/CreateOrderControllerIntegrationTest.java) |
+| Outbox 복구 시뮬레이션 | `PENDING`/`FAILED` 레코드의 재시도·재등록과 관리자 작업 추적값을 확인 | [`outbox-recovery` 실행 절차](docs/runbooks/local-e2e.md#outbox-recovery), [OutboxRelayServiceIntegrationTest](services/order-service/src/test/java/com/stockrush/order/infra/outbox/OutboxRelayServiceIntegrationTest.java) |
 
-## 화면과 아키텍처
+[Local E2E Runbook](docs/runbooks/local-e2e.md)에는 실행 명령과 과거 로컬 결과 스냅샷이 함께 있습니다. README의 명령은 현재 재현 경로이고, 실행 문서에 적힌 특정 주문 수·ID·시각은 해당 실행 기록으로만 해석합니다.
 
-![StockRush 아키텍처](docs/assets/architecture/stockrush-architecture.png)
+## 재현 방법
 
-| Customer Web | Admin Dashboard |
-|---|---|
-| ![Customer Web order flow](docs/assets/screenshots/customer-home-desktop.png) | ![Admin dashboard](docs/assets/screenshots/admin-dashboard-desktop.png) |
+### 1. 전체 데모
 
-| Admin Coupons | Admin Outbox |
-|---|---|
-| ![Admin coupon usage](docs/assets/screenshots/admin-coupons-desktop.png) | ![Admin outbox operations](docs/assets/screenshots/admin-outbox-desktop.png) |
+필수 도구는 Docker Engine, Docker Compose v2, `curl`, `python3`입니다. `demo-up`은 `infra/demo/.env`가 없으면 예제 파일을 복사하고 전체 이미지를 `--build`하므로 첫 실행에는 이미지 빌드 시간이 필요합니다.
 
-캡처 재생성 절차는 [Web Visual Smoke Runbook](docs/runbooks/web-visual-smoke.md)에 둡니다.
-
-## 빠른 실행
-
-macOS/Linux:
+기본 호스트 포트는 Gateway `28080`, Keycloak `28088`, Customer Web `15173`, Admin Web `15174`, PostgreSQL `25432`, Redis `26379`, Kafka `29092`, Kafka UI `29090`입니다. 포트는 `infra/demo/.env`에서 변경할 수 있습니다.
 
 ```bash
-./scripts/demo-up.sh
-./scripts/demo-smoke.sh
-./scripts/demo-down.sh
+(
+  set -e
+  trap './scripts/demo-down.sh' EXIT
+  ./scripts/demo-up.sh
+  ./scripts/demo-smoke.sh
+)
 ```
 
-Windows 11 PowerShell:
-
-```powershell
-.\scripts\demo-up.ps1
-.\scripts\demo-smoke.ps1
-.\scripts\demo-down.ps1
-```
-
-개별 서비스를 직접 디버깅할 때는 `infra/local`에서 PostgreSQL, Redis, Kafka, Kafka UI만 띄우고 Spring Boot 서비스와 앱을 host 런타임에서 실행합니다.
+기본 스모크는 상태 확인, 인증 토큰 발급, 정상·실패·지연 결제 흐름, 멱등성 재전송 시나리오를 실행합니다. 장애 주입은 다른 로컬 검증과 동시에 실행하지 않습니다.
 
 ```bash
-cd infra/local
-docker compose up -d
+(
+  set -e
+  trap './scripts/demo-down.sh' EXIT
+  ./scripts/demo-up.sh
+  ./scripts/demo-smoke.sh --kafka-outage
+)
 ```
 
-## 테스트
+### 2. 동일 SKU 동시 주문
 
-| 구분 | 명령 또는 결과 | 설명 |
-|---|---|---|
-| Backend services | `scripts/with-java17.sh mvn test` per service | 서비스 단위 회귀 |
-| Customer/Admin web | `npm --prefix apps/customer-app test -- --run`, `npm --prefix apps/admin-app test -- --run` | UI 단위 회귀 |
-| Mobile app | `npm --prefix apps/mobile-app test`, `npm --prefix apps/mobile-app run typecheck` | Expo 앱 정적 검증 |
-| Architecture Guard | `./tools/architecture-guard/architecture-guard check` | Gateway-only, 내부 port 공개 방지 |
-| Demo smoke | `./scripts/demo-smoke.sh` | Docker Compose full stack |
-| Kafka outage smoke | `./scripts/demo-smoke.sh --kafka-outage` | Outbox 대기/복구 |
-| Kubernetes smoke | `./scripts/kind-preflight.sh --tag latest-demo`, `./scripts/kind-smoke.sh` | 선택형 kind runtime |
-| Secret/AWS guard | `./scripts/check-no-committed-secrets.sh`, `./scripts/check-no-aws-usage.sh` | 공개 레포 안전장치 |
+Java 서비스와 `infra/local` 인프라를 호스트 개발 모드로 기동하고 `STOCKRUSH_ADMIN_BEARER_TOKEN`, `STOCKRUSH_CUSTOMER_BEARER_TOKEN`을 준비한 뒤 실행합니다. 토큰 발급과 서비스 기동 순서는 [Local E2E Runbook](docs/runbooks/local-e2e.md)을 따릅니다.
 
-`main` 배지는 `main` 브랜치의 CI 상태입니다. 현재 브랜치의 `demo-smoke` 결과는 실제 실행 로그가 있을 때만 완료 결과에 포함합니다.
+```bash
+./tools/local-e2e/local-e2e same-sku-concurrency \
+  --orders 6 \
+  --initial-stock 3 \
+  --quantity 1 \
+  --max-attempts 12
+```
 
-## 운영/배포
+검증기는 완료·취소 건수뿐 아니라 최종 `availableQuantity`, `reservedQuantity`, 서비스별 `pendingOutboxDelta`를 함께 확인합니다.
 
-| 항목 | 내용 | 확인 방법 |
-|---|---|---|
-| 로컬 실행 | Docker Compose 기반 demo stack | `scripts/demo-up.sh`, `infra/demo/` |
-| CI/CD | GitHub Actions, GHCR image publish, Trivy scan | workflow badges, release workflow |
-| 보안/비용 가드 | secret scan, AWS 사용 차단 | `check-no-committed-secrets`, `check-no-aws-usage` |
-| Kubernetes 재현 | kind 기반 선택형 smoke | `scripts/kind-preflight.sh`, `scripts/kind-smoke.sh` |
+### 3. 백엔드와 구조 검사
+
+Java 17, Maven 3.9 이상, Docker Compose가 필요합니다. 다수 통합 테스트는 `infra/local`의 PostgreSQL `15432`와 Kafka `19092`를 사용하며, `infra/demo`의 PostgreSQL `25432`로 대체되지 않습니다. 루트에는 `pom.xml`이 없으므로 서비스별로 실행합니다.
+
+```bash
+(
+  set -e
+  trap 'docker compose -f infra/local/docker-compose.yml down' EXIT
+  cp -n infra/local/.env.example infra/local/.env
+  docker compose -f infra/local/docker-compose.yml up -d --wait
+
+  for service in gateway catalog-service inventory-service order-service payment-service promotion-service fulfillment-service read-model-service; do
+    (cd "services/$service" && ../../scripts/with-java17.sh mvn test)
+  done
+
+  ./tools/architecture-guard/architecture-guard check
+)
+```
+
+웹과 모바일 검증에는 Node.js 20.19.4 이상과 npm이 필요합니다. 각 앱은 추적된 lockfile로 의존성을 설치한 뒤 검증합니다.
+
+```bash
+set -e
+npm --prefix apps/customer-app ci
+npm --prefix apps/admin-app ci
+npm --prefix apps/mobile-app ci
+
+npm --prefix apps/customer-app test -- --run
+npm --prefix apps/admin-app test -- --run
+npm --prefix apps/mobile-app test
+npm --prefix apps/mobile-app run typecheck
+```
 
 ## 담당 범위
 
-개인 프로젝트이며, 직접 구현하고 테스트한 범위는 다음과 같습니다.
-
-| 분야 | 구현 내용 | 확인 방법 |
-|---|---|---|
-| 도메인 설계 | 주문/재고/결제/쿠폰/출고 상태 수렴 모델링 | Saga와 Outbox 기반 시나리오 완성 |
-| 보안 경계 | Gateway/OIDC/JWT/소유권 검사 | 인증/권한/소유권 smoke |
-| 운영 복구 | 장애 상황 관측과 수동 보정 | Admin dashboard, outbox/retry runbook |
-
-## 프로젝트 구조
-
-```text
-apps/
-  customer-app/        React customer web app
-  admin-app/           React admin web app
-  mobile-app/          Expo React Native customer app
-services/
-  gateway/             외부 API 진입점과 보안 처리
-  catalog-service/     Product and SKU catalog
-  inventory-service/   Stock reservation and release
-  order-service/       Order state and Saga orchestration
-  payment-service/     Payment authorization simulation
-  promotion-service/   Coupon quote and usage lifecycle
-  fulfillment-service/ OrderConfirmed to fulfillment request
-  read-model-service/  Customer/admin order summaries
-infra/
-  local/               Development infrastructure
-  demo/                Portable demo runtime
-  k8s/                 Local kind runtime
-tools/
-  architecture-guard/  Static project rules
-  local-e2e/           Scenario runner
-```
-
-## 참고 문서
-
-| 순서 | 문서 | 내용 |
-|---|---|---|
-| 1 | [1페이지 요약](docs/portfolio/portfolio-one-pager.md) | 프로젝트 문제와 검증 범위 |
-| 2 | [Visual Story](docs/portfolio/visual-story.md) | Saga, Outbox, 보안, CI/CD 이미지 |
-| 3 | [Test Strategy](docs/test-strategy.md) | 테스트 구성과 시나리오 결과 |
-| 4 | [Local E2E Runbook](docs/runbooks/local-e2e.md) | 로컬 재현 절차 |
-| 5 | [Security Architecture](docs/architecture/security.md) | OIDC, Gateway, route 정책 |
-| 6 | [Outbox and Consumer Idempotency](docs/architecture/outbox.md) | Outbox relay와 중복 처리 기준 |
-| 7 | [Portfolio PDF](docs/portfolio/project-01-stockrush-portfolio.pdf) | 제출용 요약본 |
+| 영역 | 직접 구현한 범위 |
+|---|---|
+| 도메인·데이터 | 주문 Saga 상태, 재고 예약·해제, 결제 결과, 쿠폰·출고·조회 projection, 서비스별 스키마 |
+| 이벤트 처리 | 서비스별 Outbox 릴레이, 실패 상태 기록, 재시도·재등록, 소비자 중복 처리 |
+| 보안 경계 | Keycloak OIDC, Gateway JWT·역할 검사, 고객 사용자 식별자 전달과 소유권 검사 |
+| 검증 도구 | 서비스 통합 테스트, Architecture Guard, Local E2E runner, Docker Compose 스모크 |
+| 화면 | 고객 주문 웹, 관리자 조회·복구 화면, Expo 모바일 보호 주문 흐름 |
 
 ## 제한 사항
 
-- 로컬 Docker 수치를 운영 규모 성능으로 주장하지 않습니다.
-- kind runtime은 로컬 Kubernetes 재현 경로이며, 운영 Kubernetes 배포 보증이 아닙니다.
-- 실제 결제, 실제 배송, 실제 외부 PG 연동은 포함하지 않습니다.
-- Gateway는 외부 진입점이고, 내부 서비스 신뢰는 소유권/역할 재검증 경로로 별도 설명합니다.
+- 동시성·복구 결과는 고정된 로컬 환경의 기능 검증이며 처리량, 지연시간, 운영 SLO를 측정한 결과가 아닙니다.
+- Kafka 장애 시나리오는 단일 broker를 `pause/unpause`한 범위이며 다중 broker 장애나 장기 복구를 검증하지 않습니다.
+- 관리자 기능은 로컬 장애 관측·복구 시뮬레이션입니다. 실제 조직의 승인 절차나 운영 권한 체계를 모델링하지 않습니다.
+- 결제와 배송은 내부 시뮬레이션이며 외부 PG·물류 시스템과 연결하지 않습니다.
+- kind 경로는 로컬 Kubernetes 재현용이며 운영 Kubernetes의 가용성을 보증하지 않습니다.
+
+## 관련 문서
+
+| 문서 | 내용 |
+|---|---|
+| [Local E2E Runbook](docs/runbooks/local-e2e.md) | 개발·데모 실행, 동시 주문, 멱등성, Outbox·Kafka 복구 절차와 기록 |
+| [Test Strategy](docs/test-strategy.md) | 테스트 계층과 시나리오별 검증 범위 |
+| [Outbox and Consumer Idempotency](docs/architecture/outbox.md) | Outbox relay, 실패 상태, 소비자 중복 처리 기준 |
+| [Security Architecture](docs/architecture/security.md) | OIDC, Gateway route, role·소유권 검사 |
+| [Architecture Guard Rules](docs/architecture/architecture-guard-rules.md) | 외부 port와 Gateway 경계를 검사하는 정적 규칙 |
+| [Mobile Protected Order Smoke](docs/runbooks/mobile-protected-order-smoke.md) | Expo Go 환경의 보호 주문 로컬 확인 기록 |
+| [Web Visual Smoke](docs/runbooks/web-visual-smoke.md) | 고객·관리자 화면 캡처와 시각 점검 절차 |
