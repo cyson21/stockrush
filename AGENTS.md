@@ -1,4 +1,4 @@
-<!-- BASE_MIRROR: /Users/chanyang.son/agent-rules/sources/AGENTS_BASE.md v2.54 START -->
+<!-- BASE_MIRROR: /Users/chanyang.son/agent-rules/sources/AGENTS_BASE.md v2.55 START -->
 # AGENTS.md (공통 실행 규칙)
 
 ## Hard Rules
@@ -8,7 +8,7 @@
 - 사용자 명시 요청 없는 **파괴적 명령**과 승인 없는 **네트워크 설치**를 실행하지 않는다.
 - 빌드/생성 산출물은 직접 수정하지 않고 소스에서 수정해 생성 과정으로 반영한다.
 - 검증은 프로젝트 기존 도구와 컨벤션을 따르며 테스트 방식을 혼용하지 않는다.
-- 탐색·비교·검증·테스트 보강·반복 수정처럼 독립 실행 가능한 하위 작업이 하나라도 있으면 Codex 5.3 Spark 서브에이전트 위임을 기본 경로로 삼는다.
+- 탐색·비교·검증·테스트 보강·반복 수정처럼 독립 실행 가능한 하위 작업이 하나라도 있으면 서브에이전트 위임을 기본 경로로 삼는다.
 - 직접 처리 예외는 단일 파일의 짧은 수정, 즉시 판단이 필요한 blocking 작업, 민감·권한·파괴적 명령, 동일 파일 충돌 위험이 큰 작업으로 한정한다.
 - 서브에이전트 위임 시 파일 책임 범위, 금지 범위, 기대 산출물을 명시하고 메인 에이전트는 결과 통합·최종 검증·커밋을 담당한다.
 - 로컬 규칙 수정은 연결된 기준 문서 `sources/projects/**/AGENTS.md` 경로를 확인한 뒤 기준 문서에서만 수행한다.
@@ -35,7 +35,7 @@
 - 같은 의미가 필요하면 문맥에 맞게 `규칙`, `합의`, `기준`, `명세`, `인터페이스` 등으로 대체한다.
 - 병렬 작업에서는 다른 agent 변경을 **되돌리지 않는다**.
 
-<!-- BASE_MIRROR: /Users/chanyang.son/agent-rules/sources/AGENTS_BASE.md v2.54 END -->
+<!-- BASE_MIRROR: /Users/chanyang.son/agent-rules/sources/AGENTS_BASE.md v2.55 END -->
 
 # Project Overrides
 
