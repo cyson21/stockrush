@@ -117,6 +117,26 @@ class OrderGatewayControllerIntegrationTest {
     }
 
     @Test
+    void exposes_smoke_actuator_endpoints_without_bearer_token() throws Exception {
+        for (String path : List.of("/actuator/health", "/actuator/info", "/actuator/metrics")) {
+            HttpRequest request = HttpRequest.newBuilder(gatewayUri(path))
+                .GET()
+                .build();
+
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+
+            assertThat(response.statusCode()).isEqualTo(200);
+        }
+        STUB_CATALOG_SERVICE.assertNoRequests();
+        STUB_ORDER_SERVICE.assertNoRequests();
+        STUB_INVENTORY_SERVICE.assertNoRequests();
+        STUB_PAYMENT_SERVICE.assertNoRequests();
+        STUB_PROMOTION_SERVICE.assertNoRequests();
+        STUB_FULFILLMENT_SERVICE.assertNoRequests();
+        STUB_READ_MODEL_SERVICE.assertNoRequests();
+    }
+
+    @Test
     void rejects_customer_order_routes_without_bearer_token() throws Exception {
         HttpRequest request = HttpRequest.newBuilder(gatewayUri("/api/orders/ord_gateway_001"))
             .header("X-Correlation-Id", "corr-gateway-customer-unauthenticated")

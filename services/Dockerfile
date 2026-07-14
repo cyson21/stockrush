@@ -23,5 +23,4 @@ RUN apt-get update \
 
 COPY --from=build /workspace/app.jar /app/app.jar
 
-EXPOSE ${SERVICE_PORT}
 ENTRYPOINT ["java", "-jar", "/app/app.jar"]

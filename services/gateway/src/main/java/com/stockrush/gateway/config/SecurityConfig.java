@@ -36,7 +36,7 @@ class SecurityConfig {
             .csrf(AbstractHttpConfigurer::disable)
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(authorize -> authorize
-                .requestMatchers("/actuator/health/**", "/internal/ping").permitAll()
+                .requestMatchers("/actuator/health/**", "/actuator/info", "/actuator/metrics", "/internal/ping").permitAll()
                 // 공개 조회/견적 경로만 명시적으로 허용한다.
                 .requestMatchers(HttpMethod.GET, "/api/products/**", "/api/stocks/**").permitAll()
                 .requestMatchers("/api/coupons/**").permitAll()
