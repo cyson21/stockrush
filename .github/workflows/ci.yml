@@ -37,6 +37,11 @@ jobs:
           java-version: "17"
           cache: maven
 
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
       - name: Start local infrastructure
         run: |
           docker compose -f infra/local/docker-compose.yml up -d postgres kafka kafka-init
@@ -61,6 +66,27 @@ jobs:
             (cd "services/${service}" && mvn -q test)
             echo "::endgroup::"
           done
+
+      - name: Test portfolio evidence generator
+        run: python -m unittest discover -s tools/portfolio-evidence/tests -p "test_*.py"
+
+      - name: Generate portfolio evidence report
+        env:
+          PORTFOLIO_EVIDENCE_GIT_COMMIT: ${{ github.sha }}
+        run: |
+          python tools/portfolio-evidence/generate_report.py \
+            --project StockRush \
+            --scope backend-services \
+            --output build/portfolio-evidence/stockrush-backend-surefire.json \
+            services/*/target/surefire-reports
+
+      - name: Upload portfolio evidence report
+        uses: actions/upload-artifact@v4
+        with:
+          name: stockrush-backend-test-evidence
+          path: build/portfolio-evidence/stockrush-backend-surefire.json
+          if-no-files-found: error
+          retention-days: 30
 
       - name: Show infrastructure logs on failure
         if: failure()

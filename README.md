@@ -41,6 +41,23 @@ Kafka  -> Fulfillment / Promotion / Read Model
 | Kafka outage smoke | 단일 broker pause 중 Outbox 대기를 관찰하고 unpause 뒤 신규 미처리 이벤트 없이 수렴하는지 확인 |
 | Architecture Guard | 고객·관리자 외부 port와 Gateway-only 진입 경계를 정적 검사 |
 
+### 재현 가능한 검증 리포트
+
+`tools/portfolio-evidence/generate_report.py`는 Python 표준 라이브러리만 사용해 Maven Surefire XML을 하나의 JSON 리포트로 집계합니다. suite와 JSON 필드 순서를 고정하며, commit은 `PORTFOLIO_EVIDENCE_GIT_COMMIT`, `GITHUB_SHA`, `CI_COMMIT_SHA`, `GIT_COMMIT` 순으로 확인한 뒤 로컬 Git `HEAD`를 사용합니다. `SOURCE_DATE_EPOCH`를 지정하면 생성 시각도 고정할 수 있습니다.
+
+```bash
+python3 -m unittest discover -s tools/portfolio-evidence/tests -p "test_*.py"
+
+(cd services/order-service && mvn -q test)
+SOURCE_DATE_EPOCH=0 python3 tools/portfolio-evidence/generate_report.py \
+  --project StockRush \
+  --scope order-service \
+  --output /tmp/stockrush-order-service-evidence.json \
+  services/order-service/target/surefire-reports
+```
+
+입력이 없거나 `TEST-*.xml`을 찾지 못하거나 XML과 집계 값이 올바르지 않으면 리포트를 쓰지 않고 오류로 종료합니다. CI의 `Backend services` job은 전체 서비스 테스트 뒤 같은 생성기를 실행하고 `stockrush-backend-test-evidence` artifact를 업로드합니다.
+
 ## 대표 코드와 테스트
 
 - 코드: [PersistentCreateOrderService](services/order-service/src/main/java/com/stockrush/order/application/PersistentCreateOrderService.java) - 주문과 Outbox 레코드를 한 트랜잭션에 저장합니다.
