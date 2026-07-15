@@ -47,20 +47,24 @@ Kafka  -> Fulfillment / Promotion / Read Model
 
 ### 재현 가능한 검증 리포트
 
-`tools/portfolio-evidence/generate_report.py`는 Python 표준 라이브러리만 사용해 Maven Surefire XML을 하나의 JSON 리포트로 집계합니다. suite와 JSON 필드 순서를 고정하며, commit은 `PORTFOLIO_EVIDENCE_GIT_COMMIT`, `GITHUB_SHA`, `CI_COMMIT_SHA`, `GIT_COMMIT` 순으로 확인한 뒤 로컬 Git `HEAD`를 사용합니다. `SOURCE_DATE_EPOCH`를 지정하면 생성 시각도 고정할 수 있습니다.
+`tools/portfolio-evidence/generate_report.py`는 Python 표준 라이브러리만 사용해 Maven Surefire XML을 하나의 JSON 리포트로 집계합니다. 스키마 v2는 원본 XML별 SHA-256·파일 크기, source 파일 수, suite 수와 전체 성공 상태를 함께 기록합니다. suite와 JSON 필드 순서를 고정하며, commit은 `PORTFOLIO_EVIDENCE_GIT_COMMIT`, `GITHUB_SHA`, `CI_COMMIT_SHA`, `GIT_COMMIT` 순으로 확인한 뒤 로컬 Git `HEAD`를 사용합니다. 커밋 식별자는 7~64자리 16진수만 허용하고 `SOURCE_DATE_EPOCH`를 지정하면 생성 시각도 고정할 수 있습니다.
 
 ```bash
 python3 -m unittest discover -s tools/portfolio-evidence/tests -p "test_*.py"
 
-(cd services/order-service && mvn -q test)
+(cd services/order-service && mvn --batch-mode --no-transfer-progress test)
 SOURCE_DATE_EPOCH=0 python3 tools/portfolio-evidence/generate_report.py \
   --project StockRush \
   --scope order-service \
+  --require-success \
   --output /tmp/stockrush-order-service-evidence.json \
   services/order-service/target/surefire-reports
+sha256sum /tmp/stockrush-order-service-evidence.json
 ```
 
-입력이 없거나 `TEST-*.xml`을 찾지 못하거나 XML과 집계 값이 올바르지 않으면 리포트를 쓰지 않고 오류로 종료합니다. CI의 `Backend services` job은 전체 서비스 테스트 뒤 같은 생성기를 실행하고 `stockrush-backend-test-evidence` artifact를 업로드합니다.
+입력이 없거나 `TEST-*.xml`을 찾지 못하거나 testcase와 suite 집계가 다르거나 XML이 10 MiB를 넘으면 리포트를 쓰지 않고 오류로 종료합니다. `--require-success`는 failure 또는 error가 포함된 결과의 제출용 생성을 차단합니다. CI의 `Backend services` job은 원본 Surefire XML artifact와 JSON·SHA-256 checksum artifact를 분리해 업로드하므로 집계 결과를 원본과 대조할 수 있습니다.
+
+모바일 의존성은 `npm --prefix apps/mobile-app run verify:lock`으로 보안 보정 버전과 lockfile을 검사합니다. 이 검사는 `shell-quote`, `undici`, `ws`가 검토된 최소 버전 아래로 내려가면 테스트 설치 전에 실패합니다.
 
 ## 대표 코드와 테스트
 

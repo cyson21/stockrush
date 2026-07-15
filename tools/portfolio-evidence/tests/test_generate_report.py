@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from contextlib import redirect_stderr
+import hashlib
 import io
 import json
 import os
@@ -42,12 +43,16 @@ class GenerateReportTest(unittest.TestCase):
     ) -> Path:
         report_path = self.root / relative_path
         report_path.parent.mkdir(parents=True, exist_ok=True)
+        outcomes = ["failure"] * failures + ["error"] * errors + ["skipped"] * skipped
+        outcomes.extend([""] * (tests - len(outcomes)))
+        testcases = "".join(
+            f'<testcase name="test-{index}">{f"<{outcome} />" if outcome else ""}</testcase>'
+            for index, outcome in enumerate(outcomes)
+        )
         report_path.write_text(
-            (
-                f'<testsuite name="{name}" tests="{tests}" failures="{failures}" '
-                f'errors="{errors}" skipped="{skipped}" time="{duration}">'
-                "</testsuite>"
-            ),
+            f'<testsuite name="{name}" tests="{tests}" failures="{failures}" '
+            f'errors="{errors}" skipped="{skipped}" time="{duration}">'
+            f"{testcases}</testsuite>",
             encoding="utf-8",
         )
         return report_path
@@ -104,6 +109,10 @@ class GenerateReportTest(unittest.TestCase):
                 "git_commit",
                 "generated_at_utc",
                 "scope",
+                "status",
+                "source_file_count",
+                "suite_count",
+                "source_files",
                 "totals",
                 "suites",
             ],
@@ -121,6 +130,9 @@ class GenerateReportTest(unittest.TestCase):
                 "duration_seconds",
             ],
         )
+        self.assertEqual(report["status"], "passed")
+        self.assertEqual(report["source_file_count"], 1)
+        self.assertEqual(report["suite_count"], 1)
 
     def test_rendered_report_is_unchanged_when_input_order_changes(self) -> None:
         first = self.write_suite(
@@ -139,8 +151,12 @@ class GenerateReportTest(unittest.TestCase):
         report_path = self.root / "aggregate.xml"
         report_path.write_text(
             """<testsuites>
-                <testsuite name="suite.B" tests="2" failures="0" errors="0" skipped="1" time="0.2" />
-                <testsuite name="suite.A" tests="1" failures="0" errors="0" skipped="0" time="0.1" />
+                <testsuite name="suite.B" tests="2" failures="0" errors="0" skipped="1" time="0.2">
+                    <testcase name="b-1"><skipped /></testcase><testcase name="b-2" />
+                </testsuite>
+                <testsuite name="suite.A" tests="1" failures="0" errors="0" skipped="0" time="0.1">
+                    <testcase name="a-1" />
+                </testsuite>
             </testsuites>""",
             encoding="utf-8",
         )
@@ -214,7 +230,137 @@ class GenerateReportTest(unittest.TestCase):
 
         self.assertEqual(report["git_commit"], "0123456789abcdef")
         self.assertEqual(report["generated_at_utc"], "1970-01-01T00:00:00Z")
-        self.assertEqual(report["schema_version"], 1)
+        self.assertEqual(report["schema_version"], 2)
+
+    def test_records_source_digest_and_size(self) -> None:
+        report_path = self.write_suite(
+            "reports/TEST-example.xml", name="example.Suite", tests=1
+        )
+
+        report = self.build([report_path])
+        source = report["source_files"][0]
+
+        self.assertEqual(source["path"], "reports/TEST-example.xml")
+        self.assertEqual(source["bytes"], report_path.stat().st_size)
+        self.assertEqual(
+            source["sha256"], hashlib.sha256(report_path.read_bytes()).hexdigest()
+        )
+
+    def test_rejects_testcase_count_mismatch(self) -> None:
+        report_path = self.root / "TEST-mismatch.xml"
+        report_path.write_text(
+            '<testsuite name="suite" tests="2" failures="0" errors="0" skipped="0">'
+            '<testcase name="only-one" /></testsuite>',
+            encoding="utf-8",
+        )
+
+        with self.assertRaisesRegex(
+            generate_report.EvidenceError, "testcase count does not match tests"
+        ):
+            self.build([report_path])
+
+    def test_rejects_outcome_count_mismatch(self) -> None:
+        report_path = self.root / "TEST-mismatch.xml"
+        report_path.write_text(
+            '<testsuite name="suite" tests="1" failures="0" errors="0" skipped="0">'
+            '<testcase name="failed"><failure /></testcase></testsuite>',
+            encoding="utf-8",
+        )
+
+        with self.assertRaisesRegex(
+            generate_report.EvidenceError, "observed failure count does not match"
+        ):
+            self.build([report_path])
+
+    def test_rejects_testcase_with_multiple_outcomes(self) -> None:
+        report_path = self.root / "TEST-ambiguous.xml"
+        report_path.write_text(
+            '<testsuite name="suite" tests="2" failures="1" errors="1" skipped="0">'
+            '<testcase name="ambiguous"><failure /><error /></testcase>'
+            '<testcase name="passing" /></testsuite>',
+            encoding="utf-8",
+        )
+
+        with self.assertRaisesRegex(generate_report.EvidenceError, "multiple outcomes"):
+            self.build([report_path])
+
+    def test_rejects_nested_suite_to_prevent_double_counting(self) -> None:
+        report_path = self.root / "aggregate.xml"
+        report_path.write_text(
+            '<testsuites><testsuite name="parent" tests="1" failures="0" errors="0" skipped="0">'
+            '<testsuite name="child" tests="1" failures="0" errors="0" skipped="0">'
+            '<testcase name="child-test" /></testsuite></testsuite></testsuites>',
+            encoding="utf-8",
+        )
+
+        with self.assertRaisesRegex(generate_report.EvidenceError, "nested testsuite"):
+            self.build([report_path])
+
+    def test_rejects_duplicate_suite_identity_in_one_source(self) -> None:
+        report_path = self.root / "aggregate.xml"
+        report_path.write_text(
+            '<testsuites>'
+            '<testsuite name="duplicate" tests="1" failures="0" errors="0" skipped="0">'
+            '<testcase name="first" /></testsuite>'
+            '<testsuite name="duplicate" tests="1" failures="0" errors="0" skipped="0">'
+            '<testcase name="second" /></testsuite>'
+            '</testsuites>',
+            encoding="utf-8",
+        )
+
+        with self.assertRaisesRegex(generate_report.EvidenceError, "duplicate Surefire suite"):
+            self.build([report_path])
+
+    def test_rejects_oversized_report_before_parsing(self) -> None:
+        report_path = self.root / "TEST-large.xml"
+        report_path.write_bytes(b"x" * (generate_report.MAX_REPORT_BYTES + 1))
+
+        with self.assertRaisesRegex(generate_report.EvidenceError, "exceeds"):
+            self.build([report_path])
+
+    def test_rejects_invalid_environment_commit(self) -> None:
+        report_path = self.write_suite(
+            "TEST-example.xml", name="example.Suite", tests=1
+        )
+        environment = {**self.environment, "PORTFOLIO_EVIDENCE_GIT_COMMIT": "main"}
+
+        with self.assertRaisesRegex(generate_report.EvidenceError, "invalid git commit"):
+            generate_report.build_report(
+                project="StockRush",
+                scope="order-service",
+                inputs=[report_path],
+                environ=environment,
+                repo_dir=self.root,
+            )
+
+    def test_rejects_control_characters_in_labels(self) -> None:
+        report_path = self.write_suite(
+            "TEST-example.xml", name="example.Suite", tests=1
+        )
+
+        with self.assertRaisesRegex(generate_report.EvidenceError, "unsupported characters"):
+            generate_report.build_report(
+                project="StockRush\nforged",
+                scope="order-service",
+                inputs=[report_path],
+                environ=self.environment,
+                repo_dir=self.root,
+            )
+
+    def test_require_success_rejects_failed_evidence(self) -> None:
+        report_path = self.write_suite(
+            "TEST-failed.xml", name="failed.Suite", tests=1, failures=1
+        )
+
+        with self.assertRaisesRegex(generate_report.EvidenceError, "success is required"):
+            generate_report.build_report(
+                project="StockRush",
+                scope="order-service",
+                inputs=[report_path],
+                environ=self.environment,
+                repo_dir=self.root,
+                require_success=True,
+            )
 
     def test_rejects_negative_source_date_epoch(self) -> None:
         report_path = self.write_suite(

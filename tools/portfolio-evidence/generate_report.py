@@ -4,10 +4,12 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 import os
 from pathlib import Path
+import re
 import subprocess
 import sys
 import tempfile
@@ -16,8 +18,11 @@ from typing import Mapping, Sequence
 import xml.etree.ElementTree as ET
 
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 COUNT_FIELDS = ("tests", "failures", "errors", "skipped")
+OUTCOME_ELEMENTS = ("failure", "error", "skipped")
+MAX_REPORT_BYTES = 10 * 1024 * 1024
+GIT_COMMIT_PATTERN = re.compile(r"[0-9a-fA-F]{7,64}")
 COMMIT_ENV_VARS = (
     "PORTFOLIO_EVIDENCE_GIT_COMMIT",
     "GITHUB_SHA",
@@ -40,6 +45,46 @@ def _display_path(path: Path, base_dir: Path) -> str:
         return resolved.relative_to(base_dir.resolve()).as_posix()
     except ValueError:
         return resolved.as_posix()
+
+
+def _validate_label(value: str, field: str) -> str:
+    normalized = value.strip()
+    if not normalized:
+        raise EvidenceError(f"{field} must not be empty")
+    if len(normalized) > 200 or any(ord(character) < 32 for character in normalized):
+        raise EvidenceError(f"{field} contains unsupported characters")
+    return normalized
+
+
+def _read_source(
+    path: Path, base_dir: Path
+) -> tuple[dict[str, object], bytes]:
+    try:
+        size = path.stat().st_size
+    except OSError as exc:
+        raise EvidenceError(f"failed to inspect Surefire XML '{path}': {exc}") from exc
+    if size > MAX_REPORT_BYTES:
+        raise EvidenceError(
+            f"Surefire XML exceeds {MAX_REPORT_BYTES} bytes: "
+            f"{_display_path(path, base_dir)}"
+        )
+
+    try:
+        content = path.read_bytes()
+    except OSError as exc:
+        raise EvidenceError(f"failed to read Surefire XML '{path}': {exc}") from exc
+    if len(content) != size:
+        raise EvidenceError(
+            f"Surefire XML changed while being read: {_display_path(path, base_dir)}"
+        )
+    return (
+        {
+            "path": _display_path(path, base_dir),
+            "sha256": hashlib.sha256(content).hexdigest(),
+            "bytes": size,
+        },
+        content,
+    )
 
 
 def discover_report_files(inputs: Sequence[Path | str]) -> list[Path]:
@@ -104,11 +149,56 @@ def _parse_duration(element: ET.Element, source: str) -> float:
     return value
 
 
-def parse_surefire_xml(path: Path, base_dir: Path) -> list[dict[str, object]]:
+def _validate_testcases(
+    element: ET.Element,
+    counts: Mapping[str, int],
+    suite_name: str,
+    source: str,
+) -> None:
+    testcases = [
+        child for child in element if _local_name(child.tag) == "testcase"
+    ]
+    if len(testcases) != counts["tests"]:
+        raise EvidenceError(
+            f"testcase count does not match tests in Surefire suite "
+            f"'{suite_name}' from {source}"
+        )
+
+    observed = {outcome: 0 for outcome in OUTCOME_ELEMENTS}
+    for testcase in testcases:
+        outcomes = [
+            _local_name(child.tag)
+            for child in testcase
+            if _local_name(child.tag) in OUTCOME_ELEMENTS
+        ]
+        if len(outcomes) > 1:
+            testcase_name = (testcase.get("name") or "<unnamed>").strip()
+            raise EvidenceError(
+                f"multiple outcomes in testcase '{testcase_name}' from {source}"
+            )
+        if outcomes:
+            observed[outcomes[0]] += 1
+
+    for field in ("failures", "errors", "skipped"):
+        outcome = field[:-1] if field != "skipped" else "skipped"
+        if observed[outcome] != counts[field]:
+            raise EvidenceError(
+                f"observed {outcome} count does not match '{field}' in Surefire "
+                f"suite '{suite_name}' from {source}"
+            )
+
+
+def parse_surefire_xml(
+    path: Path,
+    base_dir: Path,
+    content: bytes | None = None,
+) -> list[dict[str, object]]:
     source = _display_path(path, base_dir)
+    if content is None:
+        _, content = _read_source(path, base_dir)
     try:
-        root = ET.parse(path).getroot()
-    except (ET.ParseError, OSError) as exc:
+        root = ET.fromstring(content)
+    except ET.ParseError as exc:
         raise EvidenceError(f"failed to parse Surefire XML '{source}': {exc}") from exc
 
     root_name = _local_name(root.tag)
@@ -116,9 +206,7 @@ def parse_surefire_xml(path: Path, base_dir: Path) -> list[dict[str, object]]:
         suite_elements = [root]
     elif root_name == "testsuites":
         suite_elements = [
-            element
-            for element in root.iter()
-            if element is not root and _local_name(element.tag) == "testsuite"
+            element for element in root if _local_name(element.tag) == "testsuite"
         ]
     else:
         raise EvidenceError(
@@ -136,6 +224,13 @@ def parse_surefire_xml(path: Path, base_dir: Path) -> list[dict[str, object]]:
             raise EvidenceError(f"missing 'name' in Surefire suite from {source}")
 
         counts = {field: _parse_count(element, field, source) for field in COUNT_FIELDS}
+        nested_suites = [
+            child for child in element if _local_name(child.tag) == "testsuite"
+        ]
+        if nested_suites:
+            raise EvidenceError(
+                f"nested testsuite is not supported in Surefire XML: {source}"
+            )
         passed = (
             counts["tests"]
             - counts["failures"]
@@ -146,6 +241,7 @@ def parse_surefire_xml(path: Path, base_dir: Path) -> list[dict[str, object]]:
             raise EvidenceError(
                 f"inconsistent test counts in Surefire suite '{name}' from {source}"
             )
+        _validate_testcases(element, counts, name, source)
 
         suites.append(
             {
@@ -166,7 +262,11 @@ def resolve_git_commit(environ: Mapping[str, str], repo_dir: Path) -> str:
     for variable in COMMIT_ENV_VARS:
         value = environ.get(variable, "").strip()
         if value:
-            return value
+            if not GIT_COMMIT_PATTERN.fullmatch(value):
+                raise EvidenceError(
+                    f"invalid git commit in environment variable {variable}: {value!r}"
+                )
+            return value.lower()
 
     try:
         result = subprocess.run(
@@ -181,9 +281,9 @@ def resolve_git_commit(environ: Mapping[str, str], repo_dir: Path) -> str:
         ) from exc
 
     commit = result.stdout.strip()
-    if not commit:
-        raise EvidenceError("git returned an empty commit identifier")
-    return commit
+    if not GIT_COMMIT_PATTERN.fullmatch(commit):
+        raise EvidenceError(f"git returned an invalid commit identifier: {commit!r}")
+    return commit.lower()
 
 
 def resolve_generated_at_utc(environ: Mapping[str, str]) -> str:
@@ -211,33 +311,47 @@ def build_report(
     inputs: Sequence[Path | str],
     environ: Mapping[str, str] | None = None,
     repo_dir: Path | None = None,
+    require_success: bool = False,
 ) -> dict[str, object]:
-    project = project.strip()
-    scope = scope.strip()
-    if not project:
-        raise EvidenceError("project must not be empty")
-    if not scope:
-        raise EvidenceError("scope must not be empty")
+    project = _validate_label(project, "project")
+    scope = _validate_label(scope, "scope")
 
     effective_environ = os.environ if environ is None else environ
     effective_repo_dir = Path.cwd() if repo_dir is None else repo_dir
     report_files = discover_report_files(inputs)
+    loaded_sources = [
+        (report_file, *_read_source(report_file, effective_repo_dir))
+        for report_file in report_files
+    ]
+    source_files = [metadata for _, metadata, _ in loaded_sources]
 
     suites: list[dict[str, object]] = []
-    for report_file in report_files:
-        suites.extend(parse_surefire_xml(report_file, effective_repo_dir))
+    for report_file, _, content in loaded_sources:
+        suites.extend(parse_surefire_xml(report_file, effective_repo_dir, content))
     suites.sort(key=lambda suite: (str(suite["name"]), str(suite["source"])))
+    suite_identities = [(str(suite["name"]), str(suite["source"])) for suite in suites]
+    if len(suite_identities) != len(set(suite_identities)):
+        raise EvidenceError("duplicate Surefire suite name and source detected")
 
     totals = {
         field: sum(int(suite[field]) for suite in suites)
         for field in ("tests", "failures", "errors", "skipped", "passed")
     }
+    status = "passed" if totals["failures"] == 0 and totals["errors"] == 0 else "failed"
+    if require_success and status != "passed":
+        raise EvidenceError(
+            "Surefire evidence contains failed or errored tests while success is required"
+        )
     return {
         "schema_version": SCHEMA_VERSION,
         "project": project,
         "git_commit": resolve_git_commit(effective_environ, effective_repo_dir),
         "generated_at_utc": resolve_generated_at_utc(effective_environ),
         "scope": scope,
+        "status": status,
+        "source_file_count": len(source_files),
+        "suite_count": len(suites),
+        "source_files": source_files,
         "totals": totals,
         "suites": suites,
     }
@@ -265,6 +379,8 @@ def write_report(report: Mapping[str, object], output: Path | None) -> None:
             delete=False,
         ) as handle:
             handle.write(rendered)
+            handle.flush()
+            os.fsync(handle.fileno())
             temporary_path = Path(handle.name)
         os.replace(temporary_path, output)
     finally:
@@ -284,6 +400,11 @@ def create_parser() -> argparse.ArgumentParser:
         help="Output JSON path; writes to stdout when omitted",
     )
     parser.add_argument(
+        "--require-success",
+        action="store_true",
+        help="Reject reports containing failed or errored tests",
+    )
+    parser.add_argument(
         "inputs",
         nargs="*",
         type=Path,
@@ -299,6 +420,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             project=args.project,
             scope=args.scope,
             inputs=args.inputs,
+            require_success=args.require_success,
         )
         write_report(report, args.output)
     except EvidenceError as exc:
