@@ -4,6 +4,10 @@ StockRush는 한정 판매 커머스에서 주문, 재고, 결제, 쿠폰, 출�
 
 외부 요청은 Gateway를 통과하며 Order, Inventory, Payment 서비스는 각자 상태 변경과 Outbox 기록을 관리합니다.
 
+## 포트폴리오 링크
+
+- [웹 사례](https://cyson21.github.io/projects/stockrush/) · [전체 포트폴리오 PDF](https://github.com/cyson21/portfolio-hub/releases/download/latest/portfolio-complete.pdf) · [최신 이력서](https://github.com/cyson21/portfolio-hub/releases/download/latest/resume.pdf)
+
 ## 한눈에 보기
 
 | 항목 | 내용 |
