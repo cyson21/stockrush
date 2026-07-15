@@ -1,3 +1,4 @@
+
 package com.stockrush.promotion.infra.kafka;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;

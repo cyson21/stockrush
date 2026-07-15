@@ -1,3 +1,5 @@
+// OrderQueryController: API 진입점으로 요청/응답 경계와 HTTP 흐름을 정리합니다.
+
 package com.stockrush.order.api;
 
 import com.stockrush.order.application.OrderDetailItemSnapshot;
@@ -37,10 +39,7 @@ class OrderQueryController {
     }
 
     private OrderDetailSnapshot getDetail(String orderId, String authenticatedMemberId) {
-        if (authenticatedMemberId == null || authenticatedMemberId.isBlank()) {
-            return orderQueryService.getDetail(orderId);
-        }
-        return orderQueryService.getDetailForMember(orderId, authenticatedMemberId);
+        return orderQueryService.getDetailForMember(orderId, TrustedCustomerIdentity.require(authenticatedMemberId));
     }
 }
 

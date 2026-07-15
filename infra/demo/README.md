@@ -10,7 +10,7 @@
 | Backend | Gateway, Catalog, Inventory, Order, Payment, Promotion, Fulfillment, Read Model |
 | Web apps | Customer App, Admin App |
 
-The demo stack uses a separate high host-port range so it can run next to the developer runtime on the same machine.
+The demo stack publishes only the Gateway, web apps, Keycloak, and required infrastructure ports. Backend services stay on the Docker network behind Gateway so the host public surface matches the deployed shape more closely.
 
 ## macOS / Linux
 
@@ -51,13 +51,6 @@ WSL2 shell users can use the macOS/Linux shell scripts.
 | Customer App | `http://localhost:15173` |
 | Admin App | `http://localhost:15174` |
 | Gateway | `http://localhost:28080` |
-| Catalog Service | `http://localhost:28081` |
-| Inventory Service | `http://localhost:28082` |
-| Order Service | `http://localhost:28083` |
-| Payment Service | `http://localhost:28084` |
-| Promotion Service | `http://localhost:28085` |
-| Fulfillment Service | `http://localhost:28086` |
-| Read Model Service | `http://localhost:28087` |
 | Keycloak | `http://localhost:28088` |
 | Kafka UI | `http://localhost:29090` |
 
@@ -67,7 +60,7 @@ The wrapper scripts copy `infra/demo/.env.example` to `infra/demo/.env` on first
 
 If `infra/demo/.env` already exists, later `.env.example` changes are not copied automatically. Run `./scripts/demo-up.sh --refresh-env` or `.\scripts\demo-up.ps1 --refresh-env` to replace it with the current demo defaults.
 
-`demo-up` checks host ports before starting containers. If a port is already listening, edit the matching value in `infra/demo/.env`, then run `demo-up` again. Use `--skip-port-check` only when the current demo stack is already running and you intentionally want Docker Compose to reconcile it.
+`demo-up` checks published host ports before starting containers. If a port is already listening, edit the matching value in `infra/demo/.env`, then run `demo-up` again. Use `--skip-port-check` only when the current demo stack is already running and you intentionally want Docker Compose to reconcile it.
 
 `deploy-local` uses:
 
@@ -83,6 +76,7 @@ Inside the Docker network, services use:
 - Kafka: `kafka:19092`
 - Keycloak: `keycloak:8080`
 - Gateway upstream URLs: Docker service names such as `http://order-service:18083`
+- Backend service ports: exposed only inside the Docker network; they are not published to the host.
 
 Keycloak demo setup:
 
@@ -91,23 +85,23 @@ Keycloak demo setup:
 
 ## Web App Routing
 
-The web app containers serve Vite build output through Nginx. Nginx also proxies the existing web app service prefixes:
+The web app containers serve Vite build output through Nginx. Nginx proxies Gateway-owned API prefixes only:
 
-- `/catalog` -> Catalog Service
-- `/inventory` -> Inventory Service
-- `/orders` -> Order Service
-- `/payment` -> Payment Service
-- `/promotion` -> Promotion Service
-- `/api/admin/outbox-services`, `/api/admin/coupon-usages`, `/api/admin/fulfillment-requests`, and `/api/read-model` -> Gateway
+- `/api/products` -> Gateway
+- `/api/stocks` -> Gateway
+- `/api/coupons` -> Gateway
+- `/api/orders` -> Gateway
+- `/api/admin` -> Gateway
+- `/api/read-model` -> Gateway
 
 ## Current Smoke Coverage
 
-`demo-smoke` checks service Actuator `health`, `info`, and `metrics`, web app roots, direct Catalog/Inventory read endpoints, Gateway Read Model routing with admin bearer token, the `demo-order-flow` E2E runner, and the high-volume `burst-idempotency` runner. Use `--skip-burst` for a quicker local check when the burst scenario is not needed.
+`demo-smoke` checks Gateway Actuator `health`, `info`, and `metrics`, web app roots, Gateway public product/stock endpoints, Gateway Read Model routing with admin bearer token, the `demo-order-flow` E2E runner, and the high-volume `burst-idempotency` runner. Use `--skip-burst` for a quicker local check when the burst scenario is not needed.
 
-The smoke flow now requests fresh admin/customer tokens from Keycloak before local-e2e calls, then passes `--admin-bearer-token` to protected admin commands.
+The smoke flow requests fresh admin/customer tokens from Keycloak before local-e2e calls, then passes Gateway `--public-api-url`, `--admin-api-url`, `--order-api-url`, `--admin-bearer-token`, and `--customer-bearer-token` to the runner.
 
-The order-flow runner seeds a unique demo product/SKU and coupon, verifies coupon quote through Gateway, creates `CARD`, `FAIL_CARD`, and `DELAY_CARD` orders through Gateway, cancels the delayed order through the admin API, relays service outboxes, and checks final order/stock/outbox state. The `CARD` order must keep the expected `couponCode`, `discountAmount`, and `payableAmount`.
+The order-flow runner seeds a unique demo product/SKU and coupon through Gateway admin APIs, verifies coupon quote through Gateway, creates `CARD`, `FAIL_CARD`, and `DELAY_CARD` orders through Gateway, cancels the delayed order through the admin API, relays service outboxes, and checks final order/stock/outbox state. The `CARD` order must keep the expected `couponCode`, `discountAmount`, and `payableAmount`.
 
-Latest local build verification: after rebuilding the demo stack, `./scripts/demo-smoke.sh` passed for product `DEMO-E2E-20260514200918-a2fced8f` and burst product `BURST-E2E-20260514200937-7717b3c7`. The smoke confirmed all service Actuator `health/info/metrics` endpoints, `CARD` coupon discount `1000`, final demo stock `available=19/reserved=0`, burst convergence `confirmed=4/cancelled=8`, and `pendingOutboxDelta=0` for Order, Inventory, and Payment.
+Latest local build verification: after rebuilding the demo stack, `./scripts/demo-smoke.sh` passed for product `DEMO-E2E-20260514200918-a2fced8f` and burst product `BURST-E2E-20260514200937-7717b3c7`. That verification predates the Gateway-boundary hardening in this document; rerun `./scripts/demo-smoke.sh` after refreshing `infra/demo/.env` to capture a current runtime proof.
 
-Latest GHCR deploy verification: after publishing multi-platform `latest-demo` images from `58ce878c5ac3`, `./scripts/deploy-local.sh --login --tag latest-demo` passed on Apple Silicon Mac. The smoke used product `DEMO-E2E-20260515095202-eb551849` and burst product `BURST-E2E-20260515095217-287c5a2a`, confirmed all service Actuator `health/info/metrics` endpoints, `CARD` coupon discount `1000`, final demo stock `available=19/reserved=0`, burst convergence `confirmed=4/cancelled=8`, and `pendingOutboxDelta=0` for Order, Inventory, and Payment.
+Latest GHCR deploy verification: after publishing multi-platform `latest-demo` images from `58ce878c5ac3`, `./scripts/deploy-local.sh --login --tag latest-demo` passed on Apple Silicon Mac. That verification also predates the Gateway-boundary hardening; refresh the demo env template before relying on those images for a current smoke result.

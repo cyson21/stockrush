@@ -1,3 +1,5 @@
+-- 초기 스키마 생성 DDL입니다.
+
 create table if not exists payments (
   id bigserial primary key,
   payment_id uuid unique not null,

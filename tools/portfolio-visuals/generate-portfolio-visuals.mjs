@@ -1,6 +1,8 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
+// 포트폴리오 소개용 SVG 아키텍처 다이어그램을 렌더링하는 정적 자원 생성기입니다.
+
 const outputDir = join(process.cwd(), 'docs/assets/architecture');
 mkdirSync(outputDir, { recursive: true });
 

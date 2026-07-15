@@ -1,3 +1,4 @@
+// 화면 컴포넌트 단위로 사용자 플로우를 구성하는 뷰 레이어입니다.
 import type { ReactNode } from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { AuthProvider } from '../auth/AuthContext';

@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
+// 데모 샘플 데이터 스키마와 상태 분포가 기대 범위를 벗어나지 않는지 확인합니다.
+
 import { buildPortfolioSeedSql, portfolioFixtures } from './seed-portfolio-data.mjs';
 
 test('portfolio fixtures cover visual admin states', () => {

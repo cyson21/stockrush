@@ -1,3 +1,4 @@
+// 앱의 최상위 UI 레이어: 핵심 상태와 화면 구성을 담당합니다.
 import { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
@@ -82,7 +83,6 @@ export default function App() {
   const [stocks, setStocks] = useState<Stock[]>([]);
   const [selectedSkuId, setSelectedSkuId] = useState('');
   const [quantityInput, setQuantityInput] = useState('1');
-  const [memberId, setMemberId] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('CARD');
   const [authToken, setAuthToken] = useState<string | null>(getAuthToken());
   const [createdOrder, setCreatedOrder] = useState<CreateOrderResponse | null>(null);
@@ -241,7 +241,7 @@ export default function App() {
     Boolean(selectedProduct) &&
     Boolean(selectedStock) &&
     quantityIsValid &&
-    memberId.trim().length > 0 &&
+    paymentMethod.trim().length > 0 &&
     Boolean(authToken) &&
     !submitting &&
     !applyingCoupon &&
@@ -280,8 +280,8 @@ export default function App() {
   };
 
   const submitOrder = async () => {
-    if (!selectedProduct || !selectedStock || !quantityIsValid || memberId.trim().length === 0) {
-      setMessage('상품, SKU, 수량, 회원 ID를 확인하세요.');
+    if (!selectedProduct || !selectedStock || !quantityIsValid || paymentMethod.trim().length === 0) {
+      setMessage('상품, SKU, 수량, 결제수단을 확인하세요.');
       return;
     }
     if (!authToken) {
@@ -298,8 +298,7 @@ export default function App() {
 
     try {
       const payload = {
-        memberId: memberId.trim(),
-        paymentMethod,
+        paymentMethod: paymentMethod.trim(),
         items: [
           {
             productCode: selectedProduct.productCode,
@@ -511,15 +510,6 @@ export default function App() {
                     slotProps={{ htmlInput: { min: 1 } }}
                     type="number"
                     value={quantityInput}
-                  />
-
-                  <TextField
-                    fullWidth
-                    label="회원 ID"
-                    onChange={(event) => setMemberId(event.target.value)}
-                    placeholder="member-1"
-                    size="small"
-                    value={memberId}
                   />
 
                   <TextField

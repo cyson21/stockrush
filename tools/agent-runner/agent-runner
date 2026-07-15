@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Node/Java 도구 흐름이 아닌, AI Run Ledger 실행 경로를 표준으로 진입합니다.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

@@ -1,3 +1,4 @@
+# Kafka 브로커를 단일 레플리카로 배포해 로컬/테스트용 메시지 통신 토대를 제공합니다.
 apiVersion: apps/v1
 kind: Deployment
 metadata:

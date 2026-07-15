@@ -1,3 +1,4 @@
+# 로컬 개발/CI에서 공통으로 재사용할 인프라 조각(Postgres/Redis/Kafka)을 구성합니다.
 services:
   postgres:
     image: postgres:16-alpine
@@ -72,7 +73,7 @@ services:
     restart: "no"
 
   kafka-ui:
-    image: ghcr.io/kafbat/kafka-ui:latest
+    image: kafbat/kafka-ui:latest
     container_name: stockrush-kafka-ui
     depends_on:
       kafka:
@@ -87,4 +88,3 @@ services:
 volumes:
   stockrush-postgres-data:
   stockrush-redis-data:
-

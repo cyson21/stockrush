@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Development-operations retrieval tool for StockRush."""
+# 문서/마크업을 인덱싱해 검색 맥락을 만드는 경량 검색 도구입니다.
 from __future__ import annotations
 
 import argparse

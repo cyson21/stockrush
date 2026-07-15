@@ -1,3 +1,4 @@
+
 package com.stockrush.payment.api;
 
 import static org.assertj.core.api.Assertions.assertThat;

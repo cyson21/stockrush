@@ -1,3 +1,4 @@
+// 테스트 시나리오의 의도와 경계를 검증하기 위한 코드입니다.
 import { StrictMode } from 'react';
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -45,7 +46,7 @@ function headerValue(headers: HeadersInit | undefined, name: string): string {
 function isAdminApiCall(input: RequestInfo | URL): boolean {
   const request = new URL(String(input), 'http://localhost:5173');
   const pathname = request.pathname;
-  return pathname.startsWith('/orders') || pathname.startsWith('/api') || pathname.startsWith('/inventory') || pathname.startsWith('/catalog');
+  return pathname.startsWith('/api/admin') || pathname.startsWith('/api/read-model');
 }
 
 const TEST_ACCESS_TOKEN = 'test-admin-token';

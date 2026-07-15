@@ -1,3 +1,4 @@
+# main 기준 컨테이너 이미지를 빌드하고 배포 레지스트리에 게시하는 릴리스 흐름입니다.
 name: Release Images
 
 on:

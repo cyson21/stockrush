@@ -1,3 +1,4 @@
+# API Gateway를 배포해 내부 서비스 진입점 및 헬스 체크를 노출합니다.
 apiVersion: apps/v1
 kind: Deployment
 metadata:

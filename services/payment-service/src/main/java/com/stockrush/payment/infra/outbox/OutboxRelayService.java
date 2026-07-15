@@ -8,11 +8,16 @@ import java.util.UUID;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
+/**
+ * 아웃박스 이벤트를 배치로 읽고 발행 상태를 갱신하여 멱등적으로 재시도되는 릴레이 플로우를 운영합니다.
+ */
+
 
 @Service
 public class OutboxRelayService {
 
     private static final int RETRY_BACKOFF_SECONDS = 30;
+    private static final int PUBLISHING_RECLAIM_SECONDS = 120;
 
     private final JdbcClient jdbcClient;
     private final ObjectProvider<OutboxEventPublisher> publisherProvider;
@@ -26,6 +31,7 @@ public class OutboxRelayService {
         OutboxEventPublisher publisher = publisherProvider.getIfAvailable(() -> {
             throw new IllegalStateException("outbox event publisher is not configured");
         });
+        reclaimStalePublishing();
         List<OutboxRelayEvent> events = claimPending(batchSize);
         int published = 0;
         int failed = 0;
@@ -68,6 +74,22 @@ public class OutboxRelayService {
         return new OutboxRequeueResult(updated);
     }
 
+    /**
+     * 발행 중(PUBLISHING) 상태로 일정 시간 이상 멈춘 이벤트를 PENDING으로 되돌려
+     * 릴레이어 비정상 종료로 인한 영구 정체를 복구한다.
+     */
+    private void reclaimStalePublishing() {
+        jdbcClient.sql("""
+                update outbox_events
+                set status = 'PENDING',
+                    updated_at = now()
+                where status = 'PUBLISHING'
+                  and updated_at < now() - (:seconds * interval '1 second')
+                """)
+            .param("seconds", PUBLISHING_RECLAIM_SECONDS)
+            .update();
+    }
+
     private List<OutboxRelayEvent> claimPending(int batchSize) {
         return jdbcClient.sql("""
                 with claimed as (
@@ -75,7 +97,7 @@ public class OutboxRelayService {
                   from outbox_events
                   where status = 'PENDING'
                     and (next_retry_at is null or next_retry_at <= now())
-                  order by created_at
+                  order by created_at, id
                   limit :batchSize
                   for update skip locked
                 )

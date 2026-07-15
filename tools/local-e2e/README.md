@@ -14,19 +14,16 @@
   --max-attempts 12
 ```
 
-기본 포트는 아래 서비스를 사용한다. 주문 생성/조회와 outbox 조회/재시도는 Gateway를 경유한다.
+기본 포트는 아래 Gateway 경로를 사용한다. 주문 생성/조회와 outbox 조회/재시도는 Gateway를 경유한다. Catalog/Inventory/Promotion service URL 옵션은 `--direct-service-health`를 켠 host 개발 모드의 health/debug 용도이며, 데모 compose 공개 진입점은 Gateway와 웹앱으로 제한한다.
 
 | Role | URL |
 |---|---|
-| Catalog | `http://localhost:18081` |
-| Inventory | `http://localhost:18082` |
-| Order API through Gateway | `http://localhost:18080` |
-| Outbox API through Gateway | `http://localhost:18080` |
-| Order health | `http://localhost:18083` |
-| Payment | `http://localhost:18084` |
-| Promotion admin | `http://localhost:18085` |
+| Public API | `http://localhost:18080` |
+| Admin API | `http://localhost:18080` |
+| Order API | `http://localhost:18080` |
+| Direct service health, opt-in | `http://localhost:18081`~`18085` |
 
-직접 Order Service 포트로 주문 생성/조회를 검증해야 하면 `--order-api-url http://localhost:18083`을 지정한다. Outbox 검증은 Gateway route shape를 기준으로 한다.
+주문 생성/조회 검증은 기본적으로 `--order-api-url http://localhost:18080` Gateway route shape를 기준으로 한다. 직접 Order Service 포트는 서비스 디버깅 때만 별도 지정한다.
 
 ### 검증 기준
 

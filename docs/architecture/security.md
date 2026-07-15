@@ -51,6 +51,8 @@ The demo IdP is Keycloak. It is an infrastructure dependency like PostgreSQL and
 | `/api/read-model/admin/**` | `ROLE_ADMIN`, `X-Operator-Id` from Gateway |
 | service-local direct routes | internal/dev only, not a public portfolio entrypoint |
 
+Host development mode may run backend services on local ports for debugger access, but demo compose does not publish internal backend service ports. Public demo and smoke traffic enters through Gateway or the web apps.
+
 ## Principal Propagation
 
 Gateway owns external token validation. It forwards internal identity headers only after successful authentication:
@@ -70,7 +72,7 @@ Customer APIs must stop trusting caller supplied `memberId` as the authority sou
 - Customer order detail: a customer can read only their own order.
 - Customer order history: `memberId` query is ignored on protected paths; subject drives the query.
 - Admin search can still filter by member id, but requires `ROLE_ADMIN`.
-- Service-local direct routes are for internal tooling; they are not public demo entrypoints.
+- Service-local direct routes are for internal tooling; they are not public demo entrypoints and customer routes reject missing trusted subject identity by default.
 
 ## Demo Identity Setup
 
@@ -122,8 +124,8 @@ Implemented baseline:
 - Gateway protects `POST /api/orders`, `GET /api/orders/{orderId}`, and `GET /api/read-model/orders` with `ROLE_CUSTOMER`.
 - Gateway removes spoofable identity headers, derives `X-StockRush-Subject` from the JWT subject, and forwards only trusted customer identity headers.
 - Order Service uses the trusted subject for order creation, blocks detail reads for another member, and rejects same `Idempotency-Key` replay when the authenticated subject differs from the existing order owner.
-- Read Model customer history prefers the trusted subject header and Gateway strips caller supplied `memberId` from the customer query path. Admin read-model search still supports `memberId` filtering behind `ROLE_ADMIN`.
-- Service-local direct calls still accept legacy `memberId` where needed for existing local compatibility; the external demo path is Gateway-first.
+- Read Model customer history requires the trusted subject header and Gateway strips caller supplied `memberId` from the customer query path. Admin read-model search still supports `memberId` filtering behind `ROLE_ADMIN`.
+- Service-local customer calls reject missing trusted identity by default. Host development may still expose service ports for debugging, but public demo paths and smoke tools use Gateway routes.
 
 ### P9-5. Admin Audit Principal
 
@@ -176,4 +178,4 @@ Current baseline:
   - 공개 라우트 정책은 `GET /api/products`, `GET /api/stocks`, `POST /api/coupons/quote`만 Gateway public 경로로 제한한다.
   - 고객 주문/주문 상세/주문 내역은 `ROLE_CUSTOMER` + subject-forwarding으로 보호한다.
   - Admin route는 `ROLE_ADMIN` + Gateway operator 주체 전파로 보호한다.
-  - service-local direct route는 내부/dev에서만 허용한다.
+  - service-local direct route는 host 개발 모드 디버깅에만 두고, 데모 compose는 내부 backend service host port를 공개하지 않는다.

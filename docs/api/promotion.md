@@ -4,8 +4,8 @@ Promotion API는 쿠폰 정의와 주문 전 할인 견적을 다룬다. 주문 
 
 Base URLs:
 
-- Gateway customer quote: `http://localhost:18080`
-- Service-local admin and direct service check: `http://localhost:18085`
+- Gateway public/admin routes: `http://localhost:18080`
+- Host development service debug only: `http://localhost:18085`
 
 ## Admin: Create Coupon
 
@@ -75,7 +75,7 @@ Returns the coupon detail exposed by the `Location` header from create.
 
 `GET /api/admin/coupon-usages?couponCode=WELCOME10&memberId=member-a&status=CONSUMED&page=0&size=20`
 
-This endpoint is available through Gateway and Promotion Service with the same path. Query parameters are optional. `page` is normalized to `0` or greater, and `size` is capped at `100`.
+External callers and smoke tools should use the Gateway admin path. Query parameters are optional. `page` is normalized to `0` or greater, and `size` is capped at `100`.
 
 Response:
 
@@ -113,7 +113,7 @@ Response:
 
 `POST /api/coupons/quote`
 
-Customer quote is available through Gateway and Promotion Service with the same path. Mobile and external demo clients should use the Gateway route.
+Customer quote is a public Gateway route for mobile, web, and external demo clients. The service-local path is only for host development debugging.
 
 Request:
 

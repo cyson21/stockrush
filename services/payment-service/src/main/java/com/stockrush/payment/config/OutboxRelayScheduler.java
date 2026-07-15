@@ -7,6 +7,10 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
+/**
+ * 아웃박스 릴레이 스케줄러 동작을 제어하는 빈 설정으로 재시도·지연 처리를 운영합니다.
+ */
+
 
 @Component
 @ConditionalOnProperty(

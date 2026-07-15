@@ -1,3 +1,5 @@
+// CreateOrderControllerIntegrationTest: API 진입점으로 요청/응답 경계와 HTTP 흐름을 정리합니다.
+
 package com.stockrush.order.api;
 
 import static org.hamcrest.Matchers.is;
@@ -56,6 +58,7 @@ class CreateOrderControllerIntegrationTest {
         mockMvc.perform(post("/api/orders")
                 .header("Idempotency-Key", "idem-http-001")
                 .header("X-Correlation-Id", "corr-http-001")
+                .header("X-StockRush-Subject", "member-1")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                     {
@@ -113,6 +116,62 @@ class CreateOrderControllerIntegrationTest {
     }
 
     @Test
+    void creates_order_with_authenticated_subject_when_body_member_id_is_omitted() throws Exception {
+        mockMvc.perform(post("/api/orders")
+                .header("Idempotency-Key", "idem-http-auth-subject-only")
+                .header("X-Correlation-Id", "corr-http-auth-subject-only")
+                .header("X-StockRush-Subject", "member-authenticated")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "items": [
+                        {
+                          "productCode": "LIMITED-001",
+                          "skuId": "SKU-001",
+                          "quantity": 1,
+                          "unitPrice": 12000.00
+                        }
+                      ]
+                    }
+                    """))
+            .andExpect(status().isCreated())
+            .andExpect(jsonPath("$.success", is(true)));
+
+        org.junit.jupiter.api.Assertions.assertEquals(
+            "member-authenticated",
+            jdbcClient.sql("select member_id from customer_orders where order_id = 'ord_http_001'")
+                .query(String.class)
+                .single()
+        );
+    }
+
+    @Test
+    void rejects_create_order_without_trusted_customer_subject() throws Exception {
+        mockMvc.perform(post("/api/orders")
+                .header("Idempotency-Key", "idem-http-missing-subject")
+                .header("X-Correlation-Id", "corr-http-missing-subject")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "memberId": "member-body-only",
+                      "items": [
+                        {
+                          "productCode": "LIMITED-001",
+                          "skuId": "SKU-001",
+                          "quantity": 1,
+                          "unitPrice": 12000.00
+                        }
+                      ]
+                    }
+                    """))
+            .andExpect(status().isUnauthorized())
+            .andExpect(header().string("X-Correlation-Id", "corr-http-missing-subject"))
+            .andExpect(jsonPath("$.success", is(false)))
+            .andExpect(jsonPath("$.error.code", is("ORDER_TRUSTED_IDENTITY_REQUIRED")))
+            .andExpect(jsonPath("$.trace.correlationId", is("corr-http-missing-subject")));
+    }
+
+    @Test
     void replays_same_idempotency_key_with_existing_order_response() throws Exception {
         String requestBody = """
             {
@@ -131,6 +190,7 @@ class CreateOrderControllerIntegrationTest {
         mockMvc.perform(post("/api/orders")
                 .header("Idempotency-Key", "idem-http-replay")
                 .header("X-Correlation-Id", "corr-http-replay-first")
+                .header("X-StockRush-Subject", "member-1")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(requestBody))
             .andExpect(status().isCreated())
@@ -139,6 +199,7 @@ class CreateOrderControllerIntegrationTest {
         mockMvc.perform(post("/api/orders")
                 .header("Idempotency-Key", "idem-http-replay")
                 .header("X-Correlation-Id", "corr-http-replay-second")
+                .header("X-StockRush-Subject", "member-1")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(requestBody))
             .andExpect(status().isOk())
@@ -201,6 +262,7 @@ class CreateOrderControllerIntegrationTest {
         mockMvc.perform(post("/api/orders")
                 .header("Idempotency-Key", "idem-http-payment-method")
                 .header("X-Correlation-Id", "corr-http-payment-method")
+                .header("X-StockRush-Subject", "member-1")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                     {
@@ -230,6 +292,7 @@ class CreateOrderControllerIntegrationTest {
         mockMvc.perform(post("/api/orders")
                 .header("Idempotency-Key", "idem-http-coupon")
                 .header("X-Correlation-Id", "corr-http-coupon")
+                .header("X-StockRush-Subject", "member-1")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                     {
@@ -263,6 +326,7 @@ class CreateOrderControllerIntegrationTest {
         mockMvc.perform(post("/api/orders")
                 .header("Idempotency-Key", "idem-http-coupon-invalid")
                 .header("X-Correlation-Id", "corr-http-coupon-invalid")
+                .header("X-StockRush-Subject", "member-1")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                     {
@@ -292,6 +356,7 @@ class CreateOrderControllerIntegrationTest {
         mockMvc.perform(post("/api/orders")
                 .header("Idempotency-Key", "idem-http-coupon-unavailable")
                 .header("X-Correlation-Id", "corr-http-coupon-unavailable")
+                .header("X-StockRush-Subject", "member-1")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                     {
@@ -320,6 +385,7 @@ class CreateOrderControllerIntegrationTest {
         mockMvc.perform(post("/api/orders")
                 .header("Idempotency-Key", "idem-http-default-payment")
                 .header("X-Correlation-Id", "corr-http-default-payment")
+                .header("X-StockRush-Subject", "member-1")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                     {
@@ -347,6 +413,7 @@ class CreateOrderControllerIntegrationTest {
     void rejects_request_without_idempotency_key() throws Exception {
         mockMvc.perform(post("/api/orders")
                 .header("X-Correlation-Id", "corr-http-missing")
+                .header("X-StockRush-Subject", "member-1")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                     {
@@ -373,6 +440,7 @@ class CreateOrderControllerIntegrationTest {
         mockMvc.perform(post("/api/orders")
                 .header("Idempotency-Key", "idem-http-invalid")
                 .header("X-Correlation-Id", "corr-http-invalid")
+                .header("X-StockRush-Subject", "member-1")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                     {

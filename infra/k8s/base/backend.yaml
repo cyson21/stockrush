@@ -1,3 +1,4 @@
+# backend 서비스군 배포 템플릿을 묶어 앱별 리소스를 일괄 관리합니다.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -125,6 +126,12 @@ spec:
               value: "1000"
             - name: STOCKRUSH_OUTBOX_RELAY_BATCH_SIZE
               value: "50"
+            - name: STOCKRUSH_INVENTORY_RESERVATION_SWEEPER_ENABLED
+              value: "true"
+            - name: STOCKRUSH_INVENTORY_RESERVATION_SWEEPER_FIXED_DELAY_MS
+              value: "30000"
+            - name: STOCKRUSH_INVENTORY_RESERVATION_SWEEPER_INITIAL_DELAY_MS
+              value: "5000"
           readinessProbe:
             httpGet:
               path: /actuator/health

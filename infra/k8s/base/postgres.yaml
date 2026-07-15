@@ -1,3 +1,4 @@
+# Postgres를 배포하고 스키마 초기화 configmap과 secret을 함께 연결합니다.
 apiVersion: apps/v1
 kind: Deployment
 metadata:

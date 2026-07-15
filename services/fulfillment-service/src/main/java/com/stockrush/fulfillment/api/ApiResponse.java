@@ -1,6 +1,10 @@
 package com.stockrush.fulfillment.api;
 
 import java.util.Map;
+/**
+ * HTTP API 경계의 진입점으로, 요청 파라미터를 받아 서비스 호출 흐름을 연결합니다.
+ */
+
 
 record ApiResponse<T>(
     boolean success,

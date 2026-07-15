@@ -16,6 +16,10 @@ import org.springframework.kafka.core.DefaultKafkaConsumerFactory;
 import org.springframework.kafka.core.DefaultKafkaProducerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.core.ProducerFactory;
+/**
+ * Kafka Producer/Consumer 설정과 메시지 파싱 정책을 애플리케이션 전역으로 구성하는 설정입니다.
+ */
+
 
 @EnableKafka
 @Configuration

@@ -11,6 +11,10 @@ import java.util.Locale;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+/**
+ * 도메인 규칙 조합과 저장소/이벤트 위임을 담당하는 핵심 유즈케이스 서비스입니다.
+ */
+
 
 @Service
 public class OutboxQueryService {

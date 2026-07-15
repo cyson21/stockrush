@@ -1,3 +1,4 @@
+// 인증·세션·토큰·리다이렉트 흐름을 한 곳에서 관리하는 경계입니다.
 const secureStoreValues: Record<string, string> = {};
 
 jest.mock('expo-secure-store', () => ({

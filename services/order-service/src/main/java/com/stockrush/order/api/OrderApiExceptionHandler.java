@@ -1,3 +1,5 @@
+// OrderApiExceptionHandler: 이벤트/메시지 처리 흐름을 수신하고 도메인 상태 반영을 담당합니다.
+
 package com.stockrush.order.api;
 
 import com.stockrush.order.application.CouponNotApplicableException;
@@ -65,6 +67,17 @@ class OrderApiExceptionHandler {
         return ResponseEntity.status(HttpStatus.FORBIDDEN)
             .header(CorrelationIds.HEADER_NAME, correlationId)
             .body(ApiResponse.failure("ORDER_FORBIDDEN", exception.getMessage(), correlationId));
+    }
+
+    @ExceptionHandler(TrustedCustomerIdentityRequiredException.class)
+    ResponseEntity<ApiResponse<Void>> handleTrustedCustomerIdentityRequired(
+        TrustedCustomerIdentityRequiredException exception,
+        HttpServletRequest request
+    ) {
+        String correlationId = CorrelationIds.resolve(request.getHeader(CorrelationIds.HEADER_NAME));
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+            .header(CorrelationIds.HEADER_NAME, correlationId)
+            .body(ApiResponse.failure("ORDER_TRUSTED_IDENTITY_REQUIRED", exception.getMessage(), correlationId));
     }
 
     @ExceptionHandler(OrderDataIntegrityException.class)

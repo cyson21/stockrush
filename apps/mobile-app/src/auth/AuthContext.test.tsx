@@ -1,3 +1,4 @@
+// 인증·세션·토큰·리다이렉트 흐름을 한 곳에서 관리하는 경계입니다.
 import { fireEvent, render, screen } from '@testing-library/react-native';
 import { Linking, Pressable, Text, View } from 'react-native';
 import { useAuth } from './AuthContext';

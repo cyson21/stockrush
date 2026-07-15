@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Create and update AI Run Ledger records."""
+# 실행기록을 파일 기반으로 생성/조회/기록하는 책임을 담은 핵심 유틸입니다.
 from __future__ import annotations
 
 import argparse

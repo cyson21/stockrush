@@ -1,6 +1,7 @@
 server:
   port: ${READ_MODEL_SERVICE_PORT:18087}
 
+# read-model-service 런타임 이름과 관측 엔드포인트 노출 기준을 정의합니다.
 spring:
   application:
     name: read-model-service

@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# kind 클러스터 포트포워딩과 기본 헬스체크를 통해 데모 런타임 상태를 확인합니다.
 set -euo pipefail
 
 CLUSTER_NAME="${STOCKRUSH_KIND_CLUSTER:-stockrush}"

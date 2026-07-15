@@ -1,3 +1,4 @@
+// 관리자 앱 인증 유틸: OIDC 로그인/토큰/상태 저장 흐름을 통합 관리합니다.
 export const AUTH_ACCESS_TOKEN_STORAGE_KEY = 'stockrush-admin-access-token';
 const AUTH_ACCESS_TOKEN_EXPIRES_AT_STORAGE_KEY = 'stockrush-admin-access-token-expires-at';
 const AUTH_STATE_KEY = 'stockrush-admin-oidc-state';
