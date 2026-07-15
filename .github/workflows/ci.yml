@@ -74,6 +74,7 @@ jobs:
         env:
           PORTFOLIO_EVIDENCE_GIT_COMMIT: ${{ github.sha }}
         run: |
+          SOURCE_DATE_EPOCH="$(git show -s --format=%ct "$GITHUB_SHA")" \
           python tools/portfolio-evidence/generate_report.py \
             --project StockRush \
             --scope backend-services \
