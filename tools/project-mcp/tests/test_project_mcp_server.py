@@ -7,6 +7,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
+# MCP 서버가 프로젝트 문서/도구 목록을 일관되게 노출하는지 검증합니다.
+
 
 MODULE_PATH = Path(__file__).resolve().parents[1] / "project_mcp_server.py"
 SPEC = importlib.util.spec_from_file_location("project_mcp_server", MODULE_PATH)

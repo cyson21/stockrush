@@ -1,3 +1,5 @@
+// OrderSagaEventHandlerIntegrationTest: 이벤트/메시지 처리 흐름을 수신하고 도메인 상태 반영을 담당합니다.
+
 package com.stockrush.order.application;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -79,6 +81,40 @@ class OrderSagaEventHandlerIntegrationTest {
         assertEquals("OrderConfirmed", queryString("select event_type from outbox_events"));
         assertEquals("stockrush.order.events.v1", queryString("select topic from outbox_events"));
         assertEquals("PENDING", queryString("select status from outbox_events"));
+    }
+
+    @Test
+    void ignores_payment_authorized_for_cancelled_order() {
+        jdbcClient.sql("""
+                update customer_orders
+                set status = 'CANCELLED',
+                    saga_status = 'FAILED'
+                where order_id = 'ord_saga_001'
+                """)
+            .update();
+
+        handler.handlePaymentAuthorized(paymentAuthorized());
+
+        assertEquals("CANCELLED", queryString("select status from customer_orders where order_id = 'ord_saga_001'"));
+        assertEquals("FAILED", queryString("select saga_status from customer_orders where order_id = 'ord_saga_001'"));
+        assertEquals(0, queryInt("select count(*) from outbox_events where event_type = 'OrderConfirmed'"));
+    }
+
+    @Test
+    void ignores_inventory_reserved_for_cancelled_order() {
+        jdbcClient.sql("""
+                update customer_orders
+                set status = 'CANCELLED',
+                    saga_status = 'FAILED'
+                where order_id = 'ord_saga_001'
+                """)
+            .update();
+
+        handler.handleInventoryReserved(inventoryReserved());
+
+        assertEquals("CANCELLED", queryString("select status from customer_orders where order_id = 'ord_saga_001'"));
+        assertEquals("FAILED", queryString("select saga_status from customer_orders where order_id = 'ord_saga_001'"));
+        assertEquals(0, queryInt("select count(*) from outbox_events where event_type = 'PaymentAuthorizationRequested'"));
     }
 
     @Test

@@ -1,4 +1,5 @@
 #!/usr/bin/env sh
+# 데모/로컬 Kafka 토픽을 목적별로 미리 생성해 이벤트 플로우 준비를 보장합니다.
 set -eu
 
 BOOTSTRAP_SERVER="${BOOTSTRAP_SERVER:-kafka:19092}"

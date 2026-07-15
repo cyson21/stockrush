@@ -1,3 +1,4 @@
+# main 기준 컨테이너 이미지를 빌드하고 배포 레지스트리에 게시하는 릴리스 흐름입니다.
 name: Release Images
 
 on:
@@ -87,18 +88,34 @@ jobs:
               APP_DIR=admin-app
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || inputs.source_ref || github.ref }}
+          fetch-depth: 0
+          persist-credentials: false
 
-      - name: Set image variables
+      - name: Validate release source and image tag
         id: vars
+        env:
+          RELEASE_IMAGE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.image_tag || 'latest-demo' }}
         run: |
+          set -euo pipefail
+          full_sha="$(git rev-parse HEAD)"
+          git merge-base --is-ancestor "$full_sha" origin/main || {
+            echo "Release source must be part of origin/main history" >&2
+            exit 1
+          }
           short_sha="$(git rev-parse --short=12 HEAD)"
-          image_tag="${{ github.event_name == 'workflow_dispatch' && inputs.image_tag || 'latest-demo' }}"
+          image_tag="$RELEASE_IMAGE_TAG"
+          [[ "$image_tag" =~ ^[A-Za-z0-9_][A-Za-z0-9._-]{0,127}$ ]] || {
+            echo "Invalid OCI image tag: ${image_tag}" >&2
+            exit 1
+          }
+          echo "full_sha=${full_sha}" >> "$GITHUB_OUTPUT"
           echo "short_sha=${short_sha}" >> "$GITHUB_OUTPUT"
           echo "image_tag=${image_tag}" >> "$GITHUB_OUTPUT"
           echo "image_name=ghcr.io/${{ github.repository_owner }}/stockrush-${{ matrix.image }}" >> "$GITHUB_OUTPUT"
+          echo "scan_image=stockrush-scan-${{ matrix.image }}:${short_sha}" >> "$GITHUB_OUTPUT"
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -108,6 +125,30 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      - name: Build amd64 scan candidate
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          push: false
+          load: true
+          platforms: linux/amd64
+          build-args: ${{ matrix.build_args }}
+          tags: ${{ steps.vars.outputs.scan_image }}
+          cache-from: type=gha,scope=${{ matrix.image }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}
+
+      - name: Scan candidate before publishing
+        env:
+          TRIVY_NO_PROGRESS: "true"
+        run: |
+          timeout 10m docker run --rm \
+            -e TRIVY_NO_PROGRESS \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            aquasec/trivy:0.69.3 \
+            image --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 \
+            "${{ steps.vars.outputs.scan_image }}"
+
       - name: Log in to GHCR
         uses: docker/login-action@v3
         with:
@@ -116,6 +157,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push image
+        id: publish
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -123,12 +165,15 @@ jobs:
           push: true
           platforms: linux/amd64,linux/arm64
           build-args: ${{ matrix.build_args }}
+          cache-from: type=gha,scope=${{ matrix.image }}
+          provenance: mode=max
+          sbom: true
           tags: |
             ${{ steps.vars.outputs.image_name }}:${{ steps.vars.outputs.image_tag }}
             ${{ steps.vars.outputs.image_name }}:git-${{ steps.vars.outputs.short_sha }}
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
-            org.opencontainers.image.revision=${{ steps.vars.outputs.short_sha }}
+            org.opencontainers.image.revision=${{ steps.vars.outputs.full_sha }}
             org.opencontainers.image.title=StockRush ${{ matrix.image }}
 
       - name: Scan published image for vulnerabilities
@@ -140,7 +185,7 @@ jobs:
             -v "$HOME/.docker:/root/.docker:ro" \
             aquasec/trivy:0.69.3 \
             image --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 \
-            "${{ steps.vars.outputs.image_name }}:git-${{ steps.vars.outputs.short_sha }}"
+            "${{ steps.vars.outputs.image_name }}@${{ steps.publish.outputs.digest }}"
 
       - name: Summary
         run: |
@@ -148,4 +193,6 @@ jobs:
             echo "### Published image"
             echo "- `${{ steps.vars.outputs.image_name }}:${{ steps.vars.outputs.image_tag }}`"
             echo "- `${{ steps.vars.outputs.image_name }}:git-${{ steps.vars.outputs.short_sha }}`"
+            echo "- Digest: `${{ steps.publish.outputs.digest }}`"
+            echo "- Source commit: `${{ steps.vars.outputs.full_sha }}`"
           } >> "$GITHUB_STEP_SUMMARY"

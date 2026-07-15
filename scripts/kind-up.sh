@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# kind 클러스터 생성/이미지 반영 및 배포 전 점검을 일괄 수행합니다.
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

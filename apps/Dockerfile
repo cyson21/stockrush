@@ -1,3 +1,4 @@
+# 웹 앱 빌드 산출물을 nginx 런타임 이미지로 옮기는 공통 Dockerfile입니다.
 FROM node:24-alpine AS build
 
 ARG APP_DIR

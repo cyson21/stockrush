@@ -1,3 +1,4 @@
+// 모바일 앱 사전 점검/스모크/증빙 수집을 자동화하는 스크립트입니다.
 import { execFileSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import http from 'node:http';

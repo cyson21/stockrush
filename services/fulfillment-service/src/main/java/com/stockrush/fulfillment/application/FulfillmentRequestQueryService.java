@@ -1,6 +1,10 @@
 package com.stockrush.fulfillment.application;
 
 import org.springframework.stereotype.Service;
+/**
+ * 도메인 규칙 조합과 저장소/이벤트 위임을 담당하는 핵심 유즈케이스 서비스입니다.
+ */
+
 
 @Service
 public class FulfillmentRequestQueryService {

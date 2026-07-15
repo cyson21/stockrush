@@ -1,3 +1,5 @@
+-- V6__create_admin_actions: 스키마/제약조건/인덱스 같은 영속 구조를 반영하는 마이그레이션입니다.
+
 create table if not exists admin_actions (
     id bigserial primary key,
     action varchar(80) not null,

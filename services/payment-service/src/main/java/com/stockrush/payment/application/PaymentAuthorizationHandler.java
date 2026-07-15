@@ -11,6 +11,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
+/**
+ * 외부 이벤트/명령을 수신해 유효성, 멱등성 체크, 다음 상태 전환을 조합해 처리하는 핸들러입니다.
+ */
+
 
 @Service
 public class PaymentAuthorizationHandler {

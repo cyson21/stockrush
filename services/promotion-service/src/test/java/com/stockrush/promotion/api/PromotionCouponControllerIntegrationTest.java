@@ -1,3 +1,4 @@
+
 package com.stockrush.promotion.api;
 
 import static org.hamcrest.Matchers.hasSize;

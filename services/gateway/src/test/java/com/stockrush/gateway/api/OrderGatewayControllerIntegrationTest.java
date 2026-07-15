@@ -1,3 +1,4 @@
+
 package com.stockrush.gateway.api;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -113,6 +114,26 @@ class OrderGatewayControllerIntegrationTest {
         STUB_PROMOTION_SERVICE.stop();
         STUB_FULFILLMENT_SERVICE.stop();
         STUB_READ_MODEL_SERVICE.stop();
+    }
+
+    @Test
+    void exposes_smoke_actuator_endpoints_without_bearer_token() throws Exception {
+        for (String path : List.of("/actuator/health", "/actuator/info", "/actuator/metrics")) {
+            HttpRequest request = HttpRequest.newBuilder(gatewayUri(path))
+                .GET()
+                .build();
+
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+
+            assertThat(response.statusCode()).isEqualTo(200);
+        }
+        STUB_CATALOG_SERVICE.assertNoRequests();
+        STUB_ORDER_SERVICE.assertNoRequests();
+        STUB_INVENTORY_SERVICE.assertNoRequests();
+        STUB_PAYMENT_SERVICE.assertNoRequests();
+        STUB_PROMOTION_SERVICE.assertNoRequests();
+        STUB_FULFILLMENT_SERVICE.assertNoRequests();
+        STUB_READ_MODEL_SERVICE.assertNoRequests();
     }
 
     @Test
@@ -337,6 +358,7 @@ class OrderGatewayControllerIntegrationTest {
     void routes_public_catalog_products_list_query_to_catalog_service_without_bearer_token() throws Exception {
         HttpRequest request = HttpRequest.newBuilder(gatewayUri("/api/products?status=ON_SALE&page=0&size=20"))
             .header("X-Correlation-Id", "corr-gateway-public-products")
+            .header("X-StockRush-Subject", "spoofed-public-subject")
             .GET()
             .build();
 
@@ -351,6 +373,7 @@ class OrderGatewayControllerIntegrationTest {
         assertThat(forwarded.path()).isEqualTo("/api/products");
         assertThat(forwarded.query()).contains("status=ON_SALE&page=0&size=20");
         assertThat(forwarded.firstHeader("X-Operator-Id")).isEmpty();
+        assertThat(forwarded.firstHeader("X-StockRush-Subject")).isEmpty();
         assertThat(forwarded.firstHeader("X-Customer-Id")).isEmpty();
         assertThat(forwarded.firstHeader("X-Correlation-Id")).contains("corr-gateway-public-products");
         STUB_INVENTORY_SERVICE.assertNoRequests();
@@ -380,6 +403,34 @@ class OrderGatewayControllerIntegrationTest {
         assertThat(forwarded.firstHeader("X-Operator-Id")).isEmpty();
         assertThat(forwarded.firstHeader("X-Customer-Id")).isEmpty();
         assertThat(forwarded.firstHeader("X-Correlation-Id")).contains("corr-gateway-public-stocks");
+        STUB_CATALOG_SERVICE.assertNoRequests();
+        STUB_ORDER_SERVICE.assertNoRequests();
+        STUB_PROMOTION_SERVICE.assertNoRequests();
+        STUB_FULFILLMENT_SERVICE.assertNoRequests();
+        STUB_READ_MODEL_SERVICE.assertNoRequests();
+    }
+
+    @Test
+    void routes_public_stock_detail_query_to_inventory_service_without_bearer_token() throws Exception {
+        HttpRequest request = HttpRequest.newBuilder(gatewayUri("/api/stocks/SKU-007"))
+            .header("X-Correlation-Id", "corr-gateway-public-stock-detail")
+            .header("X-StockRush-Subject", "spoofed-public-subject")
+            .header("X-Operator-Id", "spoofed-public-operator")
+            .GET()
+            .build();
+
+        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.headers().firstValue("X-Correlation-Id")).contains("corr-gateway-public-stock-detail");
+        assertThat(response.body()).contains("\"skuId\":\"SKU-007\"");
+
+        RecordedRequest forwarded = STUB_INVENTORY_SERVICE.singleRequest();
+        assertThat(forwarded.method()).isEqualTo("GET");
+        assertThat(forwarded.path()).isEqualTo("/api/stocks/SKU-007");
+        assertThat(forwarded.firstHeader("X-StockRush-Subject")).isEmpty();
+        assertThat(forwarded.firstHeader("X-Operator-Id")).isEmpty();
+        assertThat(forwarded.firstHeader("X-Correlation-Id")).contains("corr-gateway-public-stock-detail");
         STUB_CATALOG_SERVICE.assertNoRequests();
         STUB_ORDER_SERVICE.assertNoRequests();
         STUB_PROMOTION_SERVICE.assertNoRequests();
@@ -706,6 +757,8 @@ class OrderGatewayControllerIntegrationTest {
         HttpRequest request = HttpRequest.newBuilder(gatewayUri("/api/coupons/quote"))
             .header("Content-Type", "application/json")
             .header("X-Correlation-Id", "corr-gateway-coupon-quote")
+            .header("X-StockRush-Subject", "spoofed-public-subject")
+            .header("X-Operator-Id", "spoofed-public-operator")
             .POST(HttpRequest.BodyPublishers.ofString(requestBody))
             .build();
 
@@ -720,6 +773,8 @@ class OrderGatewayControllerIntegrationTest {
         assertThat(forwarded.method()).isEqualTo("POST");
         assertThat(forwarded.path()).isEqualTo("/api/coupons/quote");
         assertThat(forwarded.firstHeader("Content-Type")).contains("application/json");
+        assertThat(forwarded.firstHeader("X-StockRush-Subject")).isEmpty();
+        assertThat(forwarded.firstHeader("X-Operator-Id")).isEmpty();
         assertThat(forwarded.firstHeader("X-Correlation-Id")).contains("corr-gateway-coupon-quote");
         assertThat(forwarded.body()).contains("\"couponCode\": \"WELCOME10\"");
         STUB_ORDER_SERVICE.assertNoRequests();
@@ -745,6 +800,61 @@ class OrderGatewayControllerIntegrationTest {
         assertThat(forwarded.path()).isEqualTo("/api/admin/coupon-usages");
         assertThat(forwarded.query()).contains("couponCode=WELCOME10&status=CONSUMED&page=0&size=20");
         assertThat(forwarded.firstHeader("X-Correlation-Id")).contains("corr-gateway-coupon-usages");
+        STUB_ORDER_SERVICE.assertNoRequests();
+        STUB_READ_MODEL_SERVICE.assertNoRequests();
+    }
+
+    @Test
+    void rejects_admin_coupon_create_with_customer_role() throws Exception {
+        String requestBody = """
+            {
+              "couponCode": "WELCOME20",
+              "name": "Welcome Coupon",
+              "discountAmount": 5000
+            }
+            """;
+
+        HttpRequest request = customerRequest("/api/admin/coupons")
+            .header("Content-Type", "application/json")
+            .header("X-Correlation-Id", "corr-gateway-admin-coupon-customer")
+            .POST(HttpRequest.BodyPublishers.ofString(requestBody))
+            .build();
+
+        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+
+        assertThat(response.statusCode()).isEqualTo(403);
+        STUB_PROMOTION_SERVICE.assertNoRequests();
+    }
+
+    @Test
+    void routes_admin_coupon_create_command_to_promotion_service() throws Exception {
+        String requestBody = """
+            {
+              "couponCode": "WELCOME20",
+              "name": "Welcome Coupon",
+              "discountAmount": 5000
+            }
+            """;
+
+        HttpRequest request = adminRequest("/api/admin/coupons")
+            .header("Content-Type", "application/json")
+            .header("X-Correlation-Id", "corr-gateway-admin-coupon-create")
+            .header("X-Operator-Id", "spoofed-operator")
+            .POST(HttpRequest.BodyPublishers.ofString(requestBody))
+            .build();
+
+        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+
+        assertThat(response.statusCode()).isEqualTo(201);
+        assertThat(response.headers().firstValue("X-Correlation-Id")).contains("corr-gateway-admin-coupon-create");
+        assertThat(response.body()).contains("\"couponCode\":\"WELCOME20\"");
+
+        RecordedRequest forwarded = STUB_PROMOTION_SERVICE.singleRequest();
+        assertThat(forwarded.method()).isEqualTo("POST");
+        assertThat(forwarded.path()).isEqualTo("/api/admin/coupons");
+        assertThat(forwarded.firstHeader("X-Operator-Id")).contains("admin-demo");
+        assertThat(forwarded.firstHeader("X-Correlation-Id")).contains("corr-gateway-admin-coupon-create");
+        assertThat(forwarded.body()).contains("\"couponCode\": \"WELCOME20\"");
         STUB_ORDER_SERVICE.assertNoRequests();
         STUB_READ_MODEL_SERVICE.assertNoRequests();
     }
@@ -987,6 +1097,7 @@ class OrderGatewayControllerIntegrationTest {
             server.createContext("/api/orders", this::handle);
             server.createContext("/api/admin/orders", this::handle);
             server.createContext("/api/admin/outbox-events", this::handle);
+            server.createContext("/api/admin/coupons", this::handle);
             server.createContext("/api/admin/coupon-usages", this::handle);
             server.createContext("/api/admin/fulfillment-requests", this::handle);
             server.createContext("/api/admin/products", this::handle);
@@ -1070,6 +1181,12 @@ class OrderGatewayControllerIntegrationTest {
                     """.formatted(currentCorrelationId(exchange)));
                 return;
             }
+            if ("GET".equals(exchange.getRequestMethod()) && "/api/stocks/SKU-007".equals(path)) {
+                writeJson(exchange, 200, currentCorrelationId(exchange), null, """
+                    {"success":true,"data":{"skuId":"SKU-007","productCode":"PROD-001","availableQuantity":20,"reservedQuantity":0,"version":1},"error":null,"trace":{"correlationId":"%s"}}
+                    """.formatted(currentCorrelationId(exchange)));
+                return;
+            }
             if ("PUT".equals(exchange.getRequestMethod()) && path.startsWith("/api/stocks/")) {
                 writeJson(exchange, 200, currentCorrelationId(exchange), null, """
                     {"success":true,"data":{"skuId":"SKU-007","productCode":"PROD-001","availableQuantity":20,"reservedQuantity":0,"version":2},"error":null,"trace":{"correlationId":"%s"}}
@@ -1109,6 +1226,12 @@ class OrderGatewayControllerIntegrationTest {
             if ("POST".equals(exchange.getRequestMethod()) && "/api/coupons/quote".equals(path)) {
                 writeJson(exchange, 200, currentCorrelationId(exchange), null, """
                     {"success":true,"data":{"couponCode":"WELCOME10","applied":true,"discountAmount":5000.0,"payAmount":75000.0,"reason":"APPLIED"},"error":null,"trace":{"correlationId":"%s"}}
+                    """.formatted(currentCorrelationId(exchange)));
+                return;
+            }
+            if ("POST".equals(exchange.getRequestMethod()) && "/api/admin/coupons".equals(path)) {
+                writeJson(exchange, 201, currentCorrelationId(exchange), null, """
+                    {"success":true,"data":{"couponCode":"WELCOME20","name":"Welcome Coupon","discountAmount":5000.0},"error":null,"trace":{"correlationId":"%s"}}
                     """.formatted(currentCorrelationId(exchange)));
                 return;
             }

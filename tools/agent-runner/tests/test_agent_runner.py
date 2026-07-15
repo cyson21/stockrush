@@ -7,6 +7,8 @@ import unittest
 from datetime import datetime
 from pathlib import Path
 
+# AI Run Ledger 생성/조회/검증 경로의 회귀 동작을 검증합니다.
+
 
 MODULE_PATH = Path(__file__).resolve().parents[1] / "agent_runner.py"
 SPEC = importlib.util.spec_from_file_location("agent_runner", MODULE_PATH)

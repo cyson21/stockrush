@@ -25,6 +25,11 @@ JSON output:
 - `ARCH-007`: Gateway must resolve and propagate `X-Correlation-Id`
 - `ARCH-009`: backend services and Gateway must expose Actuator health, info, and metrics
 - `ARCH-010`: HTTP API services must keep `X-Correlation-Id` in request-scope MDC
+- `ARCH-011`: Gateway must protect admin and customer routes
+- `ARCH-012`: Gateway must rewrite trusted identity headers
+- `ARCH-013`: demo compose must not publish internal backend service ports
+- `ARCH-014`: Nginx must not proxy legacy service prefixes directly to backend services
+- `ARCH-015`: customer routes must require trusted subject identity
 
 Additional rules and planned checks are defined in `docs/architecture/architecture-guard-rules.md`.
 

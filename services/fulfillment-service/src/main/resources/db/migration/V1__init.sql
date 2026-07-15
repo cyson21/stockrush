@@ -1,3 +1,5 @@
+-- 초기 스키마 생성 DDL입니다.
+
 create table if not exists fulfillment_requests (
   id bigserial primary key,
   request_id uuid unique not null,

@@ -7,6 +7,10 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import org.springframework.http.HttpHeaders;
 import org.springframework.security.oauth2.jwt.Jwt;
+/**
+ * HTTP API 경계의 진입점으로, 요청 파라미터를 받아 서비스 호출 흐름을 연결합니다.
+ */
+
 
 final class TrustedIdentityHeaders {
 
@@ -31,13 +35,17 @@ final class TrustedIdentityHeaders {
         return headers;
     }
 
+    static HttpHeaders publicRequest(HttpHeaders source) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.putAll(source);
+        removeTrustedIdentity(headers);
+        return headers;
+    }
+
     private static HttpHeaders trustedBase(HttpHeaders source, Jwt jwt) {
         HttpHeaders headers = new HttpHeaders();
         headers.putAll(source);
-        headers.remove(SUBJECT);
-        headers.remove(EMAIL);
-        headers.remove(ROLES);
-        headers.remove(OPERATOR);
+        removeTrustedIdentity(headers);
 
         headers.set(SUBJECT, jwt.getSubject());
         String email = jwt.getClaimAsString("email");
@@ -53,6 +61,13 @@ final class TrustedIdentityHeaders {
             return email.trim();
         }
         return jwt.getSubject();
+    }
+
+    private static void removeTrustedIdentity(HttpHeaders headers) {
+        headers.remove(SUBJECT);
+        headers.remove(EMAIL);
+        headers.remove(ROLES);
+        headers.remove(OPERATOR);
     }
 
     private static String roles(Jwt jwt) {

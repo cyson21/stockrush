@@ -1,3 +1,4 @@
+// 타입 정의 모듈: API/도메인 데이터 형태를 명시적으로 문서화합니다.
 export type ApiError = {
   code: string;
   message: string;

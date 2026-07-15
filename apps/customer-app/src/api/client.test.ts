@@ -1,3 +1,4 @@
+// customer-app API 호출 모듈: 엔드포인트 구성과 공통 응답 처리 경계를 담당합니다.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { apiUrl } from './client';
 

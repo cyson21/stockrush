@@ -1,4 +1,5 @@
 $ErrorActionPreference = "Stop"
+<# demo compose 스택을 중단하고 고아 컨테이너 정리를 수행합니다. #>
 
 $RootDir = Resolve-Path (Join-Path $PSScriptRoot "..")
 $ComposeFile = Join-Path $RootDir "infra/demo/docker-compose.yml"

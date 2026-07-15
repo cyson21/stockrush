@@ -1,3 +1,4 @@
+
 package com.stockrush.fulfillment.application;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;

@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# 로컬 인프라 자원을 안전하게 정리하며 dry-run과 실제 실행을 분리합니다.
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

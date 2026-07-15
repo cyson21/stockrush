@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# 데모 이미지를 지정된 GHCR 태그로 배포하고 smoke 검사까지 이어가는 진입 스크립트입니다.
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# dev-rag 하위 실행 코드를 동일 진입점에서 실행하기 위한 래퍼입니다.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

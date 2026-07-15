@@ -1,10 +1,17 @@
+# 백엔드/웹/모바일 검증을 한 번에 묶어 PR과 main push 품질 기준을 확인합니다.
 name: CI
 
 on:
   pull_request:
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
   push:
     branches:
       - main
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
   workflow_dispatch:
 
 permissions:
@@ -21,25 +28,47 @@ jobs:
     timeout-minutes: 45
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
+        with:
+          persist-credentials: false
 
       - name: Set up Java
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "17"
           cache: maven
 
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
       - name: Start local infrastructure
         run: |
+          set -euo pipefail
           docker compose -f infra/local/docker-compose.yml up -d postgres kafka kafka-init
-          init_status="$(docker wait stockrush-kafka-init)"
+          if ! init_status="$(timeout 180s docker wait stockrush-kafka-init)"; then
+            echo "Kafka topic initialization did not finish within 180 seconds" >&2
+            docker compose -f infra/local/docker-compose.yml ps
+            exit 1
+          fi
           test "$init_status" = "0"
+          for attempt in $(seq 1 30); do
+            postgres_health="$(docker inspect --format '{{.State.Health.Status}}' stockrush-postgres)"
+            test "$postgres_health" = "healthy" && break
+            test "$attempt" = "30" && {
+              echo "PostgreSQL did not become healthy" >&2
+              exit 1
+            }
+            sleep 2
+          done
           docker compose -f infra/local/docker-compose.yml ps
 
       - name: Run Maven tests
         run: |
           set -euo pipefail
+          failed_services=()
           for service in \
             catalog-service \
             inventory-service \
@@ -51,9 +80,83 @@ jobs:
             gateway
           do
             echo "::group::${service}"
-            (cd "services/${service}" && mvn -q test)
+            set +e
+            (
+              cd "services/${service}"
+              timeout 7m mvn --batch-mode --no-transfer-progress test
+            )
+            status=$?
+            set -e
             echo "::endgroup::"
+            if test "$status" -ne 0; then
+              test "$status" -eq 124 \
+                && echo "${service}: timed out after 7 minutes" >&2 \
+                || echo "${service}: Maven exited with status ${status}" >&2
+              failed_services+=("${service}:${status}")
+            fi
           done
+          if test "${#failed_services[@]}" -gt 0; then
+            printf 'Backend test failures: %s\n' "${failed_services[*]}" >&2
+            exit 1
+          fi
+
+      - name: Upload raw Surefire reports
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: stockrush-backend-surefire-xml
+          path: services/*/target/surefire-reports/TEST-*.xml
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Test portfolio evidence generator
+        run: python -m unittest discover -s tools/portfolio-evidence/tests -p "test_*.py"
+
+      - name: Generate portfolio evidence report
+        env:
+          PORTFOLIO_EVIDENCE_GIT_COMMIT: ${{ github.sha }}
+        run: |
+          SOURCE_DATE_EPOCH="$(git show -s --format=%ct "$GITHUB_SHA")" \
+          python tools/portfolio-evidence/generate_report.py \
+            --project StockRush \
+            --scope backend-services \
+            --require-success \
+            --output build/portfolio-evidence/stockrush-backend-surefire.json \
+            services/*/target/surefire-reports
+          sha256sum build/portfolio-evidence/stockrush-backend-surefire.json \
+            > build/portfolio-evidence/stockrush-backend-surefire.json.sha256
+
+      - name: Summarize portfolio evidence
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          report = json.loads(
+              Path("build/portfolio-evidence/stockrush-backend-surefire.json").read_text()
+          )
+          totals = report["totals"]
+          with Path(os.environ["GITHUB_STEP_SUMMARY"]).open("a", encoding="utf-8") as summary:
+              summary.write("### Backend test evidence\n")
+              summary.write(f"- Commit: `{report['git_commit']}`\n")
+              summary.write(f"- Source XML files: {report['source_file_count']}\n")
+              summary.write(f"- Test suites: {report['suite_count']}\n")
+              summary.write(
+                  f"- Tests: {totals['tests']} total, {totals['passed']} passed, "
+                  f"{totals['skipped']} skipped\n"
+              )
+          PY
+
+      - name: Upload portfolio evidence report
+        uses: actions/upload-artifact@v6
+        with:
+          name: stockrush-backend-test-evidence
+          path: |
+            build/portfolio-evidence/stockrush-backend-surefire.json
+            build/portfolio-evidence/stockrush-backend-surefire.json.sha256
+          if-no-files-found: error
+          retention-days: 30
 
       - name: Show infrastructure logs on failure
         if: failure()
@@ -69,10 +172,12 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
+        with:
+          persist-credentials: false
 
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: "24"
           cache: npm
@@ -98,10 +203,12 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
+        with:
+          persist-credentials: false
 
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: "24"
           cache: npm
@@ -109,6 +216,8 @@ jobs:
 
       - name: Test mobile app
         run: |
+          npm --prefix apps/mobile-app run test:lock-policy
+          npm --prefix apps/mobile-app run verify:lock
           npm --prefix apps/mobile-app ci
           npm --prefix apps/mobile-app test
           npm --prefix apps/mobile-app run typecheck
@@ -120,10 +229,12 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
+        with:
+          persist-credentials: false
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.13"
 
@@ -140,16 +251,53 @@ jobs:
         env:
           TRIVY_NO_PROGRESS: "true"
         run: |
-          docker run --rm \
+          set -euo pipefail
+          mkdir -p build/security .trivy-cache
+          chmod 0777 .trivy-cache
+          scan_status=0
+          for target in services apps; do
+            set +e
+            timeout 10m docker run --rm \
+              -e TRIVY_NO_PROGRESS \
+              -e TRIVY_CACHE_DIR=/cache \
+              -v "$PWD:/workspace:ro" \
+              -v "$PWD/.trivy-cache:/cache" \
+              aquasec/trivy:0.69.3 \
+              fs --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed \
+              --exit-code 1 "/workspace/${target}" \
+              2>&1 | tee "build/security/trivy-${target}.log"
+            status=${PIPESTATUS[0]}
+            set -e
+            test "$status" -eq 0 || scan_status=1
+          done
+          exit "$scan_status"
+
+      - name: Scan infrastructure for misconfigurations
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        env:
+          TRIVY_NO_PROGRESS: "true"
+        run: |
+          set -euo pipefail
+          mkdir -p build/security .trivy-cache
+          chmod 0777 .trivy-cache
+          timeout 10m docker run --rm \
             -e TRIVY_NO_PROGRESS \
+            -e TRIVY_CACHE_DIR=/cache \
             -v "$PWD:/workspace:ro" \
+            -v "$PWD/.trivy-cache:/cache" \
             aquasec/trivy:0.69.3 \
-            fs --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 /workspace/services
-          docker run --rm \
-            -e TRIVY_NO_PROGRESS \
-            -v "$PWD:/workspace:ro" \
-            aquasec/trivy:0.69.3 \
-            fs --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 /workspace/apps
+            fs --scanners misconfig --severity HIGH,CRITICAL --exit-code 1 \
+            /workspace/infra 2>&1 | tee build/security/trivy-infra.log
+
+      - name: Upload security scan diagnostics
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: stockrush-security-scan-logs
+          path: build/security/*.log
+          if-no-files-found: warn
+          retention-days: 14
 
       - name: Ensure CI/CD stays cloud-neutral
         run: ./scripts/check-no-aws-usage.sh

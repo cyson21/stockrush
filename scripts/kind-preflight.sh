@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# kind 배포 전 매니페스트 렌더링/도구/자격 검증을 수행합니다.
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

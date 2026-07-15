@@ -1,4 +1,5 @@
 $ErrorActionPreference = "Stop"
+<# GHCR 이미지 기반 demo 스택 배포와 smoke 동작 전개를 담당하는 진입점입니다. #>
 
 $RootDir = Resolve-Path (Join-Path $PSScriptRoot "..")
 $ComposeFile = Join-Path $RootDir "infra/demo/docker-compose.yml"

@@ -1,10 +1,10 @@
 # Outbox Admin API
 
-Outbox Admin API는 각 서비스가 자기 schema 안의 `outbox_events`를 조회하고, due 상태의 `PENDING` 이벤트 발행과 `FAILED` 이벤트 재처리 준비를 수동으로 트리거하는 운영 API이다.
+Outbox Admin API는 각 서비스가 자기 schema 안의 `outbox_events`를 조회하고, due 상태의 `PENDING` 이벤트 발행과 `FAILED` 이벤트 재처리 준비를 수동으로 트리거하는 운영 API이다. 외부 호출자와 smoke 도구는 Gateway 관리자 route를 사용한다.
 
 ## Service Endpoints
 
-Gateway exposes one admin route family and maps the `service` path segment to the selected service-local endpoint.
+Gateway exposes one admin route family and maps the `service` path segment to the selected internal service endpoint.
 
 | Operation | Gateway path | Upstream path |
 |---|---|---|
@@ -64,7 +64,7 @@ Allowed `service` values: `order`, `inventory`, `payment`.
 | Name | Required | Description |
 |---|---:|---|
 | `X-Correlation-Id` | no | trace id echoed by Gateway and upstream service |
-| `X-Operator-Id` | Gateway-derived | Gateway overwrites this from the authenticated admin token; direct service calls may omit it and default to `unknown` |
+| `X-Operator-Id` | Gateway-derived | Gateway overwrites this from the authenticated admin token; host development service-debug calls may omit it and default to `unknown` |
 
 ### Query Parameters
 
@@ -91,7 +91,7 @@ Allowed `service` values: `order`, `inventory`, `payment`.
 | Name | Required | Description |
 |---|---:|---|
 | `X-Correlation-Id` | no | trace id echoed by Gateway and upstream service |
-| `X-Operator-Id` | Gateway-derived | Gateway overwrites this from the authenticated admin token; direct service calls may omit it and default to `unknown` |
+| `X-Operator-Id` | Gateway-derived | Gateway overwrites this from the authenticated admin token; host development service-debug calls may omit it and default to `unknown` |
 
 ### Query Parameters
 
@@ -125,7 +125,7 @@ Each producing service stores retry and requeue requests in `outbox_admin_action
 | `action` | `RETRY_PENDING` or `REQUEUE_FAILED` |
 | `requested_batch_size` | requested batch size |
 | `affected_count` | claimed or updated row count |
-| `operator_id` | Gateway-derived admin principal, or `unknown` for direct service-local calls without the header |
+| `operator_id` | Gateway-derived admin principal, or `unknown` for host development service-debug calls without the header |
 | `correlation_id` | resolved trace id |
 | `created_at` | DB timestamp |
 
@@ -140,7 +140,7 @@ Each producing service stores retry and requeue requests in `outbox_admin_action
 
 ## Local Recovery Runner
 
-로컬 운영 복구 점검은 Gateway route를 직접 호출하는 대신 runner를 우선 사용한다.
+로컬 운영 복구 점검은 Gateway route를 사용하는 runner를 우선 사용한다.
 
 ```bash
 ./tools/local-e2e/local-e2e outbox-recovery \

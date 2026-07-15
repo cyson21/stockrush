@@ -19,6 +19,10 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.web.SecurityFilterChain;
+/**
+ * 서비스 구성 계층으로, 실행 시 필요한 보안/메시지 인프라 설정을 담당합니다.
+ */
+
 
 @Configuration
 class SecurityConfig {
@@ -32,11 +36,15 @@ class SecurityConfig {
             .csrf(AbstractHttpConfigurer::disable)
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(authorize -> authorize
-                .requestMatchers("/actuator/health/**", "/internal/ping").permitAll()
+                .requestMatchers("/actuator/health/**", "/actuator/info", "/actuator/metrics", "/internal/ping").permitAll()
+                // 공개 조회/견적 경로만 명시적으로 허용한다.
+                .requestMatchers(HttpMethod.GET, "/api/products/**", "/api/stocks/**").permitAll()
+                .requestMatchers("/api/coupons/**").permitAll()
                 .requestMatchers("/api/admin/**", "/api/read-model/admin/**").hasRole("ADMIN")
                 .requestMatchers(HttpMethod.POST, "/api/orders").hasRole("CUSTOMER")
                 .requestMatchers(HttpMethod.GET, "/api/orders/**", "/api/read-model/orders").hasRole("CUSTOMER")
-                .anyRequest().permitAll()
+                // 화이트리스트에 없는 경로는 기본 거부(인증 필요)로 닫는다.
+                .anyRequest().authenticated()
             )
             .oauth2ResourceServer(oauth2 -> oauth2
                 .jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter))

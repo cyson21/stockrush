@@ -1,4 +1,5 @@
 $ErrorActionPreference = "Stop"
+<# Java 17 JDK를 탐지해 하위 실행 명령의 런타임을 고정하는 래퍼입니다. #>
 
 param(
   [Parameter(ValueFromRemainingArguments = $true)]

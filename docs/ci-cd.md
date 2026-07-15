@@ -12,10 +12,11 @@ push / pull request
      -> mobile app tests and typecheck
      -> local-e2e runner unit tests
      -> Architecture Guard
-     -> secret scan and Trivy dependency scan
+     -> secret scan, Trivy dependency/misconfiguration scan
   -> Release Images
      -> GHCR image publish after CI success on main
-     -> Trivy image scan
+     -> amd64 candidate scan before publish
+     -> multi-platform publish, SBOM/provenance, published image scan
   -> Local Deploy
      -> pull GHCR images
      -> docker compose up with image override
@@ -33,11 +34,13 @@ push / pull request
 | `CI` | `push`, `pull_request`, `workflow_dispatch` | 코드 품질 관문 |
 | `Release Images` | successful `CI` on `main`, `workflow_dispatch` | Docker image 발행 |
 
-`CI`는 `infra/local/docker-compose.yml`로 PostgreSQL과 Kafka를 띄운 뒤 서비스별 Maven 테스트를 실행한다. 웹앱은 `npm ci`, `npm test`, `npm run build`를 실행하고, 모바일 앱은 Jest, TypeScript typecheck, scaffold validation을 실행한다.
+`CI`는 `infra/local/docker-compose.yml`로 PostgreSQL과 Kafka를 띄운 뒤 서비스별 Maven 테스트를 실행한다. 인프라 준비와 각 Maven 실행에는 상한 시간을 두며, 한 서비스가 실패해도 나머지 서비스 결과를 수집한 뒤 실패 서비스 목록을 출력한다. 원본 Surefire XML은 성공 여부와 무관하게 별도 artifact로 남긴다. 웹앱은 `npm ci`, `npm test`, `npm run build`를 실행하고, 모바일 앱은 보안 보정 lockfile 검사, Jest, TypeScript typecheck, scaffold validation을 실행한다.
 
-또한 `CI` Tools 관문에서는 `./scripts/check-no-committed-secrets.sh`로 커밋된 비밀을 차단하고, Trivy `fs` 스캔으로 `services`와 `apps` 경로를 `HIGH/CRITICAL` 기준으로 점검한다.
+또한 `CI` Tools 관문에서는 `./scripts/check-no-committed-secrets.sh`로 커밋된 비밀을 차단하고, Trivy `fs` 스캔으로 `services`와 `apps` 경로를 `HIGH/CRITICAL` 기준으로 점검한다. 의존성 취약점은 CI를 차단한다. 두 경로는 같은 Trivy cache를 사용하되 각각의 로그를 남긴다. `infra`의 `HIGH/CRITICAL` misconfiguration 스캔은 기존 데모 Kubernetes baseline을 가시화하는 진단 단계이며, 현재는 결과와 로그를 보존하되 CI 성공을 차단하지 않는다. 스캔 로그는 실패 시에도 `stockrush-security-scan-logs` artifact에서 확인할 수 있다.
 
-`Release Images`는 backend 8개 서비스와 customer/admin web app을 GHCR에 발행한다. 이미지는 `linux/amd64`, `linux/arm64` 두 platform manifest로 발행해 Windows 11/일반 x86 PC와 Apple Silicon Mac에서 같은 태그를 pull할 수 있게 한다. 발행된 태그는 Trivy 이미지 스캔을 통과해야 release job이 성공한다.
+`Release Images`는 backend 8개 서비스와 customer/admin web app을 GHCR에 발행한다. 수동 실행도 `origin/main` 이력에 포함된 커밋만 허용하며 OCI tag 형식을 먼저 검사한다. 각 이미지는 amd64 후보를 로컬로 빌드해 Trivy를 통과한 뒤 `linux/amd64`, `linux/arm64` 두 platform manifest로 발행한다. 발행 단계는 SBOM과 build provenance를 만들고 digest와 전체 source commit을 summary에 기록하며, 발행된 manifest digest를 기준으로 Trivy 검사를 다시 수행한다.
+
+발행 전 후보 검사는 amd64 이미지에 대한 관문이다. arm64 변형까지 포함한 최종 manifest 검사는 GHCR 발행 뒤 수행되므로, 릴리스 성공은 두 검사 모두 통과했다는 뜻이지만 레지스트리에 한 번도 올라가지 않았다는 뜻은 아니다.
 
 이미지 이름:
 

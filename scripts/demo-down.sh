@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# 현재 데모 compose 스택을 중단하고 고아 컨테이너를 정리합니다.
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

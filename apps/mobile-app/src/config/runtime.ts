@@ -1,3 +1,4 @@
+// 런타임 환경 변수와 앱 실행 설정을 읽어 안전한 기본값을 적용하는 모듈입니다.
 import { Platform } from 'react-native';
 
 const configuredApiBaseUrl = process.env.EXPO_PUBLIC_API_BASE_URL;

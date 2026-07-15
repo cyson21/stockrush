@@ -10,6 +10,10 @@ import org.springframework.stereotype.Component;
 import tools.jackson.core.JacksonException;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.ObjectMapper;
+/**
+ * 외부 이벤트/메시지를 소비해 내부 처리 흐름으로 전달하는 컴포넌트입니다.
+ */
+
 
 @Component
 @ConditionalOnProperty(name = "stockrush.kafka.listeners.enabled", havingValue = "true")

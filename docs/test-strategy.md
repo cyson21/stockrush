@@ -75,6 +75,7 @@ Detailed capture targets are tracked in [Web Visual Smoke Runbook](runbooks/web-
 Mobile verification runs inside `apps/mobile-app`.
 
 ```bash
+npm --prefix apps/mobile-app run verify:lock
 npm --prefix apps/mobile-app test
 npm --prefix apps/mobile-app run typecheck
 npm --prefix apps/mobile-app run test:scaffold

@@ -1,6 +1,7 @@
 server:
   port: ${GATEWAY_PORT:18080}
 
+# gateway 런타임 이름과 관측 엔드포인트 노출 기준을 정의합니다.
 spring:
   application:
     name: gateway

@@ -1,3 +1,5 @@
+-- V5__add_coupon_pricing_to_customer_orders: 스키마/제약조건/인덱스 같은 영속 구조를 반영하는 마이그레이션입니다.
+
 alter table customer_orders
   add column if not exists coupon_code varchar(100);
 
