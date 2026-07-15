@@ -38,6 +38,12 @@
     "@react-native/dev-middleware": {
       "ws": "6.2.4"
     },
+    "@expo/cli": {
+      "ws": "8.21.0"
+    },
+    "jsdom": {
+      "ws": "8.21.0"
+    },
     "react-native": {
       "ws": "6.2.4"
     },

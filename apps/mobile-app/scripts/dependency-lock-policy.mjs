@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 export const minimumSafeVersions = {
   "shell-quote": { 1: "1.8.4" },
   undici: { 6: "6.27.0" },
-  ws: { 6: "6.2.4", 7: "7.5.11", 8: "8.20.1" },
+  ws: { 6: "6.2.4", 7: "7.5.11", 8: "8.21.0" },
 };
 
 export const compareVersions = (left, right) => {
@@ -27,6 +27,12 @@ export function verifyDependencyLock(packageJson, packageLock) {
     "6.2.4",
     "React Native dev middleware must use the patched ws 6 release",
   );
+  assert.equal(
+    overrides["@expo/cli"]?.ws,
+    "8.21.0",
+    "Expo CLI must use the patched ws 8 release",
+  );
+  assert.equal(overrides.jsdom?.ws, "8.21.0", "jsdom must use the patched ws 8 release");
   assert.equal(
     overrides["react-native"]?.ws,
     "6.2.4",

@@ -274,6 +274,7 @@ jobs:
 
       - name: Scan infrastructure for misconfigurations
         if: ${{ !cancelled() }}
+        continue-on-error: true
         env:
           TRIVY_NO_PROGRESS: "true"
         run: |

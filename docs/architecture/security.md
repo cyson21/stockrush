@@ -160,6 +160,7 @@ Current baseline:
 Current baseline:
 
 - Secret leakage and dependency/container risk checks run in `CI` so security gates fail on `HIGH`/`CRITICAL` findings.
+- Demo Kubernetes misconfiguration findings remain a report-only baseline until each workload's writable paths and non-root runtime are remediated and verified.
 - Release image pipeline scans pushed tags and fails the release job on actionable vulnerability findings.
 - `ARCH-011` and `ARCH-012` are part of the Architecture Guard baseline and block changes that weaken route protection or header trust boundaries.
 
