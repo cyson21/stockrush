@@ -12,6 +12,10 @@ StockRush는 한정 판매 커머스에서 주문, 재고, 결제, 쿠폰, 출�
 
 단순 CRUD보다 실제 장애 지점이 드러나는 흐름에 집중했습니다. 주문 생성은 바로 끝나지 않고 Kafka, Outbox, Saga, 멱등성 키, 재고 선점, 결제 결과, 관리자 운영 액션을 거쳐 최종 상태로 수렴합니다. 고객 웹, 관리자 웹, Expo 모바일 앱은 이 흐름을 직접 확인하기 위한 얇은 제품 화면입니다.
 
+## 포트폴리오 링크
+
+- [웹 사례](https://cyson21.github.io/projects/stockrush/) · [전체 포트폴리오 PDF](https://github.com/cyson21/portfolio-hub/releases/download/latest/portfolio-complete.pdf) · [최신 이력서](https://github.com/cyson21/portfolio-hub/releases/download/latest/resume.pdf)
+
 ## Highlights
 
 | 관점 | 핵심 내용 |
