@@ -2,9 +2,9 @@
 
 [![CI](https://github.com/cyson21/stockrush/actions/workflows/ci.yml/badge.svg)](https://github.com/cyson21/stockrush/actions/workflows/ci.yml)
 
-한정 판매 주문을 Order, Inventory, Payment로 분리했을 때 발생하는 부분 실패를 Saga와 Transactional Outbox로 수렴시키는 Java/Spring 프로젝트입니다.
+한정 재고 주문에서 결제 실패, 이벤트 중복과 Kafka 중단이 발생해도 주문·재고·결제 상태가 모순 없이 마무리되도록 Saga와 Transactional Outbox 흐름을 구현한 Java/Spring 프로젝트입니다.
 
-개인 프로젝트로 서비스 경계, 주문 Saga, 서비스별 Outbox, 게이트웨이 인증과 장애 시나리오 테스트를 직접 설계·구현했습니다.
+개인 프로젝트로 서비스 경계, 주문 Saga, 서비스별 Outbox, 게이트웨이 인증과 실패 복구 흐름을 직접 설계·구현했습니다.
 
 [웹 사례](https://cyson21.github.io/projects/stockrush/) · [전체 포트폴리오 PDF](https://github.com/cyson21/portfolio-hub/releases/download/latest/portfolio-complete.pdf) · [최신 이력서](https://github.com/cyson21/portfolio-hub/releases/download/latest/resume.pdf)
 
