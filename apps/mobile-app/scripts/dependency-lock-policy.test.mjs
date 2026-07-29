@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { verifyDependencyLock } from "./dependency-lock-policy.mjs";
+import {
+  expectedTrivyBraceExpansionSuppression,
+  parseTrivyIgnoreYaml,
+  verifyDependencyLock,
+  verifyTrivyIgnoreDocument,
+} from "./dependency-lock-policy.mjs";
 
 const validPackageJson = {
   overrides: {
@@ -10,7 +15,7 @@ const validPackageJson = {
     postcss: "8.5.18",
     "js-yaml@3": "3.15.0",
     "js-yaml@4": "4.3.0",
-    "brace-expansion@1": "1.1.16",
+    "brace-expansion@1": "2.1.3",
     "brace-expansion@2": "2.1.3",
     "brace-expansion@5": "5.0.8",
     undici: "6.27.0",
@@ -32,13 +37,24 @@ const validPackageLock = {
     "node_modules/@expo/xcpretty/node_modules/js-yaml": { version: "4.3.0" },
     "node_modules/brace-expansion": { version: "5.0.8" },
     "node_modules/expo/node_modules/brace-expansion": { version: "2.1.3" },
-    "node_modules/rimraf/node_modules/brace-expansion": { version: "1.1.16" },
+    "node_modules/rimraf/node_modules/brace-expansion": { version: "2.1.3" },
     "node_modules/undici": { version: "6.27.0" },
     "node_modules/react-native/node_modules/ws": { version: "6.2.4" },
     "node_modules/ws": { version: "7.5.11" },
     "node_modules/expo/node_modules/ws": { version: "8.21.0" },
     "node_modules/jsdom/node_modules/ws": { version: "8.21.0" },
   },
+};
+
+const validTrivyIgnore = {
+  vulnerabilities: [
+    {
+      id: expectedTrivyBraceExpansionSuppression.id,
+      purls: [expectedTrivyBraceExpansionSuppression.purl],
+      expired_at: expectedTrivyBraceExpansionSuppression.expiredAt,
+      statement: expectedTrivyBraceExpansionSuppression.statementNeedle,
+    },
+  ],
 };
 
 test("accepts the reviewed minimum versions", () => {
@@ -95,12 +111,95 @@ test("rejects vulnerable shell-quote pin", () => {
   );
 });
 
-test("rejects vulnerable brace-expansion 1.x lock entry", () => {
+test("rejects brace-expansion 1.x lock reintroduction", () => {
   const packageLock = structuredClone(validPackageLock);
-  packageLock.packages["node_modules/rimraf/node_modules/brace-expansion"].version = "1.1.14";
+  packageLock.packages["node_modules/rimraf/node_modules/brace-expansion"].version = "1.1.16";
 
   assert.throws(
     () => verifyDependencyLock(validPackageJson, packageLock),
-    /below the reviewed minimum 1\.1\.16/,
+    /still resolves brace-expansion 1\.x/,
   );
+});
+
+test("rejects brace-expansion 2.x below 2.1.3", () => {
+  const packageLock = structuredClone(validPackageLock);
+  packageLock.packages["node_modules/expo/node_modules/brace-expansion"].version = "2.1.2";
+
+  assert.throws(
+    () => verifyDependencyLock(validPackageJson, packageLock),
+    /below the reviewed minimum 2\.1\.3/,
+  );
+});
+
+test("rejects brace-expansion 5.x below 5.0.8", () => {
+  const packageLock = structuredClone(validPackageLock);
+  packageLock.packages["node_modules/brace-expansion"].version = "5.0.7";
+
+  assert.throws(
+    () => verifyDependencyLock(validPackageJson, packageLock),
+    /below the reviewed minimum 5\.0\.8/,
+  );
+});
+
+test("rejects brace-expansion@1 override that is not 2.1.3", () => {
+  const packageJson = structuredClone(validPackageJson);
+  packageJson.overrides["brace-expansion@1"] = "1.1.16";
+
+  assert.throws(
+    () => verifyDependencyLock(packageJson, validPackageLock),
+    /remap residual 1\.x requests to patched 2\.1\.3/,
+  );
+});
+
+test("accepts the reviewed trivyignore suppression", () => {
+  verifyTrivyIgnoreDocument(validTrivyIgnore);
+});
+
+test("rejects trivyignore CVE id removal or change", () => {
+  const document = structuredClone(validTrivyIgnore);
+  document.vulnerabilities[0].id = "CVE-0000-0000";
+
+  assert.throws(
+    () => verifyTrivyIgnoreDocument(document),
+    /CVE id must not change or be removed/,
+  );
+});
+
+test("rejects trivyignore PURL removal or widening", () => {
+  const document = structuredClone(validTrivyIgnore);
+  document.vulnerabilities[0].purls = ["pkg:npm/brace-expansion"];
+
+  assert.throws(
+    () => verifyTrivyIgnoreDocument(document),
+    /PURL must stay scoped to brace-expansion@2\.1\.3/,
+  );
+});
+
+test("rejects trivyignore expiry extension or removal", () => {
+  const extended = structuredClone(validTrivyIgnore);
+  extended.vulnerabilities[0].expired_at = "2026-12-31";
+  assert.throws(
+    () => verifyTrivyIgnoreDocument(extended),
+    /expiry must stay 2026-08-31/,
+  );
+
+  const removed = structuredClone(validTrivyIgnore);
+  delete removed.vulnerabilities[0].expired_at;
+  assert.throws(
+    () => verifyTrivyIgnoreDocument(removed),
+    /expiry must stay 2026-08-31/,
+  );
+});
+
+test("parseTrivyIgnoreYaml round-trips the committed statement", () => {
+  const yaml = `vulnerabilities:
+  - id: CVE-2026-14257
+    purls:
+      - "pkg:npm/brace-expansion@2.1.3"
+    expired_at: 2026-08-31
+    statement: >-
+      GHSA-mh99-v99m-4gvg는 2.1.3 patched, 스캐너 DB는 5.0.8만 fixed로 정규화
+`;
+  const document = parseTrivyIgnoreYaml(yaml);
+  verifyTrivyIgnoreDocument(document);
 });
