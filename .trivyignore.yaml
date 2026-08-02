@@ -1,0 +1,10 @@
+# Temporary scanner-metadata lag suppression.
+# Remove when Trivy/NVD treat brace-expansion@2.1.3 as fixed for CVE-2026-14257
+# (GHSA-mh99-v99m-4gvg already lists 2.1.3 as patched).
+vulnerabilities:
+  - id: CVE-2026-14257
+    purls:
+      - "pkg:npm/brace-expansion@2.1.3"
+    expired_at: 2026-08-31
+    statement: >-
+      GHSA-mh99-v99m-4gvg는 2.1.3 patched, 스캐너 DB는 5.0.8만 fixed로 정규화

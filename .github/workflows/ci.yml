@@ -264,6 +264,7 @@ jobs:
               -v "$PWD/.trivy-cache:/cache" \
               aquasec/trivy:0.69.3 \
               fs --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed \
+              --ignorefile /workspace/.trivyignore.yaml --show-suppressed \
               --exit-code 1 "/workspace/${target}" \
               2>&1 | tee "build/security/trivy-${target}.log"
             status=${PIPESTATUS[0]}
