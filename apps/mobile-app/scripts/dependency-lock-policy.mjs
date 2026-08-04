@@ -5,18 +5,11 @@ export const minimumSafeVersions = {
   tar: { 7: "7.5.19" },
   postcss: { 8: "8.5.18" },
   "js-yaml": { 3: "3.15.0", 4: "4.3.0" },
-  // Major 1 is no longer allowed: npm override remaps brace-expansion@1 → 2.1.3.
-  "brace-expansion": { 2: "2.1.3", 5: "5.0.8" },
+  // Major 1 is no longer allowed: npm override remaps brace-expansion@1 → 2.1.4.
+  "brace-expansion": { 2: "2.1.4", 5: "5.0.9" },
   undici: { 6: "6.27.0" },
   ws: { 6: "6.2.4", 7: "7.5.11", 8: "8.21.0" },
 };
-
-export const expectedTrivyBraceExpansionSuppression = Object.freeze({
-  id: "CVE-2026-14257",
-  purl: "pkg:npm/brace-expansion@2.1.3",
-  expiredAt: "2026-08-31",
-  statementNeedle: "GHSA-mh99-v99m-4gvg는 2.1.3 patched, 스캐너 DB는 5.0.8만 fixed로 정규화",
-});
 
 export const compareVersions = (left, right) => {
   const leftParts = left.split(".").map(Number);
@@ -39,17 +32,17 @@ export function verifyDependencyLock(packageJson, packageLock) {
   assert.equal(overrides["js-yaml@4"], "4.3.0", "js-yaml@4 override must remain pinned");
   assert.equal(
     overrides["brace-expansion@1"],
-    "2.1.3",
-    "brace-expansion@1 override must remap residual 1.x requests to patched 2.1.3",
+    "2.1.4",
+    "brace-expansion@1 override must remap residual 1.x requests to patched 2.1.4",
   );
   assert.equal(
     overrides["brace-expansion@2"],
-    "2.1.3",
+    "2.1.4",
     "brace-expansion@2 override must remain pinned",
   );
   assert.equal(
     overrides["brace-expansion@5"],
-    "5.0.8",
+    "5.0.9",
     "brace-expansion@5 override must remain pinned",
   );
   assert.equal(overrides.undici, "6.27.0", "undici override must remain pinned");
@@ -118,35 +111,15 @@ export function verifyDependencyLock(packageJson, packageLock) {
 }
 
 /**
- * Validates the committed Trivy YAML suppression for brace-expansion@2.1.3.
- * Failures cover removal or widening (ID/PURL/expiry) of the exception.
+ * Validates that .trivyignore.yaml has no active vulnerability suppressions.
  */
 export function verifyTrivyIgnoreDocument(document) {
-  const expected = expectedTrivyBraceExpansionSuppression;
   assert.ok(document && typeof document === "object", "trivyignore document is required");
   assert.ok(Array.isArray(document.vulnerabilities), "vulnerabilities list is required");
   assert.equal(
     document.vulnerabilities.length,
-    1,
-    "exactly one vulnerability suppression is allowed",
-  );
-
-  const entry = document.vulnerabilities[0];
-  assert.equal(entry.id, expected.id, "trivyignore CVE id must not change or be removed");
-  assert.ok(Array.isArray(entry.purls), "trivyignore purls must be present");
-  assert.deepEqual(
-    entry.purls,
-    [expected.purl],
-    "trivyignore PURL must stay scoped to brace-expansion@2.1.3",
-  );
-  assert.equal(
-    entry.expired_at,
-    expected.expiredAt,
-    "trivyignore expiry must stay 2026-08-31 (no extension or removal)",
-  );
-  assert.ok(
-    typeof entry.statement === "string" && entry.statement.includes(expected.statementNeedle),
-    "trivyignore statement must keep the GHSA/scanner-normalization rationale",
+    0,
+    "no active vulnerability suppressions are allowed",
   );
 
   for (const key of Object.keys(document)) {
@@ -157,6 +130,11 @@ export function verifyTrivyIgnoreDocument(document) {
 /** Minimal structural parse for the repo's .trivyignore.yaml shape (no YAML dependency). */
 export function parseTrivyIgnoreYaml(text) {
   assert.equal(typeof text, "string", "trivyignore text is required");
+
+  if (/^vulnerabilities:\s*\[\]\s*$/m.test(text)) {
+    return { vulnerabilities: [] };
+  }
+
   assert.match(text, /^vulnerabilities:\s*$/m, "vulnerabilities root is required");
 
   const idMatch = text.match(/^\s+- id:\s*(\S+)\s*$/m);
