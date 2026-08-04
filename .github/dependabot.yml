@@ -1,0 +1,70 @@
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 3
+    groups:
+      github-actions-minor-patch:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
+
+  - package-ecosystem: maven
+    directories:
+      - /services/catalog-service
+      - /services/fulfillment-service
+      - /services/gateway
+      - /services/inventory-service
+      - /services/order-service
+      - /services/payment-service
+      - /services/promotion-service
+      - /services/read-model-service
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 5
+    groups:
+      maven-minor-patch:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
+
+  - package-ecosystem: npm
+    directories:
+      - /apps/admin-app
+      - /apps/customer-app
+      - /apps/mobile-app
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 5
+    groups:
+      npm-production-minor-patch:
+        dependency-type: production
+        update-types:
+          - minor
+          - patch
+      npm-development-minor-patch:
+        dependency-type: development
+        update-types:
+          - minor
+          - patch
+
+  - package-ecosystem: docker
+    directories:
+      - /apps
+      - /services
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 3
+    groups:
+      docker-minor-patch:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
