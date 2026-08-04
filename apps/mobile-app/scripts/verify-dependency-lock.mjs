@@ -22,4 +22,4 @@ console.log(`Verified ${checked.length} security-sensitive lockfile entries:`);
 for (const entry of checked) {
   console.log(`- ${entry}`);
 }
-console.log("Verified .trivyignore.yaml brace-expansion@2.1.3 suppression.");
+console.log("Verified .trivyignore.yaml has no active vulnerability suppressions.");
