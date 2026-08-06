@@ -16,7 +16,7 @@ ENV VITE_AUTH_ISSUER=${VITE_AUTH_ISSUER}
 ENV VITE_AUTH_CLIENT_ID=${VITE_AUTH_CLIENT_ID}
 RUN npm run build
 
-FROM nginx:1.27-alpine
+FROM nginx:1.31-alpine
 
 RUN apk upgrade --no-cache
 
