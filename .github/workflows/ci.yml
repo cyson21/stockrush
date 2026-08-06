@@ -102,7 +102,7 @@ jobs:
 
       - name: Upload raw Surefire reports
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: stockrush-backend-surefire-xml
           path: services/*/target/surefire-reports/TEST-*.xml
@@ -149,7 +149,7 @@ jobs:
           PY
 
       - name: Upload portfolio evidence report
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: stockrush-backend-test-evidence
           path: |
@@ -293,7 +293,7 @@ jobs:
 
       - name: Upload security scan diagnostics
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: stockrush-security-scan-logs
           path: build/security/*.log
