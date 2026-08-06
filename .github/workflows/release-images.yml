@@ -88,7 +88,7 @@ jobs:
               APP_DIR=admin-app
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
           ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || inputs.source_ref || github.ref }}
           fetch-depth: 0
