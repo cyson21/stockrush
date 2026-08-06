@@ -54,6 +54,10 @@ updates:
       - dependency-name: "*"
         update-types:
           - version-update:semver-major
+      # mobile-app의 react는 Expo SDK 54가 19.1.0으로 고정한다. 이 렌더러를 올리면
+      # peer가 더 높은 react를 요구해 npm ci가 ERESOLVE로 실패한다. SDK가 올라갈 때
+      # react와 함께 사람이 옮긴다.
+      - dependency-name: react-test-renderer
     groups:
       npm-production-minor-patch:
         dependency-type: production
