@@ -118,7 +118,7 @@ jobs:
           echo "scan_image=stockrush-scan-${{ matrix.image }}:${short_sha}" >> "$GITHUB_OUTPUT"
 
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
+        uses: docker/setup-qemu-action@v4
         with:
           platforms: arm64
 
