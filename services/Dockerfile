@@ -12,7 +12,7 @@ RUN mvn -B -DskipTests package \
     && test -n "$JAR_FILE" \
     && cp "$JAR_FILE" /workspace/app.jar
 
-FROM eclipse-temurin:17-jre-jammy
+FROM eclipse-temurin:22-jre-jammy
 
 ARG SERVICE_PORT=8080
 WORKDIR /app
