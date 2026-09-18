@@ -10,10 +10,10 @@ import {
 const validPackageJson = {
   overrides: {
     "shell-quote": "1.9.0",
-    tar: "7.5.19",
+    tar: "7.5.21",
     postcss: "8.5.18",
-    "js-yaml@3": "3.15.0",
-    "js-yaml@4": "4.3.0",
+    "js-yaml@3": "3.15.2",
+    "js-yaml@4": "4.3.2",
     "brace-expansion@1": "2.1.4",
     "brace-expansion@2": "2.1.4",
     "brace-expansion@5": "5.0.9",
@@ -30,10 +30,10 @@ const validPackageJson = {
 const validPackageLock = {
   packages: {
     "node_modules/shell-quote": { version: "1.9.0" },
-    "node_modules/tar": { version: "7.5.19" },
+    "node_modules/tar": { version: "7.5.21" },
     "node_modules/postcss": { version: "8.5.18" },
-    "node_modules/js-yaml": { version: "3.15.0" },
-    "node_modules/@expo/xcpretty/node_modules/js-yaml": { version: "4.3.0" },
+    "node_modules/js-yaml": { version: "3.15.2" },
+    "node_modules/@expo/xcpretty/node_modules/js-yaml": { version: "4.3.2" },
     "node_modules/brace-expansion": { version: "5.0.9" },
     "node_modules/expo/node_modules/brace-expansion": { version: "2.1.4" },
     "node_modules/rimraf/node_modules/brace-expansion": { version: "2.1.4" },

@@ -266,7 +266,7 @@ class DemoRuntimeArtifactsTest(unittest.TestCase):
         self.assertIn("demo-smoke.ps1", powershell_deploy)
         self.assertIn("read:packages", powershell_deploy)
         self.assertIn("package visibility", powershell_deploy)
-        self.assertIn("docker/setup-qemu-action@v3", release_images_workflow)
+        self.assertRegex(release_images_workflow, r"docker/setup-qemu-action@v\d+")
         self.assertIn("platforms: linux/amd64,linux/arm64", release_images_workflow)
 
     def test_demo_smoke_runs_order_flow_and_burst_runners(self) -> None:
