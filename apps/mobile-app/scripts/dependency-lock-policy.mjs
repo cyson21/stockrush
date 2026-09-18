@@ -2,9 +2,9 @@ import assert from "node:assert/strict";
 
 export const minimumSafeVersions = {
   "shell-quote": { 1: "1.9.0" },
-  tar: { 7: "7.5.19" },
+  tar: { 7: "7.5.21" },
   postcss: { 8: "8.5.18" },
-  "js-yaml": { 3: "3.15.0", 4: "4.3.0" },
+  "js-yaml": { 3: "3.15.2", 4: "4.3.2" },
   // Major 1 is no longer allowed: npm override remaps brace-expansion@1 → 2.1.4.
   "brace-expansion": { 2: "2.1.4", 5: "5.0.9" },
   undici: { 6: "6.27.0" },
@@ -26,10 +26,10 @@ export const compareVersions = (left, right) => {
 export function verifyDependencyLock(packageJson, packageLock) {
   const overrides = packageJson.overrides ?? {};
   assert.equal(overrides["shell-quote"], "1.9.0", "shell-quote override must remain pinned");
-  assert.equal(overrides.tar, "7.5.19", "tar override must remain pinned");
+  assert.equal(overrides.tar, "7.5.21", "tar override must remain pinned");
   assert.equal(overrides.postcss, "8.5.18", "postcss override must remain pinned");
-  assert.equal(overrides["js-yaml@3"], "3.15.0", "js-yaml@3 override must remain pinned");
-  assert.equal(overrides["js-yaml@4"], "4.3.0", "js-yaml@4 override must remain pinned");
+  assert.equal(overrides["js-yaml@3"], "3.15.2", "js-yaml@3 override must remain pinned");
+  assert.equal(overrides["js-yaml@4"], "4.3.2", "js-yaml@4 override must remain pinned");
   assert.equal(
     overrides["brace-expansion@1"],
     "2.1.4",
