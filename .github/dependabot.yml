@@ -44,7 +44,6 @@ updates:
     directories:
       - /apps/admin-app
       - /apps/customer-app
-      - /apps/mobile-app
     schedule:
       interval: monthly
     open-pull-requests-limit: 5
@@ -54,10 +53,6 @@ updates:
       - dependency-name: "*"
         update-types:
           - version-update:semver-major
-      # mobile-app의 react는 Expo SDK 54가 19.1.0으로 고정한다. 이 렌더러를 올리면
-      # peer가 더 높은 react를 요구해 npm ci가 ERESOLVE로 실패한다. SDK가 올라갈 때
-      # react와 함께 사람이 옮긴다.
-      - dependency-name: react-test-renderer
     groups:
       npm-production-minor-patch:
         dependency-type: production
@@ -65,6 +60,41 @@ updates:
           - minor
           - patch
       npm-development-minor-patch:
+        dependency-type: development
+        update-types:
+          - minor
+          - patch
+
+  # mobile-app은 Expo SDK가 react·react-native 버전을 정한다(SDK 54: react 19.1.0,
+  # react-native 0.81.5). 이 둘을 SDK와 따로 올리면 jest-expo preset과 npm ci가 깨지므로
+  # SDK를 올릴 때 사람이 함께 옮긴다. 나머지 마이너·패치 갱신은 계속 받는다.
+  - package-ecosystem: npm
+    directory: /apps/mobile-app
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 5
+    ignore:
+      - dependency-name: "*"
+        update-types:
+          - version-update:semver-major
+      - dependency-name: react
+        update-types:
+          - version-update:semver-minor
+      - dependency-name: react-native
+        update-types:
+          - version-update:semver-minor
+      - dependency-name: "@types/react"
+        update-types:
+          - version-update:semver-minor
+      # 이 렌더러를 올리면 peer가 더 높은 react를 요구해 npm ci가 ERESOLVE로 실패한다.
+      - dependency-name: react-test-renderer
+    groups:
+      mobile-npm-production-minor-patch:
+        dependency-type: production
+        update-types:
+          - minor
+          - patch
+      mobile-npm-development-minor-patch:
         dependency-type: development
         update-types:
           - minor
