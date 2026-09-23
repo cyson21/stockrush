@@ -1,6 +1,6 @@
 # Portfolio Summary
 
-StockRush의 도메인, 구조, 검증 범위를 한 문서로 요약한다. 상세 구현 기준은 `README.md`, `docs/architecture/phase-1-commerce-foundation.md`, `docs/test-strategy.md`, `docs/ai-development-process.md`를 기준으로 한다.
+StockRush의 도메인, 구조, 검증 범위를 한 문서로 요약한다. 상세 구현 기준은 `README.md`, `docs/architecture/phase-1-commerce-foundation.md`와 `docs/test-strategy.md`를 기준으로 한다.
 
 ## 한 줄 요약
 
@@ -19,7 +19,7 @@ StockRush는 한정 판매 상황에서 주문, 재고, 결제가 분산 서비�
 
 Order Service가 Saga Orchestrator 역할을 맡고, Inventory Service와 Payment Service는 Kafka 이벤트와 command를 통해 재고 선점, 결제 승인, 실패 복구, 지연 결제 취소 흐름을 처리합니다. 각 서비스는 Outbox와 processed event 저장으로 발행 안정성과 중복 처리 안전성을 확보했습니다.
 
-React/Vite 고객 웹앱에서는 상품 조회, 주문 생성, 주문 상태 추적을 확인할 수 있고, 관리자 웹앱에서는 상품/재고 관리, Saga 상태 확인, 쿠폰 사용 이력, 출고 요청 이력, Outbox 재시도와 failed requeue, 지연 결제 취소를 다룹니다. Expo React Native 기반 Android/iOS 고객 앱도 Gateway-first로 상품/SKU 재고 조회, 쿠폰 견적, 주문 생성, 상태 추적, Read Model 주문 내역 조회까지 연결했습니다. 개발 운영 기록은 Dev RAG, Project MCP, Spark worker/reviewer, Agent Runner, Architecture Guard로 남겼습니다.
+React/Vite 고객 웹앱에서는 상품 조회, 주문 생성, 주문 상태 추적을 확인할 수 있고, 관리자 웹앱에서는 상품/재고 관리, Saga 상태 확인, 쿠폰 사용 이력, 출고 요청 이력, Outbox 재시도와 failed requeue, 지연 결제 취소를 다룹니다. Expo React Native 기반 Android/iOS 고객 앱도 Gateway-first로 상품/SKU 재고 조회, 쿠폰 견적, 주문 생성, 상태 추적, Read Model 주문 내역 조회까지 연결했습니다.
 
 대표 화면은 MUI 기반으로 다시 정리했고, README에는 고객 주문 흐름, 관리자 Dashboard, Coupons, Fulfillment, Outbox, 고객 모바일 폭 캡처를 연결했습니다. 포트폴리오용 데모 시드는 Dashboard 지표, 쿠폰 사용 상태, 출고 요청, failed Outbox 샘플을 반복 실행 가능한 데이터로 채웁니다. 캡처 절차는 `docs/runbooks/web-visual-smoke.md`에 정리해 데모 백엔드와 Keycloak 로그인 상태에서 다시 만들 수 있게 했습니다.
 
@@ -45,7 +45,6 @@ StockRush의 핵심 문제는 “한정 판매 주문에서 재고와 결제를 
 - 주문은 언제 생성 상태로 노출할 것인가
 - 재고 선점 실패와 결제 실패를 어떻게 주문 상태로 되돌릴 것인가
 - Kafka 발행 실패나 중복 수신이 생겨도 어떻게 복구 가능하게 만들 것인가
-- 개발 과정에서 AI가 만든 변경을 어떻게 검증 가능한 결과로 남길 것인가
 
 ### 2. 서비스 경계
 
@@ -111,18 +110,7 @@ Consumer 멱등성은 같은 이벤트가 여러 번 들어와도 결과가 흔�
 
 문서에는 구현된 검증과 남은 공백을 분리했습니다. 현재 동일 SKU runner와 runbook의 주문 생성/조회/취소 및 Outbox 운영 경로는 Gateway를 경유합니다. Outbox retry/requeue는 서비스별 감사 로그를 남깁니다. Promotion은 고객 앱 견적 UI, 주문 할인 반영, 주문 이벤트 기반 쿠폰 사용 상태, 관리자 사용 이력 화면까지 연결했고, Fulfillment는 주문 완료 이벤트 기반 출고 준비 요청, Gateway route, 관리자 출고 요청 화면까지 연결했습니다. Read Model은 주문 요약 projection, Gateway 경유 고객/관리자 API, 주문 ID/회원 ID/상태/Saga 상태/쿠폰 코드 조건 검색이 가능한 관리자 대시보드까지 연결했습니다. 고객 상품 검색은 Catalog API와 Customer App UI로 먼저 연결했고, Kafka 장애 복구는 demo compose pause/unpause 기반 opt-in smoke로 자동화했습니다. 보안은 공개 route를 `GET /api/products`, `GET /api/stocks`, `POST /api/coupons/quote`로 제한하고, 고객 주문/상세/주문 내역은 `ROLE_CUSTOMER` + subject forwarding, 관리자 라우트는 `ROLE_ADMIN` + 인증 주체 전달로 통일했습니다. service-local direct 경로는 내부/dev 전용으로 분리해 공개 경로에서 제외했습니다. live IdP browser smoke evidence와 Android Expo Go 보호 주문 완료 UI smoke evidence는 확보했습니다. iOS는 full Xcode `simctl` 미설치로 현재 로컬 실기동 증거가 제한됩니다.
 
-### 7. Agent 기반 개발 운영
-
-이 프로젝트에서 AI 활용은 산출물 자체보다 운영 방식이 중요합니다.
-
-- Dev RAG로 ADR, API 문서, 실행 기록을 검색 가능한 문맥으로 관리
-- Project MCP로 문서 조회와 검증 명령 조회를 표준화
-- Spark worker/reviewer를 분리해 구현과 리뷰 책임을 나눔
-- Architecture Guard로 사람이 놓치기 쉬운 서비스 경계와 이벤트 규칙을 자동 점검
-
-핵심은 “AI로 빠르게 만들었다”가 아니라 “AI가 만든 변경을 어떤 문맥과 검증 체계 안에서 통제했는지”다.
-
-### 8. 의도적으로 남긴 확장 지점
+### 7. 의도적으로 남긴 확장 지점
 
 현재 범위는 주문, 재고, 결제, 운영 복구 흐름 검증에 맞춰져 있다. 핵심 흐름은 끝까지 연결하되, 아래 항목은 후속 확장으로 남겼다.
 
@@ -144,7 +132,6 @@ Consumer 멱등성은 같은 이벤트가 여러 번 들어와도 결과가 흔�
 - Promotion Service가 `OrderCreated`, `OrderConfirmed`, `OrderCancelled`를 소비해 쿠폰 사용 상태를 기록하고 주문 실패 시 사용 해제로 복구하도록 구현
 - Fulfillment Service가 `OrderConfirmed`를 소비해 출고 준비 요청을 기록하고, Gateway와 관리자 앱에서 출고 요청 이력을 조회하도록 구현
 - Read Model Service가 주문 lifecycle event를 소비해 고객 주문 내역과 관리자 주문 요약 projection을 갱신하고 조건 검색 가능한 대시보드로 연결하도록 구현
-- Dev RAG, Project MCP, Spark worker/reviewer, Agent Runner, Architecture Guard를 결합해 agent 기반 개발 운영과 검증 증적을 프로젝트 산출물로 정리
 - Maven, Vitest, production build, Architecture Guard, Gateway 경유 동일 SKU runner, 로컬 E2E runbook으로 테스트 계층과 검증 절차를 문서화
 
 ## 설명 포인트
@@ -172,10 +159,6 @@ Consumer가 처리한 event id를 processed event로 저장한다. 이미 처리
 ### 재고 과다 선점은 어떻게 막았나
 
 주문 요청의 SKU별 수량을 먼저 합산하고, 재고 row를 잠근 상태에서 조건부로 available 수량을 차감한다. 이 방식은 동일 SKU 동시 주문 회귀 테스트와 로컬 최종 상태 E2E runner로 검증해, 한정된 재고보다 많이 예약되지 않도록 했다.
-
-### AI 활용에서 차별점은 무엇인가
-
-Agent 도구는 단순 코드 생성보다 변경 추적과 검증 가시성에 맞춰 사용했다. Dev RAG와 MCP로 문맥을 고정하고, Spark worker/reviewer로 역할을 분리하고, Agent Runner와 Architecture Guard로 실행 증거와 정적 검증을 남겼다.
 
 ### 지금 가장 큰 한계는 무엇인가
 
