@@ -4,7 +4,7 @@
 
 주문, 재고, 결제가 서비스별로 나뉜 쇼핑몰 백엔드입니다. 결제가 실패하거나 같은 이벤트가 두 번 오거나 Kafka가 잠깐 멈춰도, 주문이 어중간한 상태로 남지 않도록 Saga와 Transactional Outbox로 처리했습니다. 설계부터 구현, 테스트까지 혼자 진행한 개인 프로젝트입니다.
 
-[포트폴리오](https://cyson21.github.io/projects/stockrush/) · [이력서](https://github.com/cyson21/portfolio-hub/releases/download/latest/resume.pdf)
+[포트폴리오](https://cyson21.github.io/projects/stockrush/) · [이력서](https://cyson21.github.io/downloads/resume.pdf)
 
 ## 풀려던 문제
 
@@ -85,3 +85,12 @@ Kafka 중단 복구는 따로 실행합니다.
 - Kafka는 브로커 하나를 멈췄다 살리는 것까지만 확인했습니다. 여러 브로커 장애나 오래 멈춘 경우는 해 보지 않았습니다.
 - 관리자 복구 API에는 실제 회사처럼 승인이나 감사 절차가 없습니다.
 - kind 구성은 로컬 재현용이고, 운영 Kubernetes에서 돌려 본 것은 아닙니다.
+
+## 관련 프로젝트와 공개 자료
+
+이 저장소의 코드·실행·테스트는 이 저장소에서 관리합니다. [웹 포트폴리오의 프로젝트 설명](https://cyson21.github.io/projects/stockrush/)과 [공개 자료 안내](https://github.com/cyson21/portfolio-hub)는 외부에서 구현 근거를 찾는 진입점입니다.
+
+- 관련 주제: [member-event-consistency](https://github.com/cyson21/member-event-consistency) — 동시성·DB 불변식 비교.
+- 최신 제출 파일: [이력서 PDF](https://cyson21.github.io/downloads/resume.pdf) · [경력기술서 PDF](https://cyson21.github.io/downloads/career-description.pdf).
+
+위 관련 저장소는 별도로 실행하는 개인 프로젝트입니다. 서로의 서비스를 순서대로 띄우거나 실제 API·메시지로 연결한 E2E 체인이 구현됐다는 의미는 아닙니다. 구현·검증 범위가 바뀌면 이 README와 웹 프로젝트 문안을 함께 확인합니다.
