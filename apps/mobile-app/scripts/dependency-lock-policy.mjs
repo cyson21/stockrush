@@ -1,13 +1,16 @@
 import assert from "node:assert/strict";
 
 export const minimumSafeVersions = {
-  "shell-quote": { 1: "1.9.0" },
+  "shell-quote": { 1: "1.11.0" },
   tar: { 7: "7.5.21" },
   postcss: { 8: "8.5.18" },
   "js-yaml": { 3: "3.15.2", 4: "4.3.2" },
-  // Major 1 is no longer allowed: npm override remaps brace-expansion@1 → 2.1.4.
-  "brace-expansion": { 2: "2.1.4", 5: "5.0.9" },
-  undici: { 6: "6.27.0" },
+  // Major 1 is no longer allowed: npm override remaps brace-expansion@1 → 2.1.6.
+  "brace-expansion": { 2: "2.1.6", 5: "5.0.11" },
+  undici: { 6: "6.28.1" },
+  compression: { 1: "1.8.2" },
+  "image-size": { 2: "2.0.4" },
+  "source-map-js": { 1: "1.2.2" },
   ws: { 6: "6.2.4", 7: "7.5.11", 8: "8.21.0" },
 };
 
@@ -25,27 +28,29 @@ export const compareVersions = (left, right) => {
 
 export function verifyDependencyLock(packageJson, packageLock) {
   const overrides = packageJson.overrides ?? {};
-  assert.equal(overrides["shell-quote"], "1.9.0", "shell-quote override must remain pinned");
+  assert.equal(overrides["shell-quote"], "1.11.0", "shell-quote override must remain pinned");
   assert.equal(overrides.tar, "7.5.21", "tar override must remain pinned");
   assert.equal(overrides.postcss, "8.5.18", "postcss override must remain pinned");
   assert.equal(overrides["js-yaml@3"], "3.15.2", "js-yaml@3 override must remain pinned");
   assert.equal(overrides["js-yaml@4"], "4.3.2", "js-yaml@4 override must remain pinned");
   assert.equal(
     overrides["brace-expansion@1"],
-    "2.1.4",
-    "brace-expansion@1 override must remap residual 1.x requests to patched 2.1.4",
+    "2.1.6",
+    "brace-expansion@1 override must remap residual 1.x requests to patched 2.1.6",
   );
   assert.equal(
     overrides["brace-expansion@2"],
-    "2.1.4",
+    "2.1.6",
     "brace-expansion@2 override must remain pinned",
   );
   assert.equal(
     overrides["brace-expansion@5"],
-    "5.0.9",
+    "5.0.11",
     "brace-expansion@5 override must remain pinned",
   );
-  assert.equal(overrides.undici, "6.27.0", "undici override must remain pinned");
+  assert.equal(overrides.undici, "6.28.1", "undici override must remain pinned");
+  assert.equal(overrides.compression, "1.8.2", "compression override must remain pinned");
+  assert.equal(overrides["source-map-js"], "1.2.2", "source-map-js override must remain pinned");
   assert.equal(
     overrides["@react-native/dev-middleware"]?.ws,
     "6.2.4",
@@ -106,6 +111,9 @@ export function verifyDependencyLock(packageJson, packageLock) {
     "brace-expansion 1.x must be absent from the lockfile",
   );
   assert.ok(checked.some((entry) => entry.includes("undici@")), "undici is missing");
+  for (const name of ["compression", "source-map-js"]) {
+    assert.ok(checked.some((entry) => entry.includes(`${name}@`)), `${name} is missing`);
+  }
   assert.ok(checked.some((entry) => entry.includes("ws@")), "ws is missing");
   return checked.sort();
 }
