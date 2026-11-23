@@ -2,9 +2,12 @@
 
 [![CI](https://github.com/cyson21/stockrush/actions/workflows/ci.yml/badge.svg)](https://github.com/cyson21/stockrush/actions/workflows/ci.yml)
 
-주문, 재고, 결제가 서비스별로 나뉜 쇼핑몰 백엔드입니다. 결제가 실패하거나 같은 이벤트가 두 번 오거나 Kafka가 잠깐 멈춰도, 주문이 어중간한 상태로 남지 않도록 Saga와 Transactional Outbox로 처리했습니다. 설계부터 구현, 테스트까지 혼자 진행한 개인 프로젝트입니다.
+주문·재고·결제를 별도 서비스로 나눈 Spring Boot 쇼핑몰 백엔드입니다. 결제 승인에 실패하면 주문을 취소하고, 이미 취소된 주문에 승인이 늦게 도착하면 주문 상태를 그대로 둡니다. 이벤트 발행에 실패하면 Outbox에 재시도 시각을 기록하고, 재시도 한도를 넘기면 `FAILED`로 남깁니다.
 
-[포트폴리오](https://cyson21.github.io/projects/stockrush/) · [이력서](https://cyson21.github.io/downloads/resume.pdf)
+- **늦게 도착한 결제 승인** — 취소된 주문에 승인 이벤트를 넣고 주문 상태가 바뀌지 않는지 확인합니다. [Saga 구현](services/order-service/src/main/java/com/stockrush/order/application/OrderSagaEventHandler.java) · [통합 테스트](services/order-service/src/test/java/com/stockrush/order/application/OrderSagaEventHandlerIntegrationTest.java)
+- **이벤트 발행 실패** — 테스트용 발행기로 실패를 주입해 재시도 상태와 한도 초과 처리를 확인합니다. 별도 로컬 Compose 실행에서는 단일 Kafka 브로커를 일시 정지했다가 재개한 뒤 주문이 확정되고 대기 Outbox가 해소된 결과를 기록했습니다. [Relay 통합 테스트](services/order-service/src/test/java/com/stockrush/order/infra/outbox/OutboxRelayServiceIntegrationTest.java) · [로컬 복구 기록](docs/runbooks/local-e2e.md#kafka-outage-recovery)
+
+결제와 출고는 내부 시뮬레이션입니다. Kafka 복구 기록은 로컬 단일 브로커 시나리오에 해당합니다.
 
 ## 풀려던 문제
 
@@ -86,11 +89,4 @@ Kafka 중단 복구는 따로 실행합니다.
 - 관리자 복구 API에는 실제 회사처럼 승인이나 감사 절차가 없습니다.
 - kind 구성은 로컬 재현용이고, 운영 Kubernetes에서 돌려 본 것은 아닙니다.
 
-## 관련 프로젝트와 공개 자료
-
-이 저장소의 코드·실행·테스트는 이 저장소에서 관리합니다. [웹 포트폴리오의 프로젝트 설명](https://cyson21.github.io/projects/stockrush/)에서 구현 근거를, [공개 웹사이트](https://cyson21.github.io/)에서 전체 공개 자료를 확인할 수 있습니다.
-
-- 관련 주제: [member-event-consistency](https://github.com/cyson21/member-event-consistency) — 동시성·DB 불변식 비교.
-- 최신 제출 파일: [이력서 PDF](https://cyson21.github.io/downloads/resume.pdf) · [경력기술서 PDF](https://cyson21.github.io/downloads/career-description.pdf).
-
-위 관련 저장소는 별도로 실행하는 개인 프로젝트입니다. 서로의 서비스를 순서대로 띄우거나 실제 API·메시지로 연결한 E2E 체인이 구현됐다는 의미는 아닙니다. 구현·검증 범위가 바뀌면 이 README와 웹 프로젝트 문안을 함께 확인합니다.
+[웹 포트폴리오에서 프로젝트 상세 보기](https://cyson21.github.io/projects/stockrush/)
